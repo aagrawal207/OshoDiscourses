@@ -1,0 +1,65 @@
+name: OshoDiscourses
+options:
+  bundleIdPrefix: com.agraabhi
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+targets:
+  OshoDiscourses:
+    type: application
+    platform: iOS
+    sources:
+      - path: OshoDiscourses
+        excludes:
+          - Info.plist
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses
+    info:
+      path: OshoDiscourses/Info.plist
+      properties:
+        UIBackgroundModes: [audio]
+        NSSupportsLiveActivities: true
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            oshoworld.com:
+              NSIncludesSubdomains: true
+              NSTemporaryExceptionAllowsInsecureHTTPLoads: true
+        UILaunchScreen: {}
+    entitlements:
+      path: OshoDiscourses/OshoDiscourses.entitlements
+  OshoDiscoursesWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: OshoDiscoursesWidgets
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses.widgets
+    info:
+      path: OshoDiscoursesWidgets/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: OshoDiscoursesWidgets/OshoDiscoursesWidgets.entitlements
+    dependencies:
+      - target: OshoDiscourses
+        embed: false
+  OshoDiscoursesTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: OshoDiscoursesTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+    dependencies:
+      - target: OshoDiscourses
