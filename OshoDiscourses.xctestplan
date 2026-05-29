@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "595AD146-36B5-4547-BC11-404820405C13",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:OshoDiscourses.xcodeproj",
+      "identifier" : "188B6D76D44C3DD06B675A04",
+      "name" : "OshoDiscourses"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:OshoDiscourses.xcodeproj",
+        "identifier" : "696C2C285CD02E74E5C429AD",
+        "name" : "OshoDiscoursesTests"
+      }
+    }
+  ],
+  "version" : 1
+}

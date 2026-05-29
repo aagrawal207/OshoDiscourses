@@ -4,6 +4,18 @@ options:
   deploymentTarget:
     iOS: "18.0"
   createIntermediateGroups: true
+schemes:
+  OshoDiscourses:
+    build:
+      targets:
+        OshoDiscourses: all
+        OshoDiscoursesWidgets: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - OshoDiscoursesTests
 settings:
   base:
     SWIFT_VERSION: "6.0"

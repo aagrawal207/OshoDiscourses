@@ -462,13 +462,13 @@ final class AudioPlayerService {
     // MARK: - Private: Volume Boost
 
     private func applyVolumeBoost(_ boost: Float, to item: AVPlayerItem) {
-        guard let track = item.asset.tracks(withMediaType: .audio).first else { return }
-
-        let params = AVMutableAudioMixInputParameters(track: track)
-        params.setVolume(boost, at: .zero)
-
-        let mix = AVMutableAudioMix()
-        mix.inputParameters = [params]
-        item.audioMix = mix
+        Task {
+            guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
+            let params = AVMutableAudioMixInputParameters(track: track)
+            params.setVolume(boost, at: .zero)
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [params]
+            await MainActor.run { item.audioMix = mix }
+        }
     }
 }

@@ -53,9 +53,14 @@ struct SettingsView: View {
     }
 
     private var downloadsSection: some View {
-        Section("Downloads") {
+        Section {
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
+            Toggle("Noise Reduction", isOn: $settings.noiseReduction)
+        } header: {
+            Text("Downloads")
+        } footer: {
+            Text("Noise reduction removes background hiss from older recordings during download. Takes a few extra seconds per file.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -128,6 +133,15 @@ struct SettingsView: View {
                 Spacer()
                 Text("\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
                     .foregroundStyle(.secondary)
+            }
+            Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
+                HStack {
+                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))

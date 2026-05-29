@@ -63,6 +63,9 @@ final class UserSettings {
     var autoPlayNext: Bool {
         didSet { defaults.set(autoPlayNext, forKey: Keys.autoPlayNext) }
     }
+    var noiseReduction: Bool {
+        didSet { defaults.set(noiseReduction, forKey: Keys.noiseReduction) }
+    }
 
     // Computed helpers for backward compat with views
     var hideHindi: Bool { languageFilter == .english }
@@ -87,6 +90,7 @@ final class UserSettings {
         static let showBeginnerEnglish = "settings.showBeginnerEnglish"
         static let showBeginnerHindi = "settings.showBeginnerHindi"
         static let autoPlayNext = "settings.autoPlayNext"
+        static let noiseReduction = "settings.noiseReduction"
     }
 
     private init() {
@@ -100,6 +104,7 @@ final class UserSettings {
             Keys.showBeginnerEnglish: true,
             Keys.showBeginnerHindi: true,
             Keys.autoPlayNext: true,
+            Keys.noiseReduction: true,
         ])
 
         self.appearance = Appearance(rawValue: d.string(forKey: Keys.appearance) ?? "") ?? .system
@@ -112,6 +117,7 @@ final class UserSettings {
         self.showBeginnerEnglish = d.bool(forKey: Keys.showBeginnerEnglish)
         self.showBeginnerHindi = d.bool(forKey: Keys.showBeginnerHindi)
         self.autoPlayNext = d.bool(forKey: Keys.autoPlayNext)
+        self.noiseReduction = d.bool(forKey: Keys.noiseReduction)
     }
 }
 

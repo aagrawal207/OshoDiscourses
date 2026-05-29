@@ -55,14 +55,32 @@ final class DownloadService {
             try FileManager.default.createDirectory(at: seriesDir, withIntermediateDirectories: true)
 
             let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
-            try FileManager.default.moveItem(at: localURL, to: destination)
 
-            downloadedIDs.insert(discourse.id)
-            pathMap[discourse.id] = relativePath(for: discourse)
-            saveManifest()
-            activeDownloads[discourse.id]?.status = .complete
-            activeDownloads[discourse.id]?.progress = 1
-            return destination
+            // Apply noise reduction if enabled
+            if UserSettings.shared.noiseReduction {
+                activeDownloads[discourse.id]?.progress = 0.9
+                let cleanedURL = destination.deletingPathExtension().appendingPathExtension("m4a")
+                try await NoiseReductionService.shared.process(input: localURL, output: cleanedURL)
+                try? FileManager.default.removeItem(at: localURL)
+
+                // Update path to point to cleaned file
+                let cleanedRelative = relativePath(for: discourse)
+                    .replacingOccurrences(of: ".mp3", with: ".m4a")
+                downloadedIDs.insert(discourse.id)
+                pathMap[discourse.id] = cleanedRelative
+                saveManifest()
+                activeDownloads[discourse.id]?.status = .complete
+                activeDownloads[discourse.id]?.progress = 1
+                return cleanedURL
+            } else {
+                try FileManager.default.moveItem(at: localURL, to: destination)
+                downloadedIDs.insert(discourse.id)
+                pathMap[discourse.id] = relativePath(for: discourse)
+                saveManifest()
+                activeDownloads[discourse.id]?.status = .complete
+                activeDownloads[discourse.id]?.progress = 1
+                return destination
+            }
         } catch {
             activeDownloads[discourse.id]?.status = .failed(error.localizedDescription)
             throw error
@@ -108,6 +126,14 @@ final class DownloadService {
             let url = docs.appendingPathComponent(rel)
             if FileManager.default.fileExists(atPath: url.path) {
                 return url
+            }
+            // Check alternate extension (mp3 vs m4a)
+            let altRel = rel.hasSuffix(".m4a")
+                ? rel.replacingOccurrences(of: ".m4a", with: ".mp3")
+                : rel.replacingOccurrences(of: ".mp3", with: ".m4a")
+            let altURL = docs.appendingPathComponent(altRel)
+            if FileManager.default.fileExists(atPath: altURL.path) {
+                return altURL
             }
         }
 
