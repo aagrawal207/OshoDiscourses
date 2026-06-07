@@ -19,6 +19,7 @@ schemes:
 settings:
   base:
     SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: W2NS9DM63G
 targets:
   OshoDiscourses:
     type: application
@@ -34,10 +35,16 @@ targets:
     info:
       path: OshoDiscourses/Info.plist
       properties:
+        CFBundleDisplayName: Discourse Player
         UIBackgroundModes: [audio]
         NSSupportsLiveActivities: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSExceptionDomains:
             oshoworld.com:

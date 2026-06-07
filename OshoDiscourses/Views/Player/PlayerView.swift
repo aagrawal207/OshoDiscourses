@@ -10,6 +10,7 @@ struct PlayerView: View {
     @State private var showBookmarkSheet = false
     @State private var bookmarkTimestamp: TimeInterval = 0
     @State private var showBookmarkAdded = false
+    @State private var showTotalTime = false
     private var bookmarks = BookmarkService.shared
 
     private var displayTime: TimeInterval {
@@ -194,10 +195,16 @@ struct PlayerView: View {
 
                 Spacer()
 
-                Text("-\(formatTime(max(player.duration - displayTime, 0)))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                Text(showTotalTime
+                    ? formatTime(player.duration)
+                    : "-\(formatTime(max(player.duration - displayTime, 0)))"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .onTapGesture {
+                    showTotalTime.toggle()
+                }
             }
         }
     }
@@ -388,8 +395,13 @@ struct PlayerView: View {
 
     private func formatTime(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
+        let total = Int(seconds)
+        let hrs = total / 3600
+        let mins = (total % 3600) / 60
+        let secs = total % 60
+        if hrs > 0 {
+            return String(format: "%d:%02d:%02d", hrs, mins, secs)
+        }
         return String(format: "%d:%02d", mins, secs)
     }
 

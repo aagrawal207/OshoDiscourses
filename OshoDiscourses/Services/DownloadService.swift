@@ -18,6 +18,7 @@ final class DownloadService {
 
     var activeDownloads: [String: DownloadProgress] = [:]
     private(set) var downloadedIDs: Set<String> = []
+    private var activeTasks: [String: URLSessionDownloadTask] = [:]
 
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
@@ -56,31 +57,13 @@ final class DownloadService {
 
             let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
 
-            // Apply noise reduction if enabled
-            if UserSettings.shared.noiseReduction {
-                activeDownloads[discourse.id]?.progress = 0.9
-                let cleanedURL = destination.deletingPathExtension().appendingPathExtension("m4a")
-                try await NoiseReductionService.shared.process(input: localURL, output: cleanedURL)
-                try? FileManager.default.removeItem(at: localURL)
-
-                // Update path to point to cleaned file
-                let cleanedRelative = relativePath(for: discourse)
-                    .replacingOccurrences(of: ".mp3", with: ".m4a")
-                downloadedIDs.insert(discourse.id)
-                pathMap[discourse.id] = cleanedRelative
-                saveManifest()
-                activeDownloads[discourse.id]?.status = .complete
-                activeDownloads[discourse.id]?.progress = 1
-                return cleanedURL
-            } else {
-                try FileManager.default.moveItem(at: localURL, to: destination)
-                downloadedIDs.insert(discourse.id)
-                pathMap[discourse.id] = relativePath(for: discourse)
-                saveManifest()
-                activeDownloads[discourse.id]?.status = .complete
-                activeDownloads[discourse.id]?.progress = 1
-                return destination
-            }
+            try FileManager.default.moveItem(at: localURL, to: destination)
+            downloadedIDs.insert(discourse.id)
+            pathMap[discourse.id] = relativePath(for: discourse)
+            saveManifest()
+            activeDownloads[discourse.id]?.status = .complete
+            activeDownloads[discourse.id]?.progress = 1
+            return destination
         } catch {
             activeDownloads[discourse.id]?.status = .failed(error.localizedDescription)
             throw error
@@ -114,6 +97,12 @@ final class DownloadService {
         return false
     }
 
+    func cancelDownload(discourseID: String) {
+        activeTasks[discourseID]?.cancel()
+        activeTasks.removeValue(forKey: discourseID)
+        activeDownloads.removeValue(forKey: discourseID)
+    }
+
     func progress(for discourseID: String) -> Double {
         activeDownloads[discourseID]?.progress ?? 0
     }
@@ -121,19 +110,10 @@ final class DownloadService {
     func localFileURL(for discourseID: String) -> URL? {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
 
-        // Check manifest path first
         if let rel = pathMap[discourseID] {
             let url = docs.appendingPathComponent(rel)
             if FileManager.default.fileExists(atPath: url.path) {
                 return url
-            }
-            // Check alternate extension (mp3 vs m4a)
-            let altRel = rel.hasSuffix(".m4a")
-                ? rel.replacingOccurrences(of: ".m4a", with: ".mp3")
-                : rel.replacingOccurrences(of: ".mp3", with: ".m4a")
-            let altURL = docs.appendingPathComponent(altRel)
-            if FileManager.default.fileExists(atPath: altURL.path) {
-                return altURL
             }
         }
 
@@ -224,12 +204,17 @@ final class DownloadService {
         request.timeoutInterval = 120
 
         let task = URLSession.shared.downloadTask(with: request)
+        activeTasks[discourseID] = task
+
         let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
             Task { @MainActor [weak self] in
                 self?.activeDownloads[discourseID]?.progress = progress.fractionCompleted
             }
         }
-        defer { observation.invalidate() }
+        defer {
+            observation.invalidate()
+            activeTasks.removeValue(forKey: discourseID)
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
             let delegate = DownloadTaskDelegate(continuation: continuation)

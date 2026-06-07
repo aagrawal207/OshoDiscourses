@@ -53,14 +53,9 @@ struct SettingsView: View {
     }
 
     private var downloadsSection: some View {
-        Section {
+        Section("Downloads") {
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
-            Toggle("Noise Reduction", isOn: $settings.noiseReduction)
-        } header: {
-            Text("Downloads")
-        } footer: {
-            Text("Noise reduction removes background hiss from older recordings during download. Takes a few extra seconds per file.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -115,7 +110,7 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        Section("About") {
+        Section {
             HStack {
                 Text("Version")
                 Spacer()
@@ -143,6 +138,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        } header: {
+            Text("About")
+        } footer: {
+            Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }

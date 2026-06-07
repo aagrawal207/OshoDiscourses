@@ -23,8 +23,13 @@ struct AddBookmarkSheet: View {
     }
 
     private var formattedTime: String {
-        let mins = Int(timestamp) / 60
-        let secs = Int(timestamp) % 60
+        let total = Int(timestamp)
+        let hrs = total / 3600
+        let mins = (total % 3600) / 60
+        let secs = total % 60
+        if hrs > 0 {
+            return String(format: "%d:%02d:%02d", hrs, mins, secs)
+        }
         return String(format: "%d:%02d", mins, secs)
     }
 

@@ -156,8 +156,12 @@ private struct DiscourseRowView: View {
     @ViewBuilder
     private var actionButton: some View {
         if downloads.isDownloading(discourse.id) {
-            CircularProgressView(progress: downloads.progress(for: discourse.id))
-                .frame(width: 28, height: 28)
+            Button {
+                downloads.cancelDownload(discourseID: discourse.id)
+            } label: {
+                CircularProgressView(progress: downloads.progress(for: discourse.id))
+                    .frame(width: 28, height: 28)
+            }
         } else if isDownloaded {
             Button {
                 playDiscourse()
