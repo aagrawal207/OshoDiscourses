@@ -27,23 +27,14 @@ struct ListeningStatsView: View {
     // MARK: - Overview
 
     private var completedDiscourses: Int {
-        playbackState.recentlyPlayed.filter { id in
-            playbackState.getPosition(discourseId: id) == 0
-        }.count
+        playbackState.completedDiscourseIDs.count
     }
 
     private var completedSeries: Int {
-        var count = 0
-        for series in Catalog.allSeries {
+        Catalog.allSeries.filter { series in
             let discs = Catalog.discourses(for: series)
-            let allDone = discs.allSatisfy { d in
-                let played = playbackState.recentlyPlayed.contains(d.id)
-                let positionCleared = playbackState.getPosition(discourseId: d.id) == 0
-                return played && positionCleared
-            }
-            if allDone && !discs.isEmpty { count += 1 }
-        }
-        return count
+            return !discs.isEmpty && discs.allSatisfy { playbackState.isCompleted($0.id) }
+        }.count
     }
 
     private var overviewSection: some View {

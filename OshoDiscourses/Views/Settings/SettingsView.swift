@@ -97,13 +97,9 @@ struct SettingsView: View {
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
 
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Accent Color")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    ForEach(AccentTheme.allCases) { theme in
+        Section("Accent Color") {
+            HStack(spacing: 10) {
+                ForEach(AccentTheme.allCases) { theme in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             settings.accentTheme = theme
@@ -130,9 +126,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                }
             }
-            .padding(.vertical, 4)
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -141,7 +135,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
-            LabeledContent("Version", value: "1.1.0")
+            LabeledContent("Version", value: "1.2.0")
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
