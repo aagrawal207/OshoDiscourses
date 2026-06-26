@@ -103,7 +103,7 @@ final class UserSettings {
         ])
 
         self.appearance = Appearance(rawValue: d.string(forKey: Keys.appearance) ?? "") ?? .system
-        self.accentTheme = AccentTheme(rawValue: d.string(forKey: Keys.accentTheme) ?? "") ?? .blue
+        self.accentTheme = AccentTheme(rawValue: d.string(forKey: Keys.accentTheme) ?? "") ?? .purple
         self.languageFilter = LanguageFilter(rawValue: d.string(forKey: Keys.languageFilter) ?? "") ?? .both
         self.smartDownload = d.bool(forKey: Keys.smartDownload)
         self.smartDelete = d.bool(forKey: Keys.smartDelete)
@@ -117,4 +117,9 @@ final class UserSettings {
 
 extension Notification.Name {
     static let navigateToSeries = Notification.Name("navigateToSeries")
+}
+
+extension Color {
+    @MainActor
+    static var accent: Color { UserSettings.shared.accentTheme.color }
 }

@@ -3,6 +3,7 @@ import AVFoundation
 import ActivityKit
 import MediaPlayer
 import Observation
+import UIKit
 
 @Observable
 @MainActor
@@ -37,6 +38,7 @@ final class AudioPlayerService {
     // MARK: - Playback State
 
     weak var playbackStateService: PlaybackStateService?
+    weak var downloadService: DownloadService?
 
     // MARK: - Position History (Kindle-style)
 
@@ -46,6 +48,7 @@ final class AudioPlayerService {
     // MARK: - Live Activity
 
     private var liveActivity: Activity<PlaybackAttributes>?
+    private var liveActivityDismissTask: Task<Void, Never>?
 
     // MARK: - Private
 
@@ -86,21 +89,33 @@ final class AudioPlayerService {
         if isPlaying {
             player.pause()
             isPlaying = false
+            scheduleLiveActivityDismiss()
         } else {
             player.play()
             player.rate = playbackRate
             isPlaying = true
+            liveActivityDismissTask?.cancel()
+            liveActivityDismissTask = nil
         }
         updateNowPlayingInfo()
         updateLiveActivity()
     }
 
+    private func scheduleLiveActivityDismiss() {
+        liveActivityDismissTask?.cancel()
+        liveActivityDismissTask = Task {
+            try? await Task.sleep(for: .seconds(300))
+            guard !Task.isCancelled, !isPlaying else { return }
+            endLiveActivity()
+        }
+    }
+
     func seek(to time: TimeInterval) {
         guard let player else { return }
+        currentTime = time
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor in
-                self?.currentTime = time
                 self?.updateNowPlayingInfo()
             }
         }
@@ -127,8 +142,12 @@ final class AudioPlayerService {
     }
 
     func skipForward(_ seconds: TimeInterval = 30) {
-        let target = min(currentTime + seconds, duration)
-        seek(to: target)
+        let target = currentTime + seconds
+        if target >= duration - 1 {
+            finishCurrentTrack()
+        } else {
+            seek(to: target)
+        }
     }
 
     func skipBackward(_ seconds: TimeInterval = 15) {
@@ -154,6 +173,69 @@ final class AudioPlayerService {
         }
         currentIndex -= 1
         loadAndPlay(item: queue[currentIndex])
+    }
+
+    private func finishCurrentTrack() {
+        player?.pause()
+        let completedTrackId = currentTrackId
+        markCurrentAsCompleted()
+
+        let shouldAutoPlay = hasNext && UserSettings.shared.autoPlayNext
+        if shouldAutoPlay {
+            skipToNext()
+        } else {
+            isPlaying = false
+            currentTime = duration
+            updateNowPlayingInfo()
+            endLiveActivity()
+            currentTrackId = nil
+            currentTitle = ""
+            currentSeries = ""
+        }
+
+        // Smart Delete: remove the completed episode
+        if let completedId = completedTrackId {
+            performSmartDelete(completedDiscourseId: completedId)
+        }
+
+        // Smart Download fallback: if pre-emptive didn't fire (short tracks), trigger now
+        if let completedId = completedTrackId, !didTriggerPreemptiveDownload {
+            performSmartDownload(afterDiscourseId: completedId)
+        }
+    }
+
+    private func markCurrentAsCompleted() {
+        guard let trackId = currentTrackId else { return }
+        playbackStateService?.markListenedComplete(discourseId: trackId)
+        playbackStateService?.clearPosition(discourseId: trackId)
+    }
+
+    // MARK: - Smart Download / Smart Delete
+
+    private func performSmartDelete(completedDiscourseId: String) {
+        guard UserSettings.shared.smartDelete else { return }
+        guard let downloadService, downloadService.isDownloaded(completedDiscourseId) else { return }
+        try? downloadService.deleteDownload(discourseID: completedDiscourseId)
+    }
+
+    private func performSmartDownload(afterDiscourseId: String) {
+        guard UserSettings.shared.smartDownload else { return }
+        guard let downloadService else { return }
+        guard let lookup = Catalog.discourseLookup[afterDiscourseId] else { return }
+
+        let series = lookup.series
+        let allInSeries = Catalog.discourses(for: series)
+
+        // Find the completed discourse's index in the series
+        guard let completedIndex = allInSeries.firstIndex(where: { $0.id == afterDiscourseId }) else { return }
+
+        // Find the next discourse in the series that is not already downloaded
+        let remaining = allInSeries.suffix(from: allInSeries.index(after: completedIndex))
+        guard let nextToDownload = remaining.first(where: { !downloadService.isDownloaded($0.id) }) else { return }
+
+        Task {
+            _ = try? await downloadService.download(nextToDownload)
+        }
     }
 
     func setRate(_ rate: Float) {
@@ -195,6 +277,11 @@ final class AudioPlayerService {
     // MARK: - Private: Playback
 
     private func loadAndPlay(item: QueueItem) {
+        // Save position+duration of the outgoing track before switching
+        if let outgoingId = currentTrackId, currentTime > 0 {
+            playbackStateService?.savePosition(discourseId: outgoingId, position: currentTime, duration: duration)
+        }
+
         removeTimeObserver()
         removeEndObserver()
         statusObservation?.invalidate()
@@ -204,6 +291,7 @@ final class AudioPlayerService {
         currentSeries = item.series
         currentTime = 0
         duration = 0
+        didTriggerPreemptiveDownload = false
 
         let playerItem = AVPlayerItem(url: item.url)
 
@@ -239,6 +327,7 @@ final class AudioPlayerService {
                 self.observePlayerEnd()
                 self.updateNowPlayingInfo()
                 self.startLiveActivity()
+                self.playbackStateService?.recordPlay(discourseId: self.currentTrackId ?? "")
             }
         }
     }
@@ -254,6 +343,9 @@ final class AudioPlayerService {
 
     private func startLiveActivity() {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        // End any existing activity to avoid orphaning it on the Dynamic Island
+        endLiveActivity()
 
         let attributes = PlaybackAttributes(
             seriesName: currentSeries,
@@ -332,6 +424,7 @@ final class AudioPlayerService {
         let commandCenter = MPRemoteCommandCenter.shared()
 
         commandCenter.playCommand.addTarget { [weak self] _ in
+            guard let self, self.player != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.togglePlayPause()
             }
@@ -339,6 +432,7 @@ final class AudioPlayerService {
         }
 
         commandCenter.pauseCommand.addTarget { [weak self] _ in
+            guard let self, self.isPlaying else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.togglePlayPause()
             }
@@ -347,6 +441,7 @@ final class AudioPlayerService {
 
         commandCenter.skipForwardCommand.preferredIntervals = [30]
         commandCenter.skipForwardCommand.addTarget { [weak self] _ in
+            guard let self, self.player != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.skipForward()
             }
@@ -355,6 +450,7 @@ final class AudioPlayerService {
 
         commandCenter.skipBackwardCommand.preferredIntervals = [15]
         commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
+            guard let self, self.player != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.skipBackward()
             }
@@ -362,6 +458,7 @@ final class AudioPlayerService {
         }
 
         commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let self, self.player != nil else { return .commandFailed }
             guard let event = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
@@ -372,6 +469,7 @@ final class AudioPlayerService {
         }
 
         commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+            guard let self, self.hasNext else { return .noActionableNowPlayingItem }
             Task { @MainActor [weak self] in
                 self?.skipToNext()
             }
@@ -388,6 +486,11 @@ final class AudioPlayerService {
 
     // MARK: - Private: Now Playing
 
+    private let nowPlayingArtwork: MPMediaItemArtwork? = {
+        guard let image = UIImage(named: "OshoPortrait") else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }()
+
     private func updateNowPlayingInfo() {
         var info = [String: Any]()
         info[MPMediaItemPropertyTitle] = currentTitle
@@ -397,12 +500,16 @@ final class AudioPlayerService {
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0.0
         info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        if let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
     // MARK: - Private: Time Observer
 
     private var lastLiveActivityUpdate: TimeInterval = 0
+    private var didTriggerPreemptiveDownload = false
 
     private func setupTimeObserver() {
         removeTimeObserver()
@@ -417,6 +524,14 @@ final class AudioPlayerService {
                     if seconds - self.lastLiveActivityUpdate >= 5 {
                         self.lastLiveActivityUpdate = seconds
                         self.updateLiveActivity()
+                    }
+                    // Pre-emptive smart download: 20 seconds before end
+                    if !self.didTriggerPreemptiveDownload,
+                       self.duration > 30,
+                       seconds >= self.duration - 20,
+                       let trackId = self.currentTrackId {
+                        self.didTriggerPreemptiveDownload = true
+                        self.performSmartDownload(afterDiscourseId: trackId)
                     }
                 }
             }
@@ -441,13 +556,7 @@ final class AudioPlayerService {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if self.hasNext {
-                    self.skipToNext()
-                } else {
-                    self.isPlaying = false
-                    self.currentTime = self.duration
-                    self.updateNowPlayingInfo()
-                }
+                self.finishCurrentTrack()
             }
         }
     }

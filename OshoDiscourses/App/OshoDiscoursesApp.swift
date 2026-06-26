@@ -15,6 +15,11 @@ struct OshoDiscoursesApp: App {
                 .onAppear {
                     playbackState.attach(to: audioPlayer)
                     audioPlayer.playbackStateService = playbackState
+                    audioPlayer.downloadService = downloadService
+                    SleepTimerService.shared.onExpire = { [weak audioPlayer] in
+                        guard let audioPlayer, audioPlayer.isPlaying else { return }
+                        audioPlayer.togglePlayPause()
+                    }
                 }
         }
     }

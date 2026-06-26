@@ -4,35 +4,64 @@ struct DownloadsView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
     @Bindable private var settings = UserSettings.shared
+    private var bookmarkService = BookmarkService.shared
+    @State private var searchText = ""
 
     private var groupedDownloads: [(seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] {
         downloads.downloadedDiscourses()
+    }
+
+    private var filteredDownloads: [(seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] {
+        guard !searchText.isEmpty else { return groupedDownloads }
+        let query = searchText.lowercased()
+        return groupedDownloads.compactMap { group in
+            let matchesSeries = group.seriesInfo.name.lowercased().contains(query)
+            let matchingDiscourses = group.discourses.filter {
+                matchesSeries || $0.displayTitle.lowercased().contains(query)
+            }
+            guard !matchingDiscourses.isEmpty else { return nil }
+            return (seriesInfo: group.seriesInfo, discourses: matchingDiscourses)
+        }
     }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Toggle(isOn: $settings.smartDownload) {
-                        Label("Smart Download", systemImage: "arrow.down.circle")
-                    }
-                    Toggle(isOn: $settings.smartDelete) {
-                        Label("Smart Delete", systemImage: "trash.circle")
+                    NavigationLink {
+                        BookmarksView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bookmark.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Bookmarks")
+                                    .font(.body)
+                                if !bookmarkService.bookmarks.isEmpty {
+                                    Text("\(bookmarkService.bookmarks.count) saved")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                 }
                 .listRowBackground(Color(.secondarySystemGroupedBackground))
 
-                if groupedDownloads.isEmpty {
+                if filteredDownloads.isEmpty {
                     Section {
                         ContentUnavailableView(
-                            "No Downloads",
-                            systemImage: "arrow.down.circle",
-                            description: Text("Downloaded discourses will appear here.")
+                            searchText.isEmpty ? "No Downloads" : "No Results",
+                            systemImage: searchText.isEmpty ? "arrow.down.circle" : "magnifyingglass",
+                            description: Text(searchText.isEmpty
+                                ? "Downloaded discourses will appear here."
+                                : "No downloads match \"\(searchText)\".")
                         )
                     }
                     .listRowBackground(Color.clear)
                 } else {
-                    ForEach(groupedDownloads, id: \.seriesInfo.id) { group in
+                    ForEach(filteredDownloads, id: \.seriesInfo.id) { group in
                         Section {
                             ForEach(group.discourses) { discourse in
                                 DownloadedDiscourseRow(
@@ -57,6 +86,10 @@ struct DownloadsView: View {
             .scrollContentBackground(.hidden)
             .background(Color(.systemBackground))
             .navigationTitle("Downloads")
+            .searchable(text: $searchText, prompt: "Search downloads")
+            .safeAreaInset(edge: .bottom) {
+                Spacer().frame(height: 70)
+            }
         }
     }
 
@@ -80,7 +113,7 @@ private struct DownloadedSeriesHeader: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(seriesInfo.name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
 
                 Text("\(count) episodes")
                     .font(.caption2)
@@ -113,7 +146,7 @@ private struct DownloadedDiscourseRow: View {
             Text(discourse.displayTitle)
                 .font(.body)
                 .lineLimit(1)
-                .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
+                .foregroundStyle(isCurrentlyPlaying ? Color.accent : .primary)
 
             Spacer()
 
@@ -122,7 +155,7 @@ private struct DownloadedDiscourseRow: View {
             } label: {
                 Image(systemName: isCurrentlyPlaying && player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.title3)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accent)
             }
             .buttonStyle(.plain)
         }
@@ -133,7 +166,7 @@ private struct DownloadedDiscourseRow: View {
     }
 
     private func playDiscourse() {
-        guard let url = downloads.localFileURL(for: discourse.id) else { return }
+        guard downloads.localFileURL(for: discourse.id) != nil else { return }
 
         let allDiscourses = Catalog.discourses(for: seriesInfo)
         let queueItems = allDiscourses

@@ -1,123 +1,62 @@
 import SwiftUI
 
-enum SeriesFilter: String, CaseIterable {
-    case all = "All"
-    case english = "English"
-    case hindi = "Hindi"
-    case downloaded = "Downloaded"
-}
-
-enum SeriesSort: String, CaseIterable {
-    case name = "Name"
-    case discourseCount = "Episodes"
-}
-
 struct HomeView: View {
-    @State private var searchText = ""
-    @State private var activeFilter: SeriesFilter = .all
-    @State private var activeSort: SeriesSort = .name
     @State private var navigationPath = NavigationPath()
     @Environment(DownloadService.self) private var downloads
+    @Environment(PlaybackStateService.self) private var playbackState
+    @Environment(AudioPlayerService.self) private var player
     private var settings = UserSettings.shared
 
-    private var visibleSeries: [SeriesInfo] {
-        Catalog.allSeries.filter { series in
-            if settings.hideHindi && series.language == .hindi { return false }
-            if settings.hideEnglish && series.language == .english { return false }
-            return true
-        }
-    }
-
-    private var filteredSeries: [SeriesInfo] {
-        var result = visibleSeries
-
-        // Text search
-        if !searchText.isEmpty {
-            let lower = searchText.lowercased()
-            result = result.filter { $0.name.localizedCaseInsensitiveContains(lower) }
-        }
-
-        // Filter chips
-        switch activeFilter {
-        case .all: break
-        case .english: result = result.filter { $0.language == .english }
-        case .hindi: result = result.filter { $0.language == .hindi }
-        case .downloaded:
-            result = result.filter { series in
-                Catalog.discourses(for: series).contains { downloads.isDownloaded($0.id) }
-            }
-        }
-
-        // Sort
-        switch activeSort {
-        case .name: result.sort { $0.name < $1.name }
-        case .discourseCount: result.sort { $0.count > $1.count }
-        }
-
-        return result
-    }
-
     private var popularEnglish: [SeriesInfo] {
-        guard settings.showPopularEnglish && !settings.hideEnglish else { return [] }
+        guard !settings.hideEnglish else { return [] }
         return Catalog.popularEnglish
     }
 
     private var beginnerEnglish: [SeriesInfo] {
-        guard settings.showBeginnerEnglish && !settings.hideEnglish else { return [] }
+        guard !settings.hideEnglish else { return [] }
         return Catalog.beginnerEnglish
     }
 
     private var popularHindi: [SeriesInfo] {
-        guard settings.showPopularHindi && !settings.hideHindi else { return [] }
+        guard !settings.hideHindi else { return [] }
         return Catalog.popularHindi
     }
 
     private var beginnerHindi: [SeriesInfo] {
-        guard settings.showBeginnerHindi && !settings.hideHindi else { return [] }
+        guard !settings.hideHindi else { return [] }
         return Catalog.beginnerHindi
     }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
-                    // Filter and sort bar
-                    filterSortBar
-
-                    if searchText.isEmpty && activeFilter == .all {
-                        if !popularEnglish.isEmpty {
-                            SeriesSectionView(title: "Popular in English", series: popularEnglish)
-                        }
-                        if !beginnerEnglish.isEmpty {
-                            SeriesSectionView(title: "Beginner Friendly (English)", series: beginnerEnglish)
-                        }
-                        if !popularHindi.isEmpty {
-                            SeriesSectionView(title: "Popular in Hindi", series: popularHindi)
-                        }
-                        if !beginnerHindi.isEmpty {
-                            SeriesSectionView(title: "Beginner Friendly (Hindi)", series: beginnerHindi)
-                        }
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    if !continueListening.isEmpty {
+                        continueListeningSection
                     }
 
-                    allSeriesSection
+                    if !recentlyCompleted.isEmpty {
+                        recentlyCompletedSection
+                    }
+
+                    if !popularEnglish.isEmpty {
+                        SeriesSectionView(title: "Popular in English", series: popularEnglish)
+                    }
+                    if !beginnerEnglish.isEmpty {
+                        SeriesSectionView(title: "Beginner Friendly (English)", series: beginnerEnglish)
+                    }
+                    if !popularHindi.isEmpty {
+                        SeriesSectionView(title: "Popular in Hindi", series: popularHindi)
+                    }
+                    if !beginnerHindi.isEmpty {
+                        SeriesSectionView(title: "Beginner Friendly (Hindi)", series: beginnerHindi)
+                    }
                 }
-                .padding(.top, 8)
+                .padding(.top, 12)
+                .padding(.bottom, 70)
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Browse")
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack {
-                        Text("Browse")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text("\(Catalog.allSeries.count) series")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .searchable(text: $searchText, prompt: "Search series")
+            .navigationTitle("Home")
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
@@ -130,91 +69,161 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Filter & Sort Bar
+    // MARK: - Continue Listening
 
-    private var filterSortBar: some View {
-        VStack(spacing: 8) {
-            // Filter chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(SeriesFilter.allCases, id: \.self) { filter in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                activeFilter = activeFilter == filter ? .all : filter
-                            }
-                        } label: {
-                            Text(filter.rawValue)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
-                                .background(activeFilter == filter ? Color.blue : Color(.tertiarySystemFill))
-                                .foregroundStyle(activeFilter == filter ? .white : .primary)
-                                .clipShape(Capsule())
-                        }
-                    }
-
-                    Divider()
-                        .frame(height: 20)
-
-                    // Sort picker
-                    Menu {
-                        ForEach(SeriesSort.allCases, id: \.self) { sort in
-                            Button {
-                                activeSort = sort
-                            } label: {
-                                HStack {
-                                    Text(sort.rawValue)
-                                    if activeSort == sort {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up.arrow.down")
-                                .font(.caption)
-                            Text(activeSort.rawValue)
-                                .font(.subheadline.weight(.medium))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color(.tertiarySystemFill))
-                        .foregroundStyle(.primary)
-                        .clipShape(Capsule())
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
+    struct ContinueItem: Identifiable {
+        let id: String
+        let discourse: CatalogDiscourse
+        let seriesInfo: SeriesInfo
+        let position: TimeInterval
+        let savedDuration: TimeInterval
     }
 
-    @ViewBuilder
-    private var allSeriesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var continueListening: [ContinueItem] {
+        playbackState.recentlyPlayed.compactMap { discourseID in
+            guard downloads.isDownloaded(discourseID) else { return nil }
+            let position = playbackState.getPosition(discourseId: discourseID)
+            let savedDuration = playbackState.getDuration(discourseId: discourseID)
+            let isCurrentlyPlaying = player.currentTrackId == discourseID
+
+            guard position > 0 || isCurrentlyPlaying else { return nil }
+
+            guard let (disc, series) = Catalog.discourseLookup[discourseID] else { return nil }
+            return ContinueItem(
+                id: discourseID,
+                discourse: disc,
+                seriesInfo: series,
+                position: isCurrentlyPlaying ? player.currentTime : position,
+                savedDuration: isCurrentlyPlaying && player.duration > 0 ? player.duration : savedDuration
+            )
+        }
+        .prefix(8)
+        .map { $0 }
+    }
+
+    // MARK: - Recently Completed
+
+    struct CompletedItem: Identifiable {
+        let id: String
+        let discourse: CatalogDiscourse
+        let seriesInfo: SeriesInfo
+    }
+
+    private var recentlyCompleted: [CompletedItem] {
+        playbackState.listenedCompleted.compactMap { discourseID in
+            guard let (disc, series) = Catalog.discourseLookup[discourseID] else { return nil }
+            return CompletedItem(id: discourseID, discourse: disc, seriesInfo: series)
+        }
+        .prefix(6)
+        .map { $0 }
+    }
+
+    private var recentlyCompletedSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("All Series")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
+                Text("Recently Completed")
+                    .font(.title3.bold())
                 Spacer()
-                Text("\(filteredSeries.count)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Button {
+                    withAnimation {
+                        for item in recentlyCompleted {
+                            playbackState.dismissListenedComplete(discourseId: item.id)
+                        }
+                    }
+                } label: {
+                    Text("Clear All")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal)
 
-            LazyVStack(spacing: 0) {
-                ForEach(filteredSeries) { series in
-                    NavigationLink(value: series) {
-                        SeriesRowView(series: series)
+            VStack(spacing: 0) {
+                ForEach(recentlyCompleted) { item in
+                    NavigationLink(value: item.seriesInfo) {
+                        HStack(spacing: 12) {
+                            SeriesThumbnailView(name: item.seriesInfo.name, size: 48)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.discourse.displayTitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+
+                                Text(item.seriesInfo.name)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.body)
+
+                            Button {
+                                withAnimation {
+                                    playbackState.dismissListenedComplete(discourseId: item.id)
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(6)
+                                    .background(Color.primary.opacity(0.08))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 8)
                     }
                     .buttonStyle(.plain)
 
-                    Divider()
-                        .background(Color.white.opacity(0.1))
-                        .padding(.leading, 76)
+                    if item.id != recentlyCompleted.last?.id {
+                        Divider().padding(.leading, 68)
+                    }
                 }
             }
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: - Continue Listening
+
+    private var continueListeningSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Continue Listening")
+                    .font(.title3.bold())
+                Spacer()
+                Button {
+                    withAnimation {
+                        for item in continueListening {
+                            playbackState.dismissFromRecent(discourseId: item.id)
+                        }
+                    }
+                } label: {
+                    Text("Clear All")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal)
+
+            VStack(spacing: 0) {
+                ForEach(continueListening.prefix(4)) { item in
+                    ContinueListeningRow(item: item, onDismiss: {
+                        withAnimation {
+                            playbackState.dismissFromRecent(discourseId: item.id)
+                        }
+                    })
+                    if item.id != continueListening.prefix(4).last?.id {
+                        Divider().padding(.leading, 68)
+                    }
+                }
+            }
+            .padding(.horizontal)
         }
     }
 }
@@ -226,14 +235,14 @@ private struct SeriesSectionView: View {
     let series: [SeriesInfo]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.title3.bold())
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .padding(.horizontal)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
+                LazyHStack(spacing: 8) {
                     ForEach(series) { item in
                         NavigationLink(value: item) {
                             SeriesCardView(series: item)
@@ -253,60 +262,25 @@ private struct SeriesCardView: View {
     let series: SeriesInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SeriesThumbnailView(name: series.name, size: 140)
+        HStack(spacing: 8) {
+            SeriesThumbnailView(name: series.name, size: 36)
 
-            Text(series.name)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(width: 140, alignment: .leading)
-
-            Text("\(series.count) discourses")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - Series Row
-
-private struct SeriesRowView: View {
-    let series: SeriesInfo
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SeriesThumbnailView(name: series.name, size: 52)
-
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(series.name)
-                    .font(.body)
+                    .font(.caption)
+                    .fontWeight(.medium)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Text("\(series.count) discourses")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer()
-
-            Text(series.language == .hindi ? "Hindi" : "English")
-                .font(.caption2)
-                .fontWeight(.medium)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.2))
-                .foregroundStyle(.blue)
-                .clipShape(Capsule())
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -345,5 +319,110 @@ struct SeriesThumbnailView: View {
                     .font(.system(size: size * 0.3, weight: .bold))
                     .foregroundStyle(.primary)
             }
+    }
+}
+
+// MARK: - Continue Listening Row
+
+private struct ContinueListeningRow: View {
+    @Environment(AudioPlayerService.self) private var player
+    @Environment(DownloadService.self) private var downloads
+    let item: HomeView.ContinueItem
+    var onDismiss: (() -> Void)?
+
+    private var isCurrentlyPlaying: Bool {
+        player.currentTrackId == item.discourse.id && player.isPlaying
+    }
+
+    private var isCurrentTrack: Bool {
+        player.currentTrackId == item.discourse.id
+    }
+
+    private var progressFraction: Double {
+        let pos = isCurrentTrack ? player.currentTime : item.position
+        let dur = isCurrentTrack && player.duration > 0 ? player.duration : item.savedDuration
+        guard pos > 0, dur > 0 else { return 0 }
+        return min(pos / dur, 1.0)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button {
+                playItem()
+            } label: {
+                HStack(spacing: 12) {
+                    SeriesThumbnailView(name: item.seriesInfo.name, size: 48)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.discourse.displayTitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        Text(item.seriesInfo.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.1))
+                                    .frame(height: 3)
+                                Capsule()
+                                    .fill(Color.accent)
+                                    .frame(width: geo.size.width * progressFraction, height: 3)
+                            }
+                        }
+                        .frame(height: 3)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button { playItem() } label: {
+                Image(systemName: isCurrentlyPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.accent)
+            }
+            .buttonStyle(.plain)
+
+            if let onDismiss {
+                Button { onDismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(6)
+                        .background(Color.primary.opacity(0.08))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func playItem() {
+        if isCurrentTrack {
+            player.togglePlayPause()
+            return
+        }
+        guard downloads.localFileURL(for: item.discourse.id) != nil else { return }
+
+        let allDiscourses = Catalog.discourses(for: item.seriesInfo)
+        let queueItems = allDiscourses
+            .filter { downloads.isDownloaded($0.id) }
+            .compactMap { d -> AudioPlayerService.QueueItem? in
+                guard let fileURL = downloads.localFileURL(for: d.id) else { return nil }
+                return AudioPlayerService.QueueItem(
+                    id: d.id,
+                    url: fileURL,
+                    title: d.displayTitle,
+                    series: item.seriesInfo.name
+                )
+            }
+
+        let startIndex = queueItems.firstIndex { $0.id == item.discourse.id } ?? 0
+        player.playQueue(items: queueItems, startIndex: startIndex)
     }
 }

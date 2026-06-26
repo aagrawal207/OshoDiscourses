@@ -7,6 +7,7 @@ struct PlayerView: View {
     @State private var dragTime: TimeInterval = 0
     @State private var showSpeedPicker = false
     @State private var showSleepTimer = false
+    private var sleepTimer = SleepTimerService.shared
     @State private var showBookmarkSheet = false
     @State private var bookmarkTimestamp: TimeInterval = 0
     @State private var showBookmarkAdded = false
@@ -22,7 +23,7 @@ struct PlayerView: View {
             VStack(spacing: 0) {
                 // Drag handle
                 Capsule()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(Color.secondary.opacity(0.5))
                     .frame(width: 36, height: 5)
                     .padding(.top, 8)
 
@@ -49,8 +50,8 @@ struct PlayerView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.15))
-                        .foregroundStyle(.blue)
+                        .background(UserSettings.shared.accentTheme.color.opacity(0.15))
+                        .foregroundStyle(UserSettings.shared.accentTheme.color)
                         .clipShape(Capsule())
                     }
                     .padding(.top, 12)
@@ -72,19 +73,7 @@ struct PlayerView: View {
             }
             .padding(.horizontal, 24)
             .background(Color(.systemBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-            }
         }
-        .preferredColorScheme(.dark)
         .presentationDragIndicator(.hidden)
         .sheet(isPresented: $showBookmarkSheet) {
             AddBookmarkSheet(
@@ -154,7 +143,7 @@ struct PlayerView: View {
                 } label: {
                     Text(player.currentSeries)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(UserSettings.shared.accentTheme.color)
                 }
             } else {
                 Text(player.currentSeries.isEmpty ? "—" : player.currentSeries)
@@ -185,7 +174,7 @@ struct PlayerView: View {
                     }
                 }
             )
-            .tint(.white)
+            .tint(UserSettings.shared.accentTheme.color)
 
             HStack {
                 Text(formatTime(displayTime))
@@ -295,9 +284,18 @@ struct PlayerView: View {
             Button {
                 showSleepTimer.toggle()
             } label: {
-                Image(systemName: "moon.fill")
-                    .font(.title3)
-                    .frame(width: 44, height: 36)
+                if sleepTimer.isActive {
+                    Text(sleepTimer.formattedRemaining)
+                        .font(.caption.bold().monospacedDigit())
+                        .frame(width: 54, height: 36)
+                        .background(UserSettings.shared.accentTheme.color.opacity(0.2))
+                        .foregroundStyle(UserSettings.shared.accentTheme.color)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    Image(systemName: "moon.fill")
+                        .font(.title3)
+                        .frame(width: 44, height: 36)
+                }
             }
             .foregroundStyle(.primary.opacity(0.7))
             .popover(isPresented: $showSleepTimer) {
@@ -318,8 +316,8 @@ struct PlayerView: View {
                 Image(systemName: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
                     .font(.title3)
                     .frame(width: 50, height: 36)
-                    .background(player.volume > 1.0 ? Color.blue.opacity(0.2) : Color.primary.opacity(0.1))
-                    .foregroundStyle(player.volume > 1.0 ? .blue : .primary.opacity(0.7))
+                    .background(player.volume > 1.0 ? UserSettings.shared.accentTheme.color.opacity(0.2) : Color.primary.opacity(0.1))
+                    .foregroundStyle(player.volume > 1.0 ? UserSettings.shared.accentTheme.color : .primary.opacity(0.7))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -361,32 +359,45 @@ struct PlayerView: View {
         VStack(spacing: 4) {
             ForEach([5, 10, 15, 30, 45, 60], id: \.self) { minutes in
                 Button {
-                    // Sleep timer would be implemented in a separate service
+                    sleepTimer.start(minutes: minutes)
                     showSleepTimer = false
                 } label: {
-                    Text("\(minutes) min")
+                    HStack {
+                        Text("\(minutes) min")
+                            .font(.body)
+                        Spacer()
+                        if sleepTimer.isActive {
+                            let activeMinutes = Int(sleepTimer.remainingTime) / 60 + (Int(sleepTimer.remainingTime) % 60 > 0 ? 1 : 0)
+                            if activeMinutes == minutes {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if sleepTimer.isActive {
+                Divider()
+
+                Button {
+                    sleepTimer.cancel()
+                    showSleepTimer = false
+                } label: {
+                    Text("Cancel")
                         .font(.body)
+                        .foregroundStyle(.red)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
             }
-
-            Divider()
-
-            Button {
-                showSleepTimer = false
-            } label: {
-                Text("Off")
-                    .font(.body)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
         }
-        .frame(width: 140)
+        .frame(width: 160)
         .padding(.vertical, 8)
         .presentationCompactAdaptation(.popover)
     }

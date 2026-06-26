@@ -145,6 +145,16 @@ enum Catalog {
         }
     }
 
+    static let discourseLookup: [String: (discourse: CatalogDiscourse, series: SeriesInfo)] = {
+        var dict = [String: (CatalogDiscourse, SeriesInfo)]()
+        for series in allSeries {
+            for disc in discourses(for: series) {
+                dict[disc.id] = (disc, series)
+            }
+        }
+        return dict
+    }()
+
     // MARK: - Curated Lists
 
     static let popularEnglishNames: [String] = [

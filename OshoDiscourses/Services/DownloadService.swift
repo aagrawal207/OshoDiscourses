@@ -23,9 +23,11 @@ final class DownloadService {
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
 
+    private let maxConcurrent = 3
+
     private let manifestURL: URL = {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent(".download_manifest.json")
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return appSupport.appendingPathComponent(".download_manifest.json")
     }()
 
     init() {
@@ -44,6 +46,16 @@ final class DownloadService {
             saveManifest()
             activeDownloads[discourse.id] = DownloadProgress(progress: 1, status: .complete)
             return destination
+        }
+
+        // Prevent concurrent downloads of the same discourse
+        if let existing = activeDownloads[discourse.id], case .downloading = existing.status {
+            return destination
+        }
+
+        // Limit concurrent downloads
+        while activeDownloads.values.filter({ if case .downloading = $0.status { return true } else { return false } }).count >= maxConcurrent {
+            try await Task.sleep(for: .milliseconds(500))
         }
 
         activeDownloads[discourse.id] = DownloadProgress()
@@ -115,6 +127,11 @@ final class DownloadService {
             if FileManager.default.fileExists(atPath: url.path) {
                 return url
             }
+            // File missing on disk — evict from manifest
+            downloadedIDs.remove(discourseID)
+            pathMap.removeValue(forKey: discourseID)
+            saveManifest()
+            return nil
         }
 
         // Fallback: old flat path
@@ -158,18 +175,31 @@ final class DownloadService {
 
     private func saveManifest() {
         guard let data = try? JSONEncoder().encode(pathMap) else { return }
+        let dir = manifestURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? data.write(to: manifestURL)
     }
 
     private func loadManifest() {
-        guard let data = try? Data(contentsOf: manifestURL),
+        // Also try migrating from old Documents location
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let oldManifestURL = docs.appendingPathComponent(".download_manifest.json")
+        let sourceURL: URL
+        if FileManager.default.fileExists(atPath: manifestURL.path) {
+            sourceURL = manifestURL
+        } else if FileManager.default.fileExists(atPath: oldManifestURL.path) {
+            sourceURL = oldManifestURL
+            // Remove old manifest after migration
+            try? FileManager.default.removeItem(at: oldManifestURL)
+        } else {
+            return
+        }
+
+        guard let data = try? Data(contentsOf: sourceURL),
               let map = try? JSONDecoder().decode([String: String].self, from: data) else { return }
         pathMap = map
-        downloadedIDs = Set(map.keys.filter { id in
-            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let path = docs.appendingPathComponent(map[id]!)
-            return FileManager.default.fileExists(atPath: path.path)
-        })
+        // Trust manifest at load time; lazily verify in localFileURL(for:)
+        downloadedIDs = Set(map.keys)
     }
 
     // MARK: - Migration
@@ -193,7 +223,7 @@ final class DownloadService {
     // MARK: - Networking
 
     private func encodedURL(from rawURL: String) throws -> URL {
-        guard let url = URL(string: rawURL.replacingOccurrences(of: " ", with: "%20")) else {
+        guard let url = URL(string: rawURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawURL) else {
             throw URLError(.badURL)
         }
         return url
@@ -211,42 +241,35 @@ final class DownloadService {
                 self?.activeDownloads[discourseID]?.progress = progress.fractionCompleted
             }
         }
+
         defer {
             observation.invalidate()
             activeTasks.removeValue(forKey: discourseID)
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let delegate = DownloadTaskDelegate(continuation: continuation)
-            objc_setAssociatedObject(task, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
-            task.delegate = delegate
-            task.resume()
+        let (tempURL, response) = try await withTaskCancellationHandler {
+            try await URLSession.shared.download(for: request)
+        } onCancel: {
+            task.cancel()
         }
-    }
-}
 
-private final class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate {
-    private var continuation: CheckedContinuation<URL, Error>?
-
-    init(continuation: CheckedContinuation<URL, Error>) {
-        self.continuation = continuation
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let dest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
-        do {
-            try FileManager.default.moveItem(at: location, to: dest)
-            continuation?.resume(returning: dest)
-        } catch {
-            continuation?.resume(throwing: error)
+        // Validate response
+        if let httpResponse = response as? HTTPURLResponse {
+            guard (200...299).contains(httpResponse.statusCode) else {
+                try? FileManager.default.removeItem(at: tempURL)
+                throw URLError(.badServerResponse)
+            }
+            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
+            if contentType.contains("text/html") {
+                try? FileManager.default.removeItem(at: tempURL)
+                throw URLError(.badServerResponse)
+            }
         }
-        continuation = nil
-    }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error {
-            continuation?.resume(throwing: error)
-            continuation = nil
-        }
+        // Move to a stable temp location so the caller can move it to final destination
+        let stableTempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".mp3")
+        try FileManager.default.moveItem(at: tempURL, to: stableTempURL)
+        return stableTempURL
     }
 }

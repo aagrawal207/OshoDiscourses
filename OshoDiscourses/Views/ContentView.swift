@@ -15,15 +15,15 @@ struct ContentView: View {
                     }
                     .tag(0)
 
-                DownloadsView()
+                LibraryView()
                     .tabItem {
-                        Label("Downloads", systemImage: "arrow.down.circle")
+                        Label("Library", systemImage: "books.vertical")
                     }
                     .tag(1)
 
-                BookmarksView()
+                DownloadsView()
                     .tabItem {
-                        Label("Bookmarks", systemImage: "bookmark")
+                        Label("Downloads", systemImage: "arrow.down.circle")
                     }
                     .tag(2)
 

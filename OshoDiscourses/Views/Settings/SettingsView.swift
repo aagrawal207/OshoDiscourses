@@ -6,60 +6,86 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                languageSection
-                browseSectionsSection
-                playbackSection
-                downloadsSection
+                listeningStatsSection
+                contentSection
+                playerSection
                 appearanceSection
                 aboutSection
             }
             .scrollContentBackground(.hidden)
             .background(Color(.systemBackground))
             .navigationTitle("Settings")
+            .safeAreaInset(edge: .bottom) {
+                Spacer().frame(height: 70)
+            }
         }
     }
 
-    private var languageSection: some View {
-        Section("Language") {
-            Picker("Show", selection: $settings.languageFilter) {
+    // MARK: - Listening Stats
+
+    private var listeningStatsSection: some View {
+        Section {
+            NavigationLink {
+                ListeningStatsView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.accent, in: RoundedRectangle(cornerRadius: 6))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Listening Stats")
+                        Text(statsSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
+    }
+
+    private var statsSubtitle: String {
+        let stats = ListeningStatsService.shared
+        let total = Int(stats.totalAllTime)
+        let hrs = total / 3600
+        let mins = (total % 3600) / 60
+        if hrs > 0 { return "\(hrs)h \(mins)m total" }
+        if mins > 0 { return "\(mins)m total" }
+        return "Start listening to track time"
+    }
+
+    // MARK: - Content (Language)
+
+    private var contentSection: some View {
+        Section {
+            Picker("Language", selection: $settings.languageFilter) {
                 Text("Both").tag(LanguageFilter.both)
                 Text("English").tag(LanguageFilter.english)
                 Text("Hindi").tag(LanguageFilter.hindi)
             }
             .pickerStyle(.segmented)
+        } header: {
+            Text("Content Language")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 
-    private var browseSectionsSection: some View {
-        Section("Browse Sections") {
-            Toggle("Popular in English", isOn: $settings.showPopularEnglish)
-                .disabled(settings.hideEnglish)
-            Toggle("Beginner Friendly (English)", isOn: $settings.showBeginnerEnglish)
-                .disabled(settings.hideEnglish)
-            Toggle("Popular in Hindi", isOn: $settings.showPopularHindi)
-                .disabled(settings.hideHindi)
-            Toggle("Beginner Friendly (Hindi)", isOn: $settings.showBeginnerHindi)
-                .disabled(settings.hideHindi)
-        }
-        .listRowBackground(Color(.secondarySystemGroupedBackground))
-    }
+    // MARK: - Player & Downloads
 
-    private var playbackSection: some View {
-        Section("Playback") {
+    private var playerSection: some View {
+        Section("Player & Downloads") {
             Toggle("Auto-Play Next", isOn: $settings.autoPlayNext)
-        }
-        .listRowBackground(Color(.secondarySystemGroupedBackground))
-    }
-
-    private var downloadsSection: some View {
-        Section("Downloads") {
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 
+    // MARK: - Appearance
+
+    @ViewBuilder
     private var appearanceSection: some View {
         Section("Appearance") {
             Picker("Theme", selection: $settings.appearance) {
@@ -68,40 +94,37 @@ struct SettingsView: View {
                 Text("Light").tag(UserSettings.Appearance.light)
             }
             .pickerStyle(.segmented)
+        }
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Accent Color")
-                    .font(.subheadline)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(AccentTheme.allCases) { theme in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    settings.accentTheme = theme
-                                }
-                            } label: {
-                                Circle()
-                                    .fill(theme.color)
-                                    .frame(width: 32, height: 32)
-                                    .overlay {
-                                        if settings.accentTheme == theme {
-                                            Image(systemName: "checkmark")
-                                                .font(.caption.weight(.bold))
-                                                .foregroundStyle(.white)
-                                        }
-                                    }
-                                    .overlay {
-                                        Circle()
-                                            .strokeBorder(
-                                                settings.accentTheme == theme ? theme.color : .clear,
-                                                lineWidth: 2
-                                            )
-                                            .frame(width: 40, height: 40)
-                                    }
-                            }
-                            .buttonStyle(.plain)
+        Section("Accent Color") {
+            HStack(spacing: 10) {
+                ForEach(AccentTheme.allCases) { theme in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            settings.accentTheme = theme
                         }
+                    } label: {
+                        Circle()
+                            .fill(theme.color)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                if settings.accentTheme == theme {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            .padding(3)
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(
+                                        settings.accentTheme == theme ? theme.color : .clear,
+                                        lineWidth: 2
+                                    )
+                            }
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.vertical, 4)
@@ -109,26 +132,14 @@ struct SettingsView: View {
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 
+    // MARK: - About
+
     private var aboutSection: some View {
         Section {
-            HStack {
-                Text("Version")
-                Spacer()
-                Text("1.0.0")
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Text("Series")
-                Spacer()
-                Text("\(Catalog.allSeries.count)")
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Text("Total Discourses")
-                Spacer()
-                Text("\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
-                    .foregroundStyle(.secondary)
-            }
+            LabeledContent("Version", value: "1.1.0")
+            LabeledContent("Series", value: "\(Catalog.allSeries.count)")
+            LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
+
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 HStack {
                     Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
@@ -142,7 +153,9 @@ struct SettingsView: View {
             Text("About")
         } footer: {
             Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
+                .padding(.top, 8)
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 }
+

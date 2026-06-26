@@ -38,6 +38,9 @@ struct BookmarksView: View {
             }
             .background(Color(.systemBackground))
             .navigationTitle("Bookmarks")
+            .safeAreaInset(edge: .bottom) {
+                Spacer().frame(height: 70)
+            }
         }
     }
 
@@ -109,7 +112,7 @@ private struct FilterChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(isActive ? Color.blue : Color(.tertiarySystemFill))
+            .background(isActive ? Color.accent : Color(.tertiarySystemFill))
             .foregroundStyle(isActive ? .white : .primary)
             .clipShape(Capsule())
         }
@@ -143,8 +146,8 @@ private struct BookmarkRow: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.12))
-                    .foregroundStyle(.blue)
+                    .background(Color.accent.opacity(0.12))
+                    .foregroundStyle(Color.accent)
                     .clipShape(Capsule())
 
                     // Timestamp
@@ -170,7 +173,7 @@ private struct BookmarkRow: View {
                 } label: {
                     Image(systemName: "play.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accent)
                 }
                 .buttonStyle(.plain)
             } else if downloads.isDownloading(bookmark.discourseID) {
@@ -182,7 +185,7 @@ private struct BookmarkRow: View {
                 } label: {
                     Image(systemName: "arrow.down.circle")
                         .font(.title2)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accent)
                 }
                 .buttonStyle(.plain)
             }
