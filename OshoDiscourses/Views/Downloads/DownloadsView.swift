@@ -73,10 +73,12 @@ struct DownloadsView: View {
                                 deleteDiscourses(at: indexSet, in: group.discourses)
                             }
                         } header: {
-                            DownloadedSeriesHeader(
-                                seriesInfo: group.seriesInfo,
-                                count: group.discourses.count
-                            )
+                            NavigationLink(value: group.seriesInfo) {
+                                DownloadedSeriesHeader(
+                                    seriesInfo: group.seriesInfo,
+                                    count: group.discourses.count
+                                )
+                            }
                         }
                         .listRowBackground(Color(.secondarySystemGroupedBackground))
                     }
@@ -86,6 +88,9 @@ struct DownloadsView: View {
             .scrollContentBackground(.hidden)
             .background(Color(.systemBackground))
             .navigationTitle("Downloads")
+            .navigationDestination(for: SeriesInfo.self) { series in
+                SeriesDetailView(seriesInfo: series)
+            }
             .searchable(text: $searchText, prompt: "Search downloads")
             .safeAreaInset(edge: .bottom) {
                 Spacer().frame(height: 70)

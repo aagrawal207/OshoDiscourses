@@ -97,9 +97,13 @@ struct SettingsView: View {
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
 
-        Section("Accent Color") {
-            HStack(spacing: 10) {
-                ForEach(AccentTheme.allCases) { theme in
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Accent Color")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    ForEach(AccentTheme.allCases) { theme in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             settings.accentTheme = theme
@@ -125,6 +129,7 @@ struct SettingsView: View {
                             }
                     }
                     .buttonStyle(.plain)
+                }
                 }
             }
             .padding(.vertical, 4)
