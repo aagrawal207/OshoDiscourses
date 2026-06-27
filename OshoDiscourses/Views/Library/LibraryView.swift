@@ -1,10 +1,21 @@
 import SwiftUI
 
-enum SeriesFilter: String, CaseIterable {
-    case all = "All"
-    case english = "English"
-    case hindi = "Hindi"
-    case downloaded = "Downloaded"
+enum SeriesFilter: Hashable {
+    case all
+    case english
+    case hindi
+    case downloaded
+    case theme(String)
+
+    var label: String {
+        switch self {
+        case .all: return "All"
+        case .english: return "English"
+        case .hindi: return "Hindi"
+        case .downloaded: return "Downloaded"
+        case .theme(let name): return name.capitalized
+        }
+    }
 }
 
 enum SeriesSortField: String, CaseIterable {
@@ -32,12 +43,57 @@ struct LibraryView: View {
     @Environment(DownloadService.self) private var downloads
     private var settings = UserSettings.shared
 
+    /// Themes shown as filter chips only when shared by at least this many
+    /// currently-visible series — keeps one-off themes out of the bar.
+    private let minSeriesPerThemeFilter = 3
+
     private var visibleSeries: [SeriesInfo] {
         Catalog.allSeries.filter { series in
             if settings.hideHindi && series.language == .hindi { return false }
             if settings.hideEnglish && series.language == .english { return false }
             return true
         }
+    }
+
+    /// Filters that actually have entries given the visible series + downloads.
+    /// "All" is always present; language/downloaded/theme chips appear only when
+    /// at least one matching series exists.
+    private var availableFilters: [SeriesFilter] {
+        var filters: [SeriesFilter] = [.all]
+
+        let hasEnglish = visibleSeries.contains { $0.language == .english }
+        let hasHindi = visibleSeries.contains { $0.language == .hindi }
+        // Only offer a language chip when both languages are present — if only
+        // one is visible, the chip would be redundant with "All".
+        if hasEnglish && hasHindi {
+            filters.append(.english)
+            filters.append(.hindi)
+        }
+
+        let downloadedSeriesIDs = Set(
+            downloads.downloadedIDs.compactMap { Catalog.discourseLookup[$0]?.series.id }
+        )
+        if visibleSeries.contains(where: { downloadedSeriesIDs.contains($0.id) }) {
+            filters.append(.downloaded)
+        }
+
+        // Count theme occurrences across visible series; keep the shared ones.
+        var themeCounts: [String: Int] = [:]
+        for series in visibleSeries {
+            for theme in SeriesMetadata.themes(for: series.name) {
+                let key = theme.lowercased()
+                if key == "hindi" || key == "english" { continue }  // redundant w/ language
+                themeCounts[key, default: 0] += 1
+            }
+        }
+        let themeFilters = themeCounts
+            .filter { $0.value >= minSeriesPerThemeFilter }
+            .keys
+            .sorted()
+            .map { SeriesFilter.theme($0) }
+        filters.append(contentsOf: themeFilters)
+
+        return filters
     }
 
     private var filteredSeries: [SeriesInfo] {
@@ -60,6 +116,10 @@ struct LibraryView: View {
                 downloads.downloadedIDs.compactMap { Catalog.discourseLookup[$0]?.series.id }
             )
             result = result.filter { downloadedSeriesIDs.contains($0.id) }
+        case .theme(let theme):
+            result = result.filter { series in
+                SeriesMetadata.themes(for: series.name).contains { $0.lowercased() == theme }
+            }
         }
 
         switch (sortField, sortDirection) {
@@ -97,19 +157,30 @@ struct LibraryView: View {
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
+            .onAppear { resetFilterIfUnavailable() }
+            .onChange(of: settings.languageFilter) { resetFilterIfUnavailable() }
+            .onChange(of: downloads.downloadedIDs) { resetFilterIfUnavailable() }
+        }
+    }
+
+    /// If the active filter is no longer offered (language hidden, last download
+    /// removed, etc.), fall back to All so the list isn't stuck empty.
+    private func resetFilterIfUnavailable() {
+        if !availableFilters.contains(activeFilter) {
+            activeFilter = .all
         }
     }
 
     private var filterSortBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(SeriesFilter.allCases, id: \.self) { filter in
+                ForEach(availableFilters, id: \.self) { filter in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             activeFilter = activeFilter == filter ? .all : filter
                         }
                     } label: {
-                        Text(filter.rawValue)
+                        Text(filter.label)
                             .font(.caption.weight(.medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
