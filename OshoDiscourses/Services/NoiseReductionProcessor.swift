@@ -7,7 +7,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     private var profileFrameCount = 0
     private let profileLearnFrames = 15
     private var previousGains: [Float]?
-    private let smoothingFactor: Float = 0.7
+    private let smoothingFactor: Float = 0.85
 
     init() {}
 
@@ -77,15 +77,16 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
         guard let noise = noiseFloor, noise.count == halfN else { return }
 
-        // Wiener gain
+        // Gentle Wiener gain — high floor to avoid artifacts
         var gains = [Float](repeating: 0, count: halfN)
         for i in 0..<halfN {
             let signalPower = power[i]
             let noisePower = noise[i]
-            if signalPower > noisePower * 0.5 {
-                gains[i] = max((signalPower - noisePower) / signalPower, 0.12)
+            if signalPower > noisePower {
+                let reduction = (signalPower - noisePower * 0.6) / signalPower
+                gains[i] = max(reduction, 0.4)
             } else {
-                gains[i] = 0.12
+                gains[i] = 0.4
             }
         }
 
