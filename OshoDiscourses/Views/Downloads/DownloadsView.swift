@@ -3,6 +3,7 @@ import SwiftUI
 struct DownloadsView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
+    @Environment(PlaybackStateService.self) private var playbackState
     @Bindable private var settings = UserSettings.shared
     private var bookmarkService = BookmarkService.shared
     @State private var searchText = ""
@@ -27,73 +28,142 @@ struct DownloadsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    NavigationLink {
-                        BookmarksView()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "bookmark.fill")
-                                .font(.title3)
-                                .foregroundStyle(Color.accent)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Bookmarks")
-                                    .font(.body)
-                                if !bookmarkService.bookmarks.isEmpty {
-                                    Text("\(bookmarkService.bookmarks.count) saved")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-                .listRowBackground(Color(.secondarySystemGroupedBackground))
-
-                if filteredDownloads.isEmpty {
-                    Section {
-                        ContentUnavailableView(
-                            searchText.isEmpty ? "No Downloads" : "No Results",
-                            systemImage: searchText.isEmpty ? "arrow.down.circle" : "magnifyingglass",
-                            description: Text(searchText.isEmpty
-                                ? "Downloaded discourses will appear here."
-                                : "No downloads match \"\(searchText)\".")
-                        )
-                    }
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(filteredDownloads, id: \.seriesInfo.id) { group in
-                        Section {
-                            ForEach(group.discourses) { discourse in
-                                DownloadedDiscourseRow(
-                                    discourse: discourse,
-                                    seriesInfo: group.seriesInfo
-                                )
-                            }
-                            .onDelete { indexSet in
-                                deleteDiscourses(at: indexSet, in: group.discourses)
-                            }
-                        } header: {
-                            NavigationLink(value: group.seriesInfo) {
-                                DownloadedSeriesHeader(
-                                    seriesInfo: group.seriesInfo,
-                                    count: group.discourses.count
-                                )
-                            }
-                        }
-                        .listRowBackground(Color(.secondarySystemGroupedBackground))
-                    }
-                }
+                activitySection
+                downloadsSection
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color(.systemBackground))
-            .navigationTitle("Downloads")
+            .navigationTitle("My Activity")
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
             .searchable(text: $searchText, prompt: "Search downloads")
             .safeAreaInset(edge: .bottom) {
                 Spacer().frame(height: 70)
+            }
+        }
+    }
+
+    // MARK: - Activity Section
+
+    private var activitySection: some View {
+        Section {
+            NavigationLink {
+                ListeningStatsView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Listening Stats")
+                            .font(.body)
+                        Text(statsSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            NavigationLink {
+                BookmarksView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "bookmark.fill")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Bookmarks")
+                            .font(.body)
+                        if !bookmarkService.bookmarks.isEmpty {
+                            Text("\(bookmarkService.bookmarks.count) saved")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            NavigationLink {
+                RatingsListView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "star.fill")
+                        .font(.title3)
+                        .foregroundStyle(.yellow)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("My Ratings")
+                            .font(.body)
+                        Text(ratingsSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
+    }
+
+    private var statsSubtitle: String {
+        let stats = ListeningStatsService.shared
+        let total = Int(stats.totalAllTime)
+        let hrs = total / 3600
+        let mins = (total % 3600) / 60
+        if hrs > 0 { return "\(hrs)h \(mins)m listened" }
+        if mins > 0 { return "\(mins)m listened" }
+        return "Start listening to track time"
+    }
+
+    private var ratingsSubtitle: String {
+        let ratings = RatingService.shared
+        let seriesCount = Catalog.allSeries.filter { ratings.seriesRating(for: $0.id) > 0 }.count
+        let discourseCount = Catalog.allSeries.reduce(0) { total, series in
+            total + Catalog.discourses(for: series).filter { ratings.discourseRating(for: $0.id) > 0 }.count
+        }
+        let parts = [
+            seriesCount > 0 ? "\(seriesCount) series" : nil,
+            discourseCount > 0 ? "\(discourseCount) discourses" : nil
+        ].compactMap { $0 }
+        return parts.isEmpty ? "Rate series and discourses" : parts.joined(separator: ", ")
+    }
+
+    // MARK: - Downloads Section
+
+    @ViewBuilder
+    private var downloadsSection: some View {
+        if filteredDownloads.isEmpty {
+            Section("Downloads") {
+                ContentUnavailableView(
+                    searchText.isEmpty ? "No Downloads" : "No Results",
+                    systemImage: searchText.isEmpty ? "arrow.down.circle" : "magnifyingglass",
+                    description: Text(searchText.isEmpty
+                        ? "Downloaded discourses will appear here."
+                        : "No downloads match \"\(searchText)\".")
+                )
+            }
+            .listRowBackground(Color.clear)
+        } else {
+            ForEach(filteredDownloads, id: \.seriesInfo.id) { group in
+                Section {
+                    ForEach(group.discourses) { discourse in
+                        DownloadedDiscourseRow(
+                            discourse: discourse,
+                            seriesInfo: group.seriesInfo
+                        )
+                    }
+                    .onDelete { indexSet in
+                        deleteDiscourses(at: indexSet, in: group.discourses)
+                    }
+                } header: {
+                    NavigationLink(value: group.seriesInfo) {
+                        DownloadedSeriesHeader(
+                            seriesInfo: group.seriesInfo,
+                            count: group.discourses.count
+                        )
+                    }
+                }
+                .listRowBackground(Color(.secondarySystemGroupedBackground))
             }
         }
     }

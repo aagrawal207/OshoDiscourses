@@ -6,7 +6,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                listeningStatsSection
                 contentSection
                 playerSection
                 appearanceSection
@@ -19,41 +18,6 @@ struct SettingsView: View {
                 Spacer().frame(height: 70)
             }
         }
-    }
-
-    // MARK: - Listening Stats
-
-    private var listeningStatsSection: some View {
-        Section {
-            NavigationLink {
-                ListeningStatsView()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "chart.bar.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Color.accent, in: RoundedRectangle(cornerRadius: 6))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Listening Stats")
-                        Text(statsSubtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .listRowBackground(Color(.secondarySystemGroupedBackground))
-    }
-
-    private var statsSubtitle: String {
-        let stats = ListeningStatsService.shared
-        let total = Int(stats.totalAllTime)
-        let hrs = total / 3600
-        let mins = (total % 3600) / 60
-        if hrs > 0 { return "\(hrs)h \(mins)m total" }
-        if mins > 0 { return "\(mins)m total" }
-        return "Start listening to track time"
     }
 
     // MARK: - Content (Language)
