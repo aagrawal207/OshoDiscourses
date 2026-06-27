@@ -40,11 +40,7 @@ final class AudioPlayerService {
     var isNoiseReductionEnabled: Bool = false {
         didSet { rebuildAudioMix() }
     }
-    var isVoiceFilterEnabled: Bool = false {
-        didSet { rebuildAudioMix() }
-    }
     private let noiseProcessor = NoiseReductionProcessor()
-    private let voiceFilterProcessor = VoiceFilterProcessor()
 
     // MARK: - Playback State
 
@@ -72,7 +68,6 @@ final class AudioPlayerService {
 
     init() {
         isNoiseReductionEnabled = UserSettings.shared.noiseReduction
-        isVoiceFilterEnabled = UserSettings.shared.voiceFilter
         setupAudioSession()
         setupRemoteCommands()
         setupLiveActivityBridge()
@@ -586,9 +581,6 @@ final class AudioPlayerService {
             if isNoiseReductionEnabled {
                 guard let mix = noiseProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
                 await MainActor.run { item.audioMix = mix }
-            } else if isVoiceFilterEnabled {
-                guard let mix = voiceFilterProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
-                await MainActor.run { item.audioMix = mix }
             } else if volume > 1.0 {
                 let params = AVMutableAudioMixInputParameters(track: track)
                 params.setVolume(volume, at: .zero)
@@ -604,9 +596,7 @@ final class AudioPlayerService {
     private func rebuildAudioMix() {
         guard let item = player?.currentItem else { return }
         noiseProcessor.reset()
-        voiceFilterProcessor.reset()
         applyAudioMix(to: item)
         UserSettings.shared.noiseReduction = isNoiseReductionEnabled
-        UserSettings.shared.voiceFilter = isVoiceFilterEnabled
     }
 }
