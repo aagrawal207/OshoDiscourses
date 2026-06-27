@@ -17,10 +17,21 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
     private let frameSize = Int(rnnoise_get_frame_size())   // 480
 
+    /// Fraction of the denoised (wet) signal in the output, 0...1. The remainder
+    /// is the original (dry) signal. A blend below 1.0 preserves voice clarity:
+    /// it floors how much any frequency band — including the consonant energy
+    /// (s, t, f, sh) that RNNoise tends to over-suppress and that makes speech
+    /// intelligible — can be attenuated. At 0.5, no band ever drops below half
+    /// amplitude, keeping words crisp while still dropping steady noise ~6dB.
+    var wetMix: Float = 0.5 {
+        didSet { wetMix = min(max(wetMix, 0), 1) }
+    }
+
     private final class Channel {
         var state: OpaquePointer?           // DenoiseState*
         var inBuf: UnsafeMutablePointer<Float>
-        var outBuf: UnsafeMutablePointer<Float>
+        var outBuf: UnsafeMutablePointer<Float>   // wet (denoised) FIFO
+        var dryBuf: UnsafeMutablePointer<Float>   // dry FIFO, lockstep with outBuf
         var frameIn: UnsafeMutablePointer<Float>
         var frameOut: UnsafeMutablePointer<Float>
         var inCount = 0
@@ -31,10 +42,12 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             self.capacity = capacity
             inBuf = .allocate(capacity: capacity)
             outBuf = .allocate(capacity: capacity)
+            dryBuf = .allocate(capacity: capacity)
             frameIn = .allocate(capacity: frameSize)
             frameOut = .allocate(capacity: frameSize)
             inBuf.initialize(repeating: 0, count: capacity)
             outBuf.initialize(repeating: 0, count: capacity)
+            dryBuf.initialize(repeating: 0, count: capacity)
             frameIn.initialize(repeating: 0, count: frameSize)
             frameOut.initialize(repeating: 0, count: frameSize)
             state = rnnoise_create(nil)
@@ -44,6 +57,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             if let state { rnnoise_destroy(state) }
             inBuf.deallocate()
             outBuf.deallocate()
+            dryBuf.deallocate()
             frameIn.deallocate()
             frameOut.deallocate()
         }
@@ -72,11 +86,13 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         built.reserveCapacity(channelCount)
         for _ in 0..<max(channelCount, 1) {
             let ch = Channel(capacity: capacity, frameSize: frameSize)
-            // Prime the output FIFO with one block of silence. This establishes a
+            // Prime both FIFOs with one block of silence. This establishes a
             // constant `frameSize` latency and guarantees the emit step below can
             // always pull as many samples as came in (proven: in+out == frameSize
-            // is invariant, and out-before-pop >= N+1 for any N).
+            // is invariant, and out-before-pop >= N+1 for any N). The dry FIFO is
+            // primed identically so wet and dry stay sample-aligned for blending.
             ch.outBuf.update(repeating: 0, count: frameSize)
+            ch.dryBuf.update(repeating: 0, count: frameSize)
             ch.outCount = frameSize
             built.append(ch)
         }
@@ -92,7 +108,8 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             ch.state = rnnoise_create(nil)
             ch.inCount = 0
             ch.outBuf.update(repeating: 0, count: ch.capacity)
-            ch.outCount = frameSize       // re-prime latency block
+            ch.dryBuf.update(repeating: 0, count: ch.capacity)
+            ch.outCount = frameSize       // re-prime latency block (both FIFOs)
         }
     }
 
@@ -142,7 +159,9 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         vDSP_vsmul(samples, 1, &scaleUp, ch.inBuf + ch.inCount, 1, vDSP_Length(n))
         ch.inCount += n
 
-        // 2. Drain every complete 480-sample frame through RNNoise.
+        // 2. Drain every complete 480-sample frame through RNNoise. For each frame
+        //    we push the denoised (wet) result to outBuf and the matching original
+        //    (dry) samples to dryBuf at the same offset, keeping them aligned.
         var consumed = 0
         while ch.inCount - consumed >= frameSize {
             // out must hold a full frame; capacity guarantees it (see prepare).
@@ -151,6 +170,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             (ch.frameIn).update(from: ch.inBuf + consumed, count: frameSize)
             rnnoise_process_frame(ch.state, ch.frameOut, ch.frameIn)
             (ch.outBuf + ch.outCount).update(from: ch.frameOut, count: frameSize)
+            (ch.dryBuf + ch.outCount).update(from: ch.frameIn, count: frameSize)
             ch.outCount += frameSize
             consumed += frameSize
         }
@@ -164,20 +184,30 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             ch.inCount = remaining
         }
 
-        // 4. Emit n samples from the output FIFO, scaled back to ±1.0.
-        //    The priming block guarantees outCount >= n here.
+        // 4. Emit n samples: blend wet (denoised) and dry (original) per the mix,
+        //    then scale back to ±1.0. wetMix below 1.0 preserves voice clarity by
+        //    flooring how much any band — including over-suppressed consonants —
+        //    can be attenuated. The priming block guarantees outCount >= n.
         let emit = min(n, ch.outCount)
-        var scaleDown: Float = 1.0 / 32768.0
-        vDSP_vsmul(ch.outBuf, 1, &scaleDown, samples, 1, vDSP_Length(emit))
+        let wet = wetMix
+        let dry = 1.0 - wetMix
+        let inv: Float = 1.0 / 32768.0
+        var wetScale = wet * inv
+        var dryScale = dry * inv
+        // samples = outBuf*wetScale, then samples = dryBuf*dryScale + samples.
+        // (vDSP_vsma: D[i] = A[i]*scalar + C[i] — vector × scalar + vector)
+        vDSP_vsmul(ch.outBuf, 1, &wetScale, samples, 1, vDSP_Length(emit))
+        vDSP_vsma(ch.dryBuf, 1, &dryScale, samples, 1, samples, 1, vDSP_Length(emit))
         if emit < n {
             // Should not happen given the invariant; fill any shortfall with silence.
             (samples + emit).update(repeating: 0, count: n - emit)
         }
 
-        // 5. Shift the consumed output out of the FIFO.
+        // 5. Shift the consumed output out of both FIFOs in lockstep.
         let leftover = ch.outCount - emit
         if leftover > 0 {
             memmove(ch.outBuf, ch.outBuf + emit, leftover * MemoryLayout<Float>.size)
+            memmove(ch.dryBuf, ch.dryBuf + emit, leftover * MemoryLayout<Float>.size)
         }
         ch.outCount = leftover
     }

@@ -37,8 +37,33 @@ final class AudioPlayerService {
 
     // MARK: - Noise Reduction / Voice Filter
 
+    enum DenoiseStrength: String, CaseIterable, Sendable {
+        case light, medium, strong
+        /// Wet (denoised) fraction. Lower = clearer voice, higher = more noise removed.
+        var wetMix: Float {
+            switch self {
+            case .light: return 0.35
+            case .medium: return 0.5
+            case .strong: return 0.7
+            }
+        }
+        var label: String {
+            switch self {
+            case .light: return "Light"
+            case .medium: return "Medium"
+            case .strong: return "Strong"
+            }
+        }
+    }
+
     var isNoiseReductionEnabled: Bool = false {
         didSet { rebuildAudioMix() }
+    }
+    var denoiseStrength: DenoiseStrength = .medium {
+        didSet {
+            noiseProcessor.wetMix = denoiseStrength.wetMix
+            UserSettings.shared.denoiseStrength = denoiseStrength.rawValue
+        }
     }
     private let noiseProcessor = NoiseReductionProcessor()
 
@@ -68,6 +93,8 @@ final class AudioPlayerService {
 
     init() {
         isNoiseReductionEnabled = UserSettings.shared.noiseReduction
+        denoiseStrength = DenoiseStrength(rawValue: UserSettings.shared.denoiseStrength) ?? .medium
+        noiseProcessor.wetMix = denoiseStrength.wetMix
         setupAudioSession()
         setupRemoteCommands()
         setupLiveActivityBridge()

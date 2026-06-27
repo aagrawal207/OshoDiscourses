@@ -269,6 +269,24 @@ struct PlayerView: View {
             ) {
                 player.isNoiseReductionEnabled.toggle()
             }
+            .contextMenu {
+                Section("Denoise Strength") {
+                    ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
+                        Button {
+                            player.denoiseStrength = strength
+                            if !player.isNoiseReductionEnabled {
+                                player.isNoiseReductionEnabled = true
+                            }
+                        } label: {
+                            if player.denoiseStrength == strength {
+                                Label(strength.label, systemImage: "checkmark")
+                            } else {
+                                Text(strength.label)
+                            }
+                        }
+                    }
+                }
+            }
 
             playerControlButton(
                 icon: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.2",
