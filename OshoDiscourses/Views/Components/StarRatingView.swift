@@ -7,11 +7,11 @@ struct StarRatingView: View {
     var onRate: ((Int) -> Void)?
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: size * 0.25) {
             ForEach(1...maxRating, id: \.self) { star in
                 Image(systemName: star <= rating ? "star.fill" : "star")
                     .font(.system(size: size))
-                    .foregroundStyle(star <= rating ? .yellow : .secondary.opacity(0.4))
+                    .foregroundStyle(star <= rating ? .yellow : .secondary.opacity(0.3))
                     .onTapGesture {
                         if star == rating {
                             onRate?(0)
@@ -21,5 +21,24 @@ struct StarRatingView: View {
                     }
             }
         }
+    }
+}
+
+struct CompactRatingBadge: View {
+    let rating: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "star.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(.yellow)
+            Text("\(rating)")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.yellow.opacity(0.1))
+        .clipShape(Capsule())
     }
 }

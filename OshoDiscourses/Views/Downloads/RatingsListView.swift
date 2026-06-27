@@ -7,15 +7,15 @@ struct RatingsListView: View {
     var body: some View {
         List {
             if !ratedSeries.isEmpty {
-                Section("Series") {
+                Section {
                     ForEach(ratedSeries, id: \.series.id) { item in
                         NavigationLink(value: item.series) {
                             HStack(spacing: 12) {
-                                SeriesThumbnailView(name: item.series.name, size: 36)
+                                SeriesThumbnailView(name: item.series.name, size: 40)
 
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(item.series.name)
-                                        .font(.body)
+                                        .font(.subheadline.weight(.medium))
                                         .lineLimit(1)
                                     Text("\(item.series.count) discourses")
                                         .font(.caption)
@@ -24,24 +24,26 @@ struct RatingsListView: View {
 
                                 Spacer()
 
-                                starsDisplay(item.rating)
+                                CompactRatingBadge(rating: item.rating)
                             }
                         }
                     }
+                } header: {
+                    Text("Series (\(ratedSeries.count))")
                 }
                 .listRowBackground(Color(.secondarySystemGroupedBackground))
             }
 
             if !ratedDiscourses.isEmpty {
-                Section("Discourses") {
+                Section {
                     ForEach(ratedDiscourses, id: \.discourse.id) { item in
                         NavigationLink(value: item.series) {
                             HStack(spacing: 12) {
-                                SeriesThumbnailView(name: item.series.name, size: 36)
+                                SeriesThumbnailView(name: item.series.name, size: 40)
 
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(item.discourse.displayTitle)
-                                        .font(.body)
+                                        .font(.subheadline.weight(.medium))
                                         .lineLimit(1)
                                     Text(item.series.name)
                                         .font(.caption)
@@ -51,10 +53,12 @@ struct RatingsListView: View {
 
                                 Spacer()
 
-                                starsDisplay(item.rating)
+                                CompactRatingBadge(rating: item.rating)
                             }
                         }
                     }
+                } header: {
+                    Text("Discourses (\(ratedDiscourses.count))")
                 }
                 .listRowBackground(Color(.secondarySystemGroupedBackground))
             }
@@ -62,9 +66,9 @@ struct RatingsListView: View {
             if ratedSeries.isEmpty && ratedDiscourses.isEmpty {
                 Section {
                     ContentUnavailableView(
-                        "No Ratings",
+                        "No Ratings Yet",
                         systemImage: "star",
-                        description: Text("Rate discourses and series to see them here.")
+                        description: Text("Long-press any discourse to rate it, or tap the stars in a series header.")
                     )
                 }
                 .listRowBackground(Color.clear)
@@ -78,17 +82,10 @@ struct RatingsListView: View {
         .navigationDestination(for: SeriesInfo.self) { series in
             SeriesDetailView(seriesInfo: series)
         }
-        .onAppear { loadRatings() }
-    }
-
-    private func starsDisplay(_ count: Int) -> some View {
-        HStack(spacing: 1) {
-            ForEach(1...count, id: \.self) { _ in
-                Image(systemName: "star.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.yellow)
-            }
+        .safeAreaInset(edge: .bottom) {
+            Spacer().frame(height: 70)
         }
+        .onAppear { loadRatings() }
     }
 
     private func loadRatings() {

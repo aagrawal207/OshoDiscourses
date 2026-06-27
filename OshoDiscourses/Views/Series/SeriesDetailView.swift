@@ -77,11 +77,16 @@ struct SeriesDetailView: View {
                         .foregroundStyle(.green)
                 }
 
-                StarRatingView(rating: seriesRating, size: 20) { newRating in
-                    RatingService.shared.setSeriesRating(newRating, for: seriesInfo.id)
-                    seriesRating = newRating
+                HStack(spacing: 6) {
+                    Text("Your rating")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    StarRatingView(rating: seriesRating, size: 14) { newRating in
+                        RatingService.shared.setSeriesRating(newRating, for: seriesInfo.id)
+                        seriesRating = newRating
+                    }
                 }
-                .padding(.top, 4)
+                .padding(.top, 6)
                 .onAppear {
                     seriesRating = RatingService.shared.seriesRating(for: seriesInfo.id)
                 }
@@ -237,22 +242,13 @@ private struct DiscourseRowView: View {
                     .lineLimit(1)
                     .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
 
-                HStack(spacing: 4) {
-                    if showDownloadHint {
-                        Text("Downloading...")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .transition(.opacity)
-                    }
-                    if discRating > 0 {
-                        HStack(spacing: 1) {
-                            ForEach(1...discRating, id: \.self) { _ in
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.yellow)
-                            }
-                        }
-                    }
+                if showDownloadHint {
+                    Text("Downloading...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                } else if discRating > 0 {
+                    CompactRatingBadge(rating: discRating)
                 }
             }
 
@@ -292,10 +288,11 @@ private struct DiscourseRowView: View {
                         RatingService.shared.setDiscourseRating(star, for: discourse.id)
                         discRating = star
                     } label: {
-                        Label(
-                            String(repeating: "\u{2605}", count: star),
-                            systemImage: star == discRating ? "checkmark" : "star"
-                        )
+                        if star == discRating {
+                            Label("\(star) / 5", systemImage: "checkmark.circle.fill")
+                        } else {
+                            Label("\(star) / 5", systemImage: "\(star).circle")
+                        }
                     }
                 }
                 if discRating > 0 {
@@ -304,13 +301,13 @@ private struct DiscourseRowView: View {
                         RatingService.shared.setDiscourseRating(0, for: discourse.id)
                         discRating = 0
                     } label: {
-                        Label("Clear Rating", systemImage: "xmark")
+                        Label("Clear Rating", systemImage: "xmark.circle")
                     }
                 }
             } label: {
                 Label(
-                    discRating > 0 ? "Rating: \(String(repeating: "\u{2605}", count: discRating))" : "Rate",
-                    systemImage: "star"
+                    discRating > 0 ? "Rated \(discRating)/5" : "Rate",
+                    systemImage: discRating > 0 ? "star.fill" : "star"
                 )
             }
         }
