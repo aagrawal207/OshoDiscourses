@@ -125,7 +125,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
-            LabeledContent("Version", value: "1.2.0")
+            LabeledContent("Version", value: "1.3.0")
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
