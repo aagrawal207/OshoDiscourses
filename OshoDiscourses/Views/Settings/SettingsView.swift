@@ -2,12 +2,14 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
+    @Environment(AudioPlayerService.self) private var player
 
     var body: some View {
         NavigationStack {
             Form {
                 contentSection
                 playerSection
+                noiseReductionSection
                 appearanceSection
                 aboutSection
             }
@@ -41,9 +43,32 @@ struct SettingsView: View {
     private var playerSection: some View {
         Section("Player & Downloads") {
             Toggle("Auto-Play Next", isOn: $settings.autoPlayNext)
-            Toggle("Noise Reduction", isOn: $settings.noiseReduction)
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
+        }
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
+    }
+
+    // MARK: - Noise Reduction
+
+    @ViewBuilder
+    private var noiseReductionSection: some View {
+        @Bindable var player = player
+        Section {
+            Toggle("Noise Reduction", isOn: $player.isNoiseReductionEnabled)
+
+            if player.isNoiseReductionEnabled {
+                Picker("Strength", selection: $player.denoiseStrength) {
+                    ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
+                        Text(strength.label).tag(strength)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        } header: {
+            Text("Noise Reduction")
+        } footer: {
+            Text("Reduces background hiss and hum during playback using on-device speech filtering. It can slightly soften the voice — Light keeps speech clearest, Strong removes the most noise. You can also long-press the Denoise button in the player to change strength.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
