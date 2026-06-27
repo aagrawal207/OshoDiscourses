@@ -35,6 +35,13 @@ final class AudioPlayerService {
     var hasNext: Bool { currentIndex < queue.count - 1 }
     var hasPrevious: Bool { currentIndex > 0 }
 
+    // MARK: - Noise Reduction
+
+    var isNoiseReductionEnabled: Bool = false {
+        didSet { applyNoiseReduction() }
+    }
+    private let noiseProcessor = NoiseReductionProcessor()
+
     // MARK: - Playback State
 
     weak var playbackStateService: PlaybackStateService?
@@ -60,6 +67,7 @@ final class AudioPlayerService {
     // MARK: - Init
 
     init() {
+        isNoiseReductionEnabled = UserSettings.shared.noiseReduction
         setupAudioSession()
         setupRemoteCommands()
         setupLiveActivityBridge()
@@ -303,7 +311,10 @@ final class AudioPlayerService {
 
         player?.volume = min(volume, 1.0)
 
-        if volume > 1.0 {
+        if isNoiseReductionEnabled {
+            noiseProcessor.reset()
+            applyNoiseReductionTap(to: playerItem)
+        } else if volume > 1.0 {
             applyVolumeBoost(volume, to: playerItem)
         }
 
@@ -577,6 +588,30 @@ final class AudioPlayerService {
             params.setVolume(boost, at: .zero)
             let mix = AVMutableAudioMix()
             mix.inputParameters = [params]
+            await MainActor.run { item.audioMix = mix }
+        }
+    }
+
+    // MARK: - Private: Noise Reduction
+
+    private func applyNoiseReduction() {
+        guard let item = player?.currentItem else { return }
+        if isNoiseReductionEnabled {
+            noiseProcessor.reset()
+            applyNoiseReductionTap(to: item)
+        } else {
+            item.audioMix = nil
+            if volume > 1.0 {
+                applyVolumeBoost(volume, to: item)
+            }
+        }
+        UserSettings.shared.noiseReduction = isNoiseReductionEnabled
+    }
+
+    private func applyNoiseReductionTap(to item: AVPlayerItem) {
+        Task {
+            guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
+            guard let mix = noiseProcessor.createAudioMix(for: track) else { return }
             await MainActor.run { item.audioMix = mix }
         }
     }

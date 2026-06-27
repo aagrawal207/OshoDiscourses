@@ -267,6 +267,20 @@ struct PlayerView: View {
 
             Spacer()
 
+            // Noise reduction
+            Button {
+                player.isNoiseReductionEnabled.toggle()
+            } label: {
+                Image(systemName: player.isNoiseReductionEnabled ? "waveform.slash" : "waveform")
+                    .font(.title3)
+                    .frame(width: 50, height: 36)
+                    .background(player.isNoiseReductionEnabled ? UserSettings.shared.accentTheme.color.opacity(0.2) : Color.primary.opacity(0.1))
+                    .foregroundStyle(player.isNoiseReductionEnabled ? UserSettings.shared.accentTheme.color : .primary.opacity(0.7))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            Spacer()
+
             // Bookmark
             Button {
                 bookmarkTimestamp = player.currentTime

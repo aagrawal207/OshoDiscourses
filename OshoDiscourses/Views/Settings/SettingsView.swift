@@ -77,6 +77,7 @@ struct SettingsView: View {
     private var playerSection: some View {
         Section("Player & Downloads") {
             Toggle("Auto-Play Next", isOn: $settings.autoPlayNext)
+            Toggle("Noise Reduction", isOn: $settings.noiseReduction)
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
         }

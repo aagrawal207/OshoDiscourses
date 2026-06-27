@@ -6,6 +6,7 @@ struct SeriesDetailView: View {
     @Environment(PlaybackStateService.self) private var playbackState
     let seriesInfo: SeriesInfo
     @State private var showDownloadAllConfirm = false
+    @State private var seriesRating = 0
 
     private var discourses: [CatalogDiscourse] {
         Catalog.discourses(for: seriesInfo)
@@ -74,6 +75,15 @@ struct SeriesDetailView: View {
                     Text("\(completedCount)/\(seriesInfo.count) completed")
                         .font(.caption)
                         .foregroundStyle(.green)
+                }
+
+                StarRatingView(rating: seriesRating, size: 20) { newRating in
+                    RatingService.shared.setSeriesRating(newRating, for: seriesInfo.id)
+                    seriesRating = newRating
+                }
+                .padding(.top, 4)
+                .onAppear {
+                    seriesRating = RatingService.shared.seriesRating(for: seriesInfo.id)
                 }
 
                 if let meta = SeriesMetadata.description(for: seriesInfo.name) {
@@ -191,6 +201,7 @@ private struct DiscourseRowView: View {
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
     @State private var showDownloadHint = false
+    @State private var discRating = 0
 
     private var isCurrentlyPlaying: Bool {
         player.currentTrackId == discourse.id && player.isPlaying
@@ -226,11 +237,22 @@ private struct DiscourseRowView: View {
                     .lineLimit(1)
                     .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
 
-                if showDownloadHint {
-                    Text("Downloading...")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .transition(.opacity)
+                HStack(spacing: 4) {
+                    if showDownloadHint {
+                        Text("Downloading...")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
+                    if discRating > 0 {
+                        HStack(spacing: 1) {
+                            ForEach(1...discRating, id: \.self) { _ in
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.yellow)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -241,6 +263,9 @@ private struct DiscourseRowView: View {
         .padding(.horizontal)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+        .onAppear {
+            discRating = RatingService.shared.discourseRating(for: discourse.id)
+        }
         .onTapGesture {
             playDiscourse()
         }
@@ -257,6 +282,36 @@ private struct DiscourseRowView: View {
                 } label: {
                     Label("Mark as Complete", systemImage: "checkmark.circle")
                 }
+            }
+
+            Divider()
+
+            Menu {
+                ForEach(1...5, id: \.self) { star in
+                    Button {
+                        RatingService.shared.setDiscourseRating(star, for: discourse.id)
+                        discRating = star
+                    } label: {
+                        Label(
+                            String(repeating: "\u{2605}", count: star),
+                            systemImage: star == discRating ? "checkmark" : "star"
+                        )
+                    }
+                }
+                if discRating > 0 {
+                    Divider()
+                    Button(role: .destructive) {
+                        RatingService.shared.setDiscourseRating(0, for: discourse.id)
+                        discRating = 0
+                    } label: {
+                        Label("Clear Rating", systemImage: "xmark")
+                    }
+                }
+            } label: {
+                Label(
+                    discRating > 0 ? "Rating: \(String(repeating: "\u{2605}", count: discRating))" : "Rate",
+                    systemImage: "star"
+                )
             }
         }
     }
