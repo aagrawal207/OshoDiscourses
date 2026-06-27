@@ -250,92 +250,71 @@ struct PlayerView: View {
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
-        HStack {
-            // Speed
-            Button {
+        HStack(spacing: 0) {
+            playerControlButton(
+                icon: "speedometer",
+                label: formatSpeed(player.playbackRate),
+                isActive: player.playbackRate != 1.0
+            ) {
                 showSpeedPicker.toggle()
-            } label: {
-                Text(formatSpeed(player.playbackRate))
-                    .font(.subheadline.bold())
-                    .frame(width: 50, height: 36)
-                    .background(Color.primary.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .popover(isPresented: $showSpeedPicker) {
                 speedPickerContent
             }
 
-            Spacer()
-
-            // Noise reduction
-            Button {
+            playerControlButton(
+                icon: player.isNoiseReductionEnabled ? "waveform.slash" : "waveform",
+                label: "Denoise",
+                isActive: player.isNoiseReductionEnabled
+            ) {
                 player.isNoiseReductionEnabled.toggle()
-            } label: {
-                Image(systemName: player.isNoiseReductionEnabled ? "waveform.slash" : "waveform")
-                    .font(.title3)
-                    .frame(width: 50, height: 36)
-                    .background(player.isNoiseReductionEnabled ? UserSettings.shared.accentTheme.color.opacity(0.2) : Color.primary.opacity(0.1))
-                    .foregroundStyle(player.isNoiseReductionEnabled ? UserSettings.shared.accentTheme.color : .primary.opacity(0.7))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            Spacer()
-
-            // Bookmark
-            Button {
-                bookmarkTimestamp = player.currentTime
-                showBookmarkSheet = true
-            } label: {
-                Image(systemName: "bookmark.fill")
-                    .font(.title3)
-                    .frame(width: 44, height: 36)
+            playerControlButton(
+                icon: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.2",
+                label: "Boost",
+                isActive: player.volume > 1.0
+            ) {
+                player.setVolume(player.volume > 1.0 ? 1.0 : 1.5)
             }
-            .foregroundStyle(.primary.opacity(0.7))
 
-            Spacer()
-
-            // Sleep timer
-            Button {
+            playerControlButton(
+                icon: sleepTimer.isActive ? "moon.fill" : "moon",
+                label: sleepTimer.isActive ? sleepTimer.formattedRemaining : "Sleep",
+                isActive: sleepTimer.isActive
+            ) {
                 showSleepTimer.toggle()
-            } label: {
-                if sleepTimer.isActive {
-                    Text(sleepTimer.formattedRemaining)
-                        .font(.caption.bold().monospacedDigit())
-                        .frame(width: 54, height: 36)
-                        .background(UserSettings.shared.accentTheme.color.opacity(0.2))
-                        .foregroundStyle(UserSettings.shared.accentTheme.color)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    Image(systemName: "moon.fill")
-                        .font(.title3)
-                        .frame(width: 44, height: 36)
-                }
             }
-            .foregroundStyle(.primary.opacity(0.7))
             .popover(isPresented: $showSleepTimer) {
                 sleepTimerContent
             }
 
-            Spacer()
-
-            // Voice boost
-            Button {
-                let current = player.volume
-                if current > 1.0 {
-                    player.setVolume(1.0)
-                } else {
-                    player.setVolume(1.5)
-                }
-            } label: {
-                Image(systemName: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
-                    .font(.title3)
-                    .frame(width: 50, height: 36)
-                    .background(player.volume > 1.0 ? UserSettings.shared.accentTheme.color.opacity(0.2) : Color.primary.opacity(0.1))
-                    .foregroundStyle(player.volume > 1.0 ? UserSettings.shared.accentTheme.color : .primary.opacity(0.7))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            playerControlButton(
+                icon: "bookmark",
+                label: "Bookmark",
+                isActive: false
+            ) {
+                bookmarkTimestamp = player.currentTime
+                showBookmarkSheet = true
             }
         }
-        .foregroundStyle(.primary)
+    }
+
+    private func playerControlButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .frame(height: 22)
+                Text(label)
+                    .font(.system(size: 9, weight: .medium))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .foregroundStyle(isActive ? UserSettings.shared.accentTheme.color : .secondary)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Speed Picker
