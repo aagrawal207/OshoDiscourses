@@ -85,22 +85,6 @@ struct DownloadsView: View {
                 }
             }
 
-            NavigationLink {
-                RatingsListView()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "star.fill")
-                        .font(.title3)
-                        .foregroundStyle(.yellow)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("My Ratings")
-                            .font(.body)
-                        Text(ratingsSubtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -113,19 +97,6 @@ struct DownloadsView: View {
         if hrs > 0 { return "\(hrs)h \(mins)m listened" }
         if mins > 0 { return "\(mins)m listened" }
         return "Start listening to track time"
-    }
-
-    private var ratingsSubtitle: String {
-        let ratings = RatingService.shared
-        let seriesCount = Catalog.allSeries.filter { ratings.seriesRating(for: $0.id) > 0 }.count
-        let discourseCount = Catalog.allSeries.reduce(0) { total, series in
-            total + Catalog.discourses(for: series).filter { ratings.discourseRating(for: $0.id) > 0 }.count
-        }
-        let parts = [
-            seriesCount > 0 ? "\(seriesCount) series" : nil,
-            discourseCount > 0 ? "\(discourseCount) discourses" : nil
-        ].compactMap { $0 }
-        return parts.isEmpty ? "Rate series and discourses" : parts.joined(separator: ", ")
     }
 
     // MARK: - Downloads Section
