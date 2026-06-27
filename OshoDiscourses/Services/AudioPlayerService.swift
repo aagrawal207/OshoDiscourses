@@ -35,12 +35,16 @@ final class AudioPlayerService {
     var hasNext: Bool { currentIndex < queue.count - 1 }
     var hasPrevious: Bool { currentIndex > 0 }
 
-    // MARK: - Noise Reduction
+    // MARK: - Noise Reduction / Voice Filter
 
     var isNoiseReductionEnabled: Bool = false {
-        didSet { applyNoiseReduction() }
+        didSet { rebuildAudioMix() }
+    }
+    var isVoiceFilterEnabled: Bool = false {
+        didSet { rebuildAudioMix() }
     }
     private let noiseProcessor = NoiseReductionProcessor()
+    private let voiceFilterProcessor = VoiceFilterProcessor()
 
     // MARK: - Playback State
 
@@ -68,6 +72,7 @@ final class AudioPlayerService {
 
     init() {
         isNoiseReductionEnabled = UserSettings.shared.noiseReduction
+        isVoiceFilterEnabled = UserSettings.shared.voiceFilter
         setupAudioSession()
         setupRemoteCommands()
         setupLiveActivityBridge()
@@ -571,15 +576,18 @@ final class AudioPlayerService {
         }
     }
 
-    // MARK: - Private: Audio Mix (Noise Reduction + Volume Boost)
+    // MARK: - Private: Audio Mix (Noise Reduction / Voice Filter + Volume Boost)
 
     private func applyAudioMix(to item: AVPlayerItem) {
         Task {
             guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
+            let boost = volume > 1.0 ? volume : Float(1.0)
 
             if isNoiseReductionEnabled {
-                let boost = volume > 1.0 ? volume : Float(1.0)
                 guard let mix = noiseProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
+                await MainActor.run { item.audioMix = mix }
+            } else if isVoiceFilterEnabled {
+                guard let mix = voiceFilterProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
                 await MainActor.run { item.audioMix = mix }
             } else if volume > 1.0 {
                 let params = AVMutableAudioMixInputParameters(track: track)
@@ -593,10 +601,12 @@ final class AudioPlayerService {
         }
     }
 
-    private func applyNoiseReduction() {
+    private func rebuildAudioMix() {
         guard let item = player?.currentItem else { return }
         noiseProcessor.reset()
+        voiceFilterProcessor.reset()
         applyAudioMix(to: item)
         UserSettings.shared.noiseReduction = isNoiseReductionEnabled
+        UserSettings.shared.voiceFilter = isVoiceFilterEnabled
     }
 }

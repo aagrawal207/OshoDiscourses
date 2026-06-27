@@ -268,6 +268,16 @@ struct PlayerView: View {
                 isActive: player.isNoiseReductionEnabled
             ) {
                 player.isNoiseReductionEnabled.toggle()
+                if player.isNoiseReductionEnabled { player.isVoiceFilterEnabled = false }
+            }
+
+            playerControlButton(
+                icon: player.isVoiceFilterEnabled ? "person.wave.2.fill" : "person.wave.2",
+                label: "Voice",
+                isActive: player.isVoiceFilterEnabled
+            ) {
+                player.isVoiceFilterEnabled.toggle()
+                if player.isVoiceFilterEnabled { player.isNoiseReductionEnabled = false }
             }
 
             playerControlButton(
