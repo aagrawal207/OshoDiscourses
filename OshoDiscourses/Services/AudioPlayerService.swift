@@ -415,6 +415,10 @@ final class AudioPlayerService {
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .spokenAudio, options: [])
+            // RNNoise is trained at 48kHz; hint the session toward that rate so the
+            // denoiser operates closest to its trained band layout. The OS may pick
+            // a different rate — the processor handles whatever rate it receives.
+            try? session.setPreferredSampleRate(48000)
             try session.setActive(true)
         } catch {
             // Audio session setup failed; playback may not work in background
