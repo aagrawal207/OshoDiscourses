@@ -28,8 +28,8 @@ struct DownloadsView: View {
     var body: some View {
         NavigationStack {
             List {
-                activitySection
                 downloadsSection
+                activitySection
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
