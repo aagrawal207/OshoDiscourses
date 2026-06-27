@@ -7,11 +7,11 @@ struct StarRatingView: View {
     var onRate: ((Int) -> Void)?
 
     var body: some View {
-        HStack(spacing: size * 0.25) {
+        HStack(spacing: 4) {
             ForEach(1...maxRating, id: \.self) { star in
                 Image(systemName: star <= rating ? "star.fill" : "star")
                     .font(.system(size: size))
-                    .foregroundStyle(star <= rating ? .yellow : .secondary.opacity(0.3))
+                    .foregroundStyle(star <= rating ? .yellow : .secondary.opacity(0.4))
                     .onTapGesture {
                         if star == rating {
                             onRate?(0)
