@@ -3,12 +3,12 @@ import Accelerate
 
 final class NoiseReductionProcessor: @unchecked Sendable {
 
-    private let fftSize = 2048
-    private let hopSize = 512
-    private var noiseProfile: [Float]?
+    private let fftSize = 1024
+    private var noiseFloor: [Float]?
     private var profileFrameCount = 0
-    private let profileLearnFrames = 20
-    private let reductionStrength: Float = 0.7
+    private let profileLearnFrames = 30
+    private var previousGains: [Float]?
+    private let smoothingFactor: Float = 0.7
 
     private var fftSetup: FFTSetup?
     private let log2n: vDSP_Length
@@ -25,8 +25,9 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     }
 
     func reset() {
-        noiseProfile = nil
+        noiseFloor = nil
         profileFrameCount = 0
+        previousGains = nil
     }
 
     func process(buffer: UnsafeMutablePointer<AudioBufferList>, frameCount: UInt32) {
@@ -40,108 +41,109 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
             var offset = 0
             while offset + fftSize <= count {
-                processFrame(samples: samples.advanced(by: offset), setup: setup)
-                offset += hopSize
+                processBlock(samples: samples.advanced(by: offset), setup: setup)
+                offset += fftSize
             }
         }
     }
 
-    private func processFrame(samples: UnsafeMutablePointer<Float>, setup: FFTSetup) {
+    private func processBlock(samples: UnsafeMutablePointer<Float>, setup: FFTSetup) {
         let n = fftSize
         let halfN = n / 2
-
-        var window = [Float](repeating: 0, count: n)
-        vDSP_hann_window(&window, vDSP_Length(n), Int32(vDSP_HANN_NORM))
-
-        var windowed = [Float](repeating: 0, count: n)
-        vDSP_vmul(samples, 1, window, 1, &windowed, 1, vDSP_Length(n))
 
         var realp = [Float](repeating: 0, count: halfN)
         var imagp = [Float](repeating: 0, count: halfN)
 
         realp.withUnsafeMutableBufferPointer { realBuf in
             imagp.withUnsafeMutableBufferPointer { imagBuf in
-                var splitComplex = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
 
-                windowed.withUnsafeBufferPointer { ptr in
-                    ptr.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: halfN) { complexPtr in
-                        vDSP_ctoz(complexPtr, 2, &splitComplex, 1, vDSP_Length(halfN))
-                    }
+                let input = UnsafeBufferPointer(start: samples, count: n)
+                input.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: halfN) { ptr in
+                    vDSP_ctoz(ptr, 2, &split, 1, vDSP_Length(halfN))
                 }
 
-                vDSP_fft_zrip(setup, &splitComplex, 1, self.log2n, FFTDirection(kFFTDirection_Forward))
+                vDSP_fft_zrip(setup, &split, 1, log2n, FFTDirection(kFFTDirection_Forward))
             }
         }
 
-        var magnitudes = [Float](repeating: 0, count: halfN)
+        // Compute power spectrum (magnitude squared)
+        var power = [Float](repeating: 0, count: halfN)
         realp.withUnsafeMutableBufferPointer { realBuf in
             imagp.withUnsafeMutableBufferPointer { imagBuf in
-                var splitComplex = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
-                vDSP_zvabs(&splitComplex, 1, &magnitudes, 1, vDSP_Length(halfN))
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                vDSP_zvmags(&split, 1, &power, 1, vDSP_Length(halfN))
             }
         }
 
+        // Learning phase: accumulate noise floor estimate
         if profileFrameCount < profileLearnFrames {
-            if noiseProfile == nil {
-                noiseProfile = [Float](repeating: 0, count: halfN)
+            if noiseFloor == nil {
+                noiseFloor = [Float](repeating: 0, count: halfN)
             }
-            vDSP_vadd(noiseProfile!, 1, magnitudes, 1, &noiseProfile!, 1, vDSP_Length(halfN))
+            // Use max of current estimate and new frame for robust floor
+            for i in 0..<halfN {
+                noiseFloor![i] = max(noiseFloor![i], power[i])
+            }
             profileFrameCount += 1
-
-            if profileFrameCount == profileLearnFrames {
-                var divisor = Float(profileLearnFrames)
-                vDSP_vsdiv(noiseProfile!, 1, &divisor, &noiseProfile!, 1, vDSP_Length(halfN))
-            }
             return
         }
 
-        guard let profile = noiseProfile else { return }
+        guard let noise = noiseFloor else { return }
 
-        var scaledProfile = [Float](repeating: 0, count: halfN)
-        var strength = reductionStrength
-        vDSP_vsmul(profile, 1, &strength, &scaledProfile, 1, vDSP_Length(halfN))
-
-        var subtracted = [Float](repeating: 0, count: halfN)
-        vDSP_vsub(scaledProfile, 1, magnitudes, 1, &subtracted, 1, vDSP_Length(halfN))
-
-        var floor: Float = 0.001
-        vDSP_vthres(subtracted, 1, &floor, &subtracted, 1, vDSP_Length(halfN))
-
+        // Wiener gain: gain = max(power - noise, 0) / power
+        // This is smoother than spectral subtraction
         var gains = [Float](repeating: 0, count: halfN)
         for i in 0..<halfN {
-            gains[i] = magnitudes[i] > 0.001 ? subtracted[i] / magnitudes[i] : 1.0
+            if power[i] > 0.0001 {
+                let clean = max(power[i] - noise[i] * 1.5, 0)
+                gains[i] = sqrt(clean / power[i])
+            } else {
+                gains[i] = 0
+            }
+            // Floor the gain to avoid killing signal entirely
+            gains[i] = max(gains[i], 0.1)
         }
 
+        // Temporal smoothing: blend with previous frame's gains
+        if let prev = previousGains {
+            for i in 0..<halfN {
+                gains[i] = smoothingFactor * prev[i] + (1.0 - smoothingFactor) * gains[i]
+            }
+        }
+        previousGains = gains
+
+        // Apply gains to spectrum
         vDSP_vmul(realp, 1, gains, 1, &realp, 1, vDSP_Length(halfN))
         vDSP_vmul(imagp, 1, gains, 1, &imagp, 1, vDSP_Length(halfN))
 
+        // Inverse FFT
         var output = [Float](repeating: 0, count: n)
 
         realp.withUnsafeMutableBufferPointer { realBuf in
             imagp.withUnsafeMutableBufferPointer { imagBuf in
-                var splitComplex = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
-
-                vDSP_fft_zrip(setup, &splitComplex, 1, self.log2n, FFTDirection(kFFTDirection_Inverse))
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                vDSP_fft_zrip(setup, &split, 1, log2n, FFTDirection(kFFTDirection_Inverse))
 
                 output.withUnsafeMutableBufferPointer { outBuf in
-                    outBuf.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: halfN) { complexPtr in
-                        vDSP_ztoc(&splitComplex, 1, complexPtr, 2, vDSP_Length(halfN))
+                    outBuf.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: halfN) { ptr in
+                        vDSP_ztoc(&split, 1, ptr, 2, vDSP_Length(halfN))
                     }
                 }
             }
         }
 
+        // Normalize IFFT output
         var scale = 1.0 / Float(2 * n)
         vDSP_vsmul(output, 1, &scale, &output, 1, vDSP_Length(n))
-        vDSP_vmul(output, 1, window, 1, &output, 1, vDSP_Length(n))
 
+        // Write back
         samples.update(from: output, count: n)
     }
 
     // MARK: - Audio Tap
 
     func createAudioMix(for track: AVAssetTrack) -> AVAudioMix? {
-
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
             clientInfo: Unmanaged.passRetained(self).toOpaque(),
