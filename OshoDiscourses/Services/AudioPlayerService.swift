@@ -44,7 +44,7 @@ final class AudioPlayerService {
             switch self {
             case .light: return 0.35
             case .medium: return 0.5
-            case .strong: return 0.7
+            case .strong: return 0.6
             }
         }
         var label: String {
