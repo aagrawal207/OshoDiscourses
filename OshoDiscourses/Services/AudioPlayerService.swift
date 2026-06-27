@@ -259,11 +259,8 @@ final class AudioPlayerService {
         let clamped = max(0.0, min(vol, 2.0))
         volume = clamped
         player?.volume = min(clamped, 1.0)
-        // For volume > 1.0, we use AVAudioMix to boost
-        if clamped > 1.0, let currentItem = player?.currentItem {
-            applyVolumeBoost(clamped, to: currentItem)
-        } else if let currentItem = player?.currentItem {
-            currentItem.audioMix = nil
+        if let currentItem = player?.currentItem {
+            applyAudioMix(to: currentItem)
         }
     }
 
@@ -310,13 +307,8 @@ final class AudioPlayerService {
         }
 
         player?.volume = min(volume, 1.0)
-
-        if isNoiseReductionEnabled {
-            noiseProcessor.reset()
-            applyNoiseReductionTap(to: playerItem)
-        } else if volume > 1.0 {
-            applyVolumeBoost(volume, to: playerItem)
-        }
+        noiseProcessor.reset()
+        applyAudioMix(to: playerItem)
 
         // Observe when the item is ready to play
         statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -579,40 +571,32 @@ final class AudioPlayerService {
         }
     }
 
-    // MARK: - Private: Volume Boost
+    // MARK: - Private: Audio Mix (Noise Reduction + Volume Boost)
 
-    private func applyVolumeBoost(_ boost: Float, to item: AVPlayerItem) {
+    private func applyAudioMix(to item: AVPlayerItem) {
         Task {
             guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
-            let params = AVMutableAudioMixInputParameters(track: track)
-            params.setVolume(boost, at: .zero)
-            let mix = AVMutableAudioMix()
-            mix.inputParameters = [params]
-            await MainActor.run { item.audioMix = mix }
+
+            if isNoiseReductionEnabled {
+                let boost = volume > 1.0 ? volume : Float(1.0)
+                guard let mix = noiseProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
+                await MainActor.run { item.audioMix = mix }
+            } else if volume > 1.0 {
+                let params = AVMutableAudioMixInputParameters(track: track)
+                params.setVolume(volume, at: .zero)
+                let mix = AVMutableAudioMix()
+                mix.inputParameters = [params]
+                await MainActor.run { item.audioMix = mix }
+            } else {
+                await MainActor.run { item.audioMix = nil }
+            }
         }
     }
-
-    // MARK: - Private: Noise Reduction
 
     private func applyNoiseReduction() {
         guard let item = player?.currentItem else { return }
-        if isNoiseReductionEnabled {
-            noiseProcessor.reset()
-            applyNoiseReductionTap(to: item)
-        } else {
-            item.audioMix = nil
-            if volume > 1.0 {
-                applyVolumeBoost(volume, to: item)
-            }
-        }
+        noiseProcessor.reset()
+        applyAudioMix(to: item)
         UserSettings.shared.noiseReduction = isNoiseReductionEnabled
-    }
-
-    private func applyNoiseReductionTap(to item: AVPlayerItem) {
-        Task {
-            guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
-            guard let mix = noiseProcessor.createAudioMix(for: track) else { return }
-            await MainActor.run { item.audioMix = mix }
-        }
     }
 }
