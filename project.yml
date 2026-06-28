@@ -19,8 +19,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: W2NS9DM63G
-    MARKETING_VERSION: "1.4.0"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "1.5.0"
+    CURRENT_PROJECT_VERSION: "4"
 targets:
   OshoDiscourses:
     type: application
