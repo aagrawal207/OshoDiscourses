@@ -176,7 +176,7 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
                 Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
-                Text("Your data — playback positions, downloads, and settings — stays on this device and syncs only through your own iCloud account. No accounts, no analytics, no tracking.")
+                Text("Your listening progress, bookmarks, and stats sync across your devices through your own iCloud. Everything else stays on this device. No accounts, no servers, no analytics, no tracking.")
             }
             .padding(.top, 8)
         }
