@@ -48,6 +48,41 @@ final class ListeningStatsService {
         } catch {}
     }
 
+    // MARK: - iCloud Sync
+
+    /// Export per-day totals as a plain date→seconds map for syncing.
+    func syncedDailyStats() -> [String: TimeInterval] {
+        var map: [String: TimeInterval] = [:]
+        for entry in entries { map[entry.date] = entry.seconds }
+        return map
+    }
+
+    /// Merge per-day totals from another device. Takes the MAX seconds per day so
+    /// the merge is idempotent and converges regardless of write order. (Summing
+    /// would double-count every time the same day re-syncs; max can under-count a
+    /// day listened on two devices, but never inflates — the safe direction for a
+    /// streak.) Returns true if anything changed locally.
+    @discardableResult
+    func mergeSyncedStats(_ incoming: [String: TimeInterval]) -> Bool {
+        var changed = false
+        for (date, seconds) in incoming {
+            if let idx = entries.firstIndex(where: { $0.date == date }) {
+                if seconds > entries[idx].seconds {
+                    entries[idx].seconds = seconds
+                    changed = true
+                }
+            } else {
+                entries.append(DailyEntry(date: date, seconds: seconds))
+                changed = true
+            }
+        }
+        if changed {
+            entries.sort { $0.date < $1.date }
+            save()
+        }
+        return changed
+    }
+
     var totalAllTime: TimeInterval {
         entries.reduce(0) { $0 + $1.seconds }
     }

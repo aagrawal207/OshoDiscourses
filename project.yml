@@ -9,7 +9,6 @@ schemes:
     build:
       targets:
         OshoDiscourses: all
-        OshoDiscoursesWidgets: all
     run:
       config: Debug
     test:
@@ -20,8 +19,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: W2NS9DM63G
-    MARKETING_VERSION: "1.3.0"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "1.4.0"
+    CURRENT_PROJECT_VERSION: "3"
 targets:
   OshoDiscourses:
     type: application
@@ -30,7 +29,6 @@ targets:
       - path: OshoDiscourses
         excludes:
           - Info.plist
-      - path: Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses
@@ -47,7 +45,6 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Discourse Player
         UIBackgroundModes: [audio]
-        NSSupportsLiveActivities: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:
@@ -58,27 +55,8 @@ targets:
         UILaunchScreen: {}
     entitlements:
       path: OshoDiscourses/OshoDiscourses.entitlements
-  OshoDiscoursesWidgets:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: OshoDiscoursesWidgets
-      - path: Shared
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses.widgets
-    info:
-      path: OshoDiscoursesWidgets/Info.plist
       properties:
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
-    entitlements:
-      path: OshoDiscoursesWidgets/OshoDiscoursesWidgets.entitlements
-    dependencies:
-      - target: OshoDiscourses
-        embed: false
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
   OshoDiscoursesTests:
     type: bundle.unit-test
     platform: iOS

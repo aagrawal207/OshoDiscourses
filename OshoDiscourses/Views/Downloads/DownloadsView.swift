@@ -7,6 +7,13 @@ struct DownloadsView: View {
     @Bindable private var settings = UserSettings.shared
     private var bookmarkService = BookmarkService.shared
     @State private var searchText = ""
+    @State private var sizesByID: [String: Int64] = [:]
+    @State private var editMode: EditMode = .inactive
+    @State private var selection = Set<String>()
+    @State private var showDeleteAllConfirm = false
+    @State private var seriesPendingDelete: SeriesInfo?
+
+    private var isEditing: Bool { editMode.isEditing }
 
     private var groupedDownloads: [(seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] {
         downloads.downloadedDiscourses()
@@ -27,21 +34,117 @@ struct DownloadsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            List(selection: $selection) {
                 downloadsSection
-                activitySection
+                if !isEditing {
+                    activitySection
+                }
             }
             .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color(.systemBackground))
+            .environment(\.editMode, $editMode)
             .navigationTitle("My Activity")
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
             .searchable(text: $searchText, prompt: "Search downloads")
+            .task(id: downloads.downloadedIDs) { sizesByID = await downloads.downloadedSizes() }
+            .toolbar { downloadsToolbar }
             .safeAreaInset(edge: .bottom) {
-                Spacer().frame(height: 70)
+                if isEditing {
+                    multiSelectDeleteBar
+                } else {
+                    Spacer().frame(height: 70)
+                }
             }
+            .confirmationDialog(
+                "Delete all \(downloads.downloadedIDs.count) downloaded discourses?",
+                isPresented: $showDeleteAllConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All", role: .destructive) {
+                    downloads.deleteAllDownloads()
+                    exitEditing()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes the audio files from this device. Your bookmarks and listening history are kept.")
+            }
+            .confirmationDialog(
+                seriesPendingDelete.map { "Delete all downloads in \($0.name)?" } ?? "",
+                isPresented: Binding(
+                    get: { seriesPendingDelete != nil },
+                    set: { if !$0 { seriesPendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Series Downloads", role: .destructive) {
+                    if let series = seriesPendingDelete {
+                        let ids = Catalog.discourses(for: series)
+                            .map(\.id)
+                            .filter { downloads.isDownloaded($0) }
+                        downloads.deleteDownloads(ids: ids)
+                    }
+                    seriesPendingDelete = nil
+                }
+                Button("Cancel", role: .cancel) { seriesPendingDelete = nil }
+            }
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var downloadsToolbar: some ToolbarContent {
+        if !filteredDownloads.isEmpty {
+            ToolbarItem(placement: .topBarTrailing) {
+                if isEditing {
+                    Button("Done") { exitEditing() }
+                } else {
+                    Menu {
+                        Button {
+                            withAnimation { editMode = .active }
+                        } label: {
+                            Label("Select", systemImage: "checkmark.circle")
+                        }
+                        Button(role: .destructive) {
+                            showDeleteAllConfirm = true
+                        } label: {
+                            Label("Delete All", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Multi-select delete bar
+
+    private var multiSelectDeleteBar: some View {
+        HStack {
+            Text(selection.isEmpty ? "Select discourses" : "\(selection.count) selected")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(role: .destructive) {
+                downloads.deleteDownloads(ids: Array(selection))
+                exitEditing()
+            } label: {
+                Text("Delete")
+                    .fontWeight(.semibold)
+            }
+            .disabled(selection.isEmpty)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+
+    private func exitEditing() {
+        withAnimation {
+            editMode = .inactive
+            selection.removeAll()
         }
     }
 
@@ -115,28 +218,68 @@ struct DownloadsView: View {
             }
             .listRowBackground(Color.clear)
         } else {
-            ForEach(filteredDownloads, id: \.seriesInfo.id) { group in
+            ForEach(Array(filteredDownloads.enumerated()), id: \.element.seriesInfo.id) { index, group in
                 Section {
                     ForEach(group.discourses) { discourse in
                         DownloadedDiscourseRow(
                             discourse: discourse,
-                            seriesInfo: group.seriesInfo
+                            seriesInfo: group.seriesInfo,
+                            sizeText: sizeText(for: sizesByID[discourse.id])
                         )
+                        .tag(discourse.id)
                     }
                     .onDelete { indexSet in
                         deleteDiscourses(at: indexSet, in: group.discourses)
                     }
                 } header: {
-                    NavigationLink(value: group.seriesInfo) {
-                        DownloadedSeriesHeader(
-                            seriesInfo: group.seriesInfo,
-                            count: group.discourses.count
-                        )
+                    DownloadedSeriesHeader(
+                        seriesInfo: group.seriesInfo,
+                        count: group.discourses.count,
+                        sizeText: seriesSizeText(for: group.discourses),
+                        onDeleteSeries: isEditing ? nil : { seriesPendingDelete = group.seriesInfo }
+                    )
+                } footer: {
+                    // Tip + storage live as plain footer text under the last
+                    // section — small and informational, not a tappable card.
+                    if index == filteredDownloads.count - 1 {
+                        downloadsFooter
                     }
                 }
-                .listRowBackground(Color(.secondarySystemGroupedBackground))
             }
         }
+    }
+
+    @ViewBuilder
+    private var downloadsFooter: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !isEditing {
+                Text("Swipe a discourse left to delete, or use a series' ••• menu to clear a whole series or select several.")
+            }
+            if totalBytes > 0 && searchText.isEmpty {
+                Text("\(format(totalBytes)) used on this device")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private var totalBytes: Int64 {
+        sizesByID.values.reduce(0, +)
+    }
+
+    /// Per-series size summed from the discourse-level map.
+    private func seriesSizeText(for discourses: [CatalogDiscourse]) -> String? {
+        let bytes = discourses.reduce(Int64(0)) { $0 + (sizesByID[$1.id] ?? 0) }
+        return bytes > 0 ? format(bytes) : nil
+    }
+
+    private func sizeText(for bytes: Int64?) -> String? {
+        guard let bytes, bytes > 0 else { return nil }
+        return format(bytes)
+    }
+
+    private func format(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     private func deleteDiscourses(at offsets: IndexSet, in discourses: [CatalogDiscourse]) {
@@ -151,19 +294,50 @@ struct DownloadsView: View {
 private struct DownloadedSeriesHeader: View {
     let seriesInfo: SeriesInfo
     let count: Int
+    let sizeText: String?
+    /// When non-nil, shows a ••• menu offering to delete the whole series.
+    let onDeleteSeries: (() -> Void)?
+
+    private var subtitle: String {
+        var parts = ["\(count) episodes"]
+        if let sizeText { parts.append(sizeText) }
+        return parts.joined(separator: " · ")
+    }
 
     var body: some View {
         HStack(spacing: 10) {
-            SeriesThumbnailView(name: seriesInfo.name, size: 32)
+            NavigationLink(value: seriesInfo) {
+                HStack(spacing: 10) {
+                    SeriesThumbnailView(name: seriesInfo.name, size: 32)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(seriesInfo.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(seriesInfo.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
 
-                Text("\(count) episodes")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                        Text(subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if let onDeleteSeries {
+                Menu {
+                    Button(role: .destructive, action: onDeleteSeries) {
+                        Label("Delete All in Series", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 8)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                }
             }
         }
         .padding(.vertical, 4)
@@ -175,12 +349,16 @@ private struct DownloadedSeriesHeader: View {
 private struct DownloadedDiscourseRow: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
+    @Environment(\.editMode) private var editMode
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
+    let sizeText: String?
 
     private var isCurrentlyPlaying: Bool {
         player.currentTrackId == discourse.id
     }
+
+    private var isEditing: Bool { editMode?.wrappedValue.isEditing == true }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -196,17 +374,29 @@ private struct DownloadedDiscourseRow: View {
 
             Spacer()
 
-            Button {
-                playDiscourse()
-            } label: {
-                Image(systemName: isCurrentlyPlaying && player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(Color.accent)
+            if let sizeText {
+                Text(sizeText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
-            .buttonStyle(.plain)
+
+            // Hide the play button in edit mode so the row reads as selectable.
+            if !isEditing {
+                Button {
+                    playDiscourse()
+                } label: {
+                    Image(systemName: isCurrentlyPlaying && player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.accent)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .contentShape(Rectangle())
+        // In edit mode let the List handle selection; only play on tap otherwise.
         .onTapGesture {
+            guard !isEditing else { return }
             playDiscourse()
         }
     }

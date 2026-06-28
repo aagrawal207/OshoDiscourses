@@ -33,7 +33,7 @@ struct ContentView: View {
                     }
                     .tag(3)
             }
-            .tint(settings.accentTheme.color)
+            .tint(settings.effectiveAccentTheme.color)
 
             if player.currentTrackId != nil {
                 MiniPlayerView(showFullPlayer: $showFullPlayer)

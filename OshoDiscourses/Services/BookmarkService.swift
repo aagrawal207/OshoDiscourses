@@ -80,6 +80,11 @@ final class BookmarkService {
 
     private(set) var bookmarks: [Bookmark] = []
 
+    /// Called after the local bookmark set is persisted (add/remove) so iCloud
+    /// sync can push. Set by the app on startup; nil keeps sync inert. Not fired
+    /// by `mergeSyncedBookmarks` — that's already reconciling cloud data.
+    var onBookmarksChanged: (() -> Void)?
+
     private let fileURL: URL = {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("bookmarks.json")
@@ -109,15 +114,44 @@ final class BookmarkService {
         )
         bookmarks.insert(bookmark, at: 0)
         save()
+        onBookmarksChanged?()
     }
 
     func remove(id: String) {
         bookmarks.removeAll { $0.id == id }
         save()
+        onBookmarksChanged?()
     }
 
     func bookmarks(for discourseID: String) -> [Bookmark] {
         bookmarks.filter { $0.discourseID == discourseID }
+    }
+
+    // MARK: - iCloud Sync
+
+    /// Merge bookmarks arriving from another device. Union by stable `id`, newest
+    /// first by `createdAt`, so adds on either device converge regardless of write
+    /// order. Returns true if the local set changed.
+    ///
+    /// Note: this syncs additions, not deletions — a bookmark deleted on one
+    /// device can reappear from another that still has it. Honoring deletes would
+    /// need tombstones; bookmarks are precious and few, so we err toward keeping.
+    @discardableResult
+    func mergeSyncedBookmarks(_ incoming: [Bookmark]) -> Bool {
+        let merged = Self.mergeBookmarks(local: bookmarks, incoming: incoming)
+        guard merged != bookmarks else { return false }
+        bookmarks = merged
+        save()
+        return true
+    }
+
+    /// Pure union-by-id merge, sorted newest-first. Local entries win on id
+    /// collisions (they're identical anyway since id is a UUID minted at creation).
+    static func mergeBookmarks(local: [Bookmark], incoming: [Bookmark]) -> [Bookmark] {
+        var byID: [String: Bookmark] = [:]
+        for b in incoming { byID[b.id] = b }
+        for b in local { byID[b.id] = b }   // local overrides on collision
+        return byID.values.sorted { $0.createdAt > $1.createdAt }
     }
 
     func bookmarks(forCategory category: BookmarkCategory) -> [Bookmark] {

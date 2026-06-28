@@ -1,6 +1,5 @@
 import Foundation
 import AVFoundation
-import ActivityKit
 import MediaPlayer
 import Observation
 import UIKit
@@ -77,11 +76,6 @@ final class AudioPlayerService {
     private(set) var previousPosition: TimeInterval?
     var hasPreviousPosition: Bool { previousPosition != nil }
 
-    // MARK: - Live Activity
-
-    private var liveActivity: Activity<PlaybackAttributes>?
-    private var liveActivityDismissTask: Task<Void, Never>?
-
     // MARK: - Private
 
     private var player: AVPlayer?
@@ -89,15 +83,24 @@ final class AudioPlayerService {
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
 
+    // Audio-session lifecycle observers. iOS tears the session down on calls,
+    // Siri, alarms, and headphone changes; without these we never reattach and
+    // the Now Playing controls (Control Center, Lock Screen, AirPods) go dead.
+    private var interruptionObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
+    private var wasPlayingBeforeInterruption = false
+
     // MARK: - Init
 
     init() {
         isNoiseReductionEnabled = UserSettings.shared.noiseReduction
         denoiseStrength = DenoiseStrength(rawValue: UserSettings.shared.denoiseStrength) ?? .medium
         noiseProcessor.wetMix = denoiseStrength.wetMix
+        // Restore the listener's preferred speed; clamp in case a stale/corrupt
+        // value was stored outside the supported 0.5–2.0 range.
+        playbackRate = max(0.5, min(Float(UserSettings.shared.defaultPlaybackRate), 2.0))
         setupAudioSession()
         setupRemoteCommands()
-        setupLiveActivityBridge()
     }
 
     /// Cleanup is handled by `stop()`. Since AudioPlayerService is MainActor-isolated,
@@ -124,25 +127,15 @@ final class AudioPlayerService {
         if isPlaying {
             player.pause()
             isPlaying = false
-            scheduleLiveActivityDismiss()
         } else {
+            // Reclaim the session in case it was deactivated while we were paused
+            // (interruption, another app, backgrounding) so controls reappear.
+            activateSession()
             player.play()
             player.rate = playbackRate
             isPlaying = true
-            liveActivityDismissTask?.cancel()
-            liveActivityDismissTask = nil
         }
         updateNowPlayingInfo()
-        updateLiveActivity()
-    }
-
-    private func scheduleLiveActivityDismiss() {
-        liveActivityDismissTask?.cancel()
-        liveActivityDismissTask = Task {
-            try? await Task.sleep(for: .seconds(300))
-            guard !Task.isCancelled, !isPlaying else { return }
-            endLiveActivity()
-        }
     }
 
     func seek(to time: TimeInterval) {
@@ -215,14 +208,16 @@ final class AudioPlayerService {
         let completedTrackId = currentTrackId
         markCurrentAsCompleted()
 
-        let shouldAutoPlay = hasNext && UserSettings.shared.autoPlayNext
+        // End-of-discourse sleep: let this talk finish, then stop here (don't
+        // auto-advance). discourseDidFinish() resets the timer afterward.
+        let endSleepArmed = SleepTimerService.shared.mode == .endOfDiscourse
+        let shouldAutoPlay = hasNext && UserSettings.shared.autoPlayNext && !endSleepArmed
         if shouldAutoPlay {
             skipToNext()
         } else {
             isPlaying = false
             currentTime = duration
             updateNowPlayingInfo()
-            endLiveActivity()
             currentTrackId = nil
             currentTitle = ""
             currentSeries = ""
@@ -237,6 +232,9 @@ final class AudioPlayerService {
         if let completedId = completedTrackId, !didTriggerPreemptiveDownload {
             performSmartDownload(afterDiscourseId: completedId)
         }
+
+        // Notify the sleep timer so an armed end-of-discourse timer fires/resets.
+        SleepTimerService.shared.discourseDidFinish()
     }
 
     private func markCurrentAsCompleted() {
@@ -276,6 +274,9 @@ final class AudioPlayerService {
     func setRate(_ rate: Float) {
         let clamped = max(0.5, min(rate, 2.0))
         playbackRate = clamped
+        // Persist so the chosen speed survives relaunch. The in-player picker is
+        // the single source of truth — no separate "remember speed" toggle.
+        UserSettings.shared.defaultPlaybackRate = Double(clamped)
         if isPlaying {
             player?.rate = clamped
         }
@@ -303,7 +304,6 @@ final class AudioPlayerService {
         removeEndObserver()
         player = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        endLiveActivity()
     }
 
     // MARK: - Private: Playback
@@ -350,105 +350,159 @@ final class AudioPlayerService {
                     self.currentTime = saved
                 }
 
+                // Activate the session at the moment playback actually begins, so
+                // we acquire audio focus and the Now Playing controls light up.
+                self.activateSession()
                 self.player?.play()
                 self.player?.rate = self.playbackRate
                 self.isPlaying = true
                 self.setupTimeObserver()
                 self.observePlayerEnd()
                 self.updateNowPlayingInfo()
-                self.startLiveActivity()
                 self.playbackStateService?.recordPlay(discourseId: self.currentTrackId ?? "")
             }
         }
     }
 
-    // MARK: - Private: Live Activity
-
-    private func setupLiveActivityBridge() {
-        let bridge = LiveActivityBridge.shared
-        bridge.togglePlayPause = { [weak self] in self?.togglePlayPause() }
-        bridge.skipForward = { [weak self] in self?.skipForward() }
-        bridge.skipBack = { [weak self] in self?.skipBackward() }
-    }
-
-    private func startLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-
-        // End any existing activity to avoid orphaning it on the Dynamic Island
-        endLiveActivity()
-
-        let attributes = PlaybackAttributes(
-            seriesName: currentSeries,
-            totalTracks: queue.count
-        )
-        let state = PlaybackAttributes.ContentState(
-            title: currentTitle,
-            trackNumber: currentIndex + 1,
-            isPlaying: true,
-            elapsedSeconds: currentTime,
-            durationSeconds: duration,
-            playbackRate: playbackRate
-        )
-
-        do {
-            liveActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: state, staleDate: nil),
-                pushType: nil
-            )
-        } catch {
-            // Live Activity not available on this device
-        }
-    }
-
-    private func updateLiveActivity() {
-        guard let activity = liveActivity else { return }
-        let state = PlaybackAttributes.ContentState(
-            title: currentTitle,
-            trackNumber: currentIndex + 1,
-            isPlaying: isPlaying,
-            elapsedSeconds: currentTime,
-            durationSeconds: duration,
-            playbackRate: playbackRate
-        )
-        let content = ActivityContent(state: state, staleDate: nil)
-        nonisolated(unsafe) let act = activity
-        Task.detached {
-            await act.update(content)
-        }
-    }
-
-    private func endLiveActivity() {
-        guard let activity = liveActivity else { return }
-        let finalState = PlaybackAttributes.ContentState(
-            title: currentTitle,
-            trackNumber: currentIndex + 1,
-            isPlaying: false,
-            elapsedSeconds: currentTime,
-            durationSeconds: duration,
-            playbackRate: playbackRate
-        )
-        let content = ActivityContent(state: finalState, staleDate: nil)
-        nonisolated(unsafe) let act = activity
-        Task.detached {
-            await act.end(content, dismissalPolicy: .immediate)
-        }
-        liveActivity = nil
-    }
-
     // MARK: - Private: Audio Session
 
+    /// Configures the session category once and starts listening for the system
+    /// events that otherwise silently kill our Now Playing controls. Activation
+    /// itself is deferred to `activateSession()` right before playback, since
+    /// activating at launch can fail if another app currently holds audio focus.
     private func setupAudioSession() {
+        let session = AVAudioSession.sharedInstance()
         do {
-            let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .spokenAudio, options: [])
             // RNNoise is trained at 48kHz; hint the session toward that rate so the
             // denoiser operates closest to its trained band layout. The OS may pick
             // a different rate — the processor handles whatever rate it receives.
             try? session.setPreferredSampleRate(48000)
-            try session.setActive(true)
         } catch {
-            // Audio session setup failed; playback may not work in background
+            print("[AudioSession] category setup failed: \(error)")
+        }
+        observeInterruptions()
+        observeRouteChanges()
+    }
+
+    /// Activates the audio session. Called right before playback and whenever we
+    /// need to reclaim focus (interruption end, route change, foreground return).
+    /// Returns true on success so callers can decide whether to proceed.
+    @discardableResult
+    private func activateSession() -> Bool {
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            return true
+        } catch {
+            print("[AudioSession] activation failed: \(error)")
+            return false
+        }
+    }
+
+    /// Re-claims the session and refreshes Now Playing when the app returns to the
+    /// foreground. iOS may have handed audio focus to another app while we were
+    /// backgrounded; this puts our controls back without requiring a relaunch.
+    func handleForegroundReturn() {
+        guard currentTrackId != nil else { return }
+        activateSession()
+        updateNowPlayingInfo()
+    }
+
+    private func observeInterruptions() {
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            // Notification isn't Sendable, so pull out the primitive (Sendable)
+            // values here on the main queue, then hop onto the main actor with
+            // just those to touch our isolated state safely.
+            let info = notification.userInfo
+            let typeValue = info?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let optionValue = info?[AVAudioSessionInterruptionOptionKey] as? UInt
+            MainActor.assumeIsolated {
+                self?.handleInterruption(typeValue: typeValue, optionValue: optionValue)
+            }
+        }
+    }
+
+    private func handleInterruption(typeValue: UInt?, optionValue: UInt?) {
+        guard let typeValue, let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+
+        switch type {
+        case .began:
+            // iOS has already paused us. Remember whether we were playing so we
+            // can resume if the system says it's okay.
+            wasPlayingBeforeInterruption = isPlaying
+            isPlaying = false
+            updateNowPlayingInfo()
+
+        case .ended:
+            // Reactivate the session no matter what, so the controls come back even
+            // if we don't auto-resume. Then resume only if iOS grants .shouldResume
+            // AND we were playing before.
+            activateSession()
+            let options = optionValue.map { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
+            if player != nil,
+               Self.shouldResumeAfterInterruption(wasPlaying: wasPlayingBeforeInterruption, options: options) {
+                player?.play()
+                player?.rate = playbackRate
+                isPlaying = true
+            }
+            wasPlayingBeforeInterruption = false
+            updateNowPlayingInfo()
+
+        @unknown default:
+            break
+        }
+    }
+
+    /// Pure resume decision after an interruption ends: only resume if we were
+    /// playing when the interruption began AND iOS says it's okay (.shouldResume).
+    /// Extracted (and nonisolated, since it touches no actor state) so the branch
+    /// logic is unit-testable without AVFoundation or MainActor hopping.
+    nonisolated static func shouldResumeAfterInterruption(
+        wasPlaying: Bool,
+        options: AVAudioSession.InterruptionOptions
+    ) -> Bool {
+        wasPlaying && options.contains(.shouldResume)
+    }
+
+    private func observeRouteChanges() {
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            MainActor.assumeIsolated {
+                self?.handleRouteChange(reasonValue: reasonValue)
+            }
+        }
+    }
+
+    private func handleRouteChange(reasonValue: UInt?) {
+        guard let reasonValue,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+
+        switch reason {
+        case .oldDeviceUnavailable:
+            // Headphones/AirPods were unplugged. Apple's convention: pause rather
+            // than blast audio out of the speaker.
+            if isPlaying {
+                player?.pause()
+                isPlaying = false
+                updateNowPlayingInfo()
+            }
+        case .newDeviceAvailable, .categoryChange, .override:
+            // A new output appeared or the route otherwise changed; make sure we
+            // still hold the session and the controls reflect current state.
+            if currentTrackId != nil {
+                activateSession()
+                updateNowPlayingInfo()
+            }
+        default:
+            break
         }
     }
 
@@ -457,7 +511,11 @@ final class AudioPlayerService {
     private func setupRemoteCommands() {
         let commandCenter = MPRemoteCommandCenter.shared()
 
-        commandCenter.playCommand.addTarget { [weak self] _ in
+        // AirPods and most Bluetooth/wired headsets send a single TOGGLE command,
+        // not separate play/pause. Handling this is what makes the AirPods pinch /
+        // headset button work reliably.
+        commandCenter.togglePlayPauseCommand.isEnabled = true
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
             guard let self, self.player != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.togglePlayPause()
@@ -465,10 +523,31 @@ final class AudioPlayerService {
             return .success
         }
 
-        commandCenter.pauseCommand.addTarget { [weak self] _ in
-            guard let self, self.isPlaying else { return .commandFailed }
+        // Explicit play. Guard only on having a player — never on isPlaying, which
+        // can be stale after an interruption and would wrongly report failure,
+        // making the control look dead.
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            guard let self, let player = self.player else { return .commandFailed }
             Task { @MainActor [weak self] in
-                self?.togglePlayPause()
+                guard let self, !self.isPlaying else { return }
+                self.activateSession()
+                player.play()
+                player.rate = self.playbackRate
+                self.isPlaying = true
+                self.updateNowPlayingInfo()
+            }
+            return .success
+        }
+
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            guard let self, let player = self.player else { return .commandFailed }
+            Task { @MainActor [weak self] in
+                guard let self, self.isPlaying else { return }
+                player.pause()
+                self.isPlaying = false
+                self.updateNowPlayingInfo()
             }
             return .success
         }
@@ -527,6 +606,7 @@ final class AudioPlayerService {
 
     private func updateNowPlayingInfo() {
         var info = [String: Any]()
+        info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPMediaItemPropertyTitle] = currentTitle
         info[MPMediaItemPropertyArtist] = "Osho"
         info[MPMediaItemPropertyAlbumTitle] = currentSeries
@@ -542,7 +622,6 @@ final class AudioPlayerService {
 
     // MARK: - Private: Time Observer
 
-    private var lastLiveActivityUpdate: TimeInterval = 0
     private var didTriggerPreemptiveDownload = false
 
     private func setupTimeObserver() {
@@ -554,11 +633,6 @@ final class AudioPlayerService {
                 let seconds = time.seconds
                 if seconds.isFinite {
                     self.currentTime = seconds
-                    // Update Live Activity every 5 seconds
-                    if seconds - self.lastLiveActivityUpdate >= 5 {
-                        self.lastLiveActivityUpdate = seconds
-                        self.updateLiveActivity()
-                    }
                     // Pre-emptive smart download: 20 seconds before end
                     if !self.didTriggerPreemptiveDownload,
                        self.duration > 30,

@@ -50,8 +50,8 @@ struct PlayerView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(UserSettings.shared.accentTheme.color.opacity(0.15))
-                        .foregroundStyle(UserSettings.shared.accentTheme.color)
+                        .background(UserSettings.shared.effectiveAccentTheme.color.opacity(0.15))
+                        .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
                         .clipShape(Capsule())
                     }
                     .padding(.top, 12)
@@ -143,7 +143,7 @@ struct PlayerView: View {
                 } label: {
                     Text(player.currentSeries)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(UserSettings.shared.accentTheme.color)
+                        .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
                 }
             } else {
                 Text(player.currentSeries.isEmpty ? "—" : player.currentSeries)
@@ -169,12 +169,14 @@ struct PlayerView: View {
                 in: 0...max(player.duration, 1),
                 onEditingChanged: { editing in
                     if !editing {
-                        player.seek(to: dragTime)
+                        // Use seekWithHistory so a large manual scrub surfaces the
+                        // "Back to position" button (same as a bookmark jump).
+                        player.seekWithHistory(to: dragTime)
                         isDragging = false
                     }
                 }
             )
-            .tint(UserSettings.shared.accentTheme.color)
+            .tint(UserSettings.shared.effectiveAccentTheme.color)
 
             HStack {
                 Text(formatTime(displayTime))
@@ -298,7 +300,7 @@ struct PlayerView: View {
 
             playerControlButton(
                 icon: sleepTimer.isActive ? "moon.fill" : "moon",
-                label: sleepTimer.isActive ? sleepTimer.formattedRemaining : "Sleep",
+                label: sleepTimer.statusLabel,
                 isActive: sleepTimer.isActive
             ) {
                 showSleepTimer.toggle()
@@ -330,7 +332,7 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .foregroundStyle(isActive ? UserSettings.shared.accentTheme.color : .secondary)
+            .foregroundStyle(isActive ? UserSettings.shared.effectiveAccentTheme.color : .secondary)
         }
         .buttonStyle(.plain)
     }
@@ -368,6 +370,26 @@ struct PlayerView: View {
 
     private var sleepTimerContent: some View {
         VStack(spacing: 4) {
+            Button {
+                sleepTimer.startUntilEndOfDiscourse()
+                showSleepTimer = false
+            } label: {
+                HStack {
+                    Text("End of discourse")
+                        .font(.body)
+                    Spacer()
+                    if sleepTimer.mode == .endOfDiscourse {
+                        Image(systemName: "checkmark")
+                            .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
             ForEach([5, 10, 15, 30, 45, 60], id: \.self) { minutes in
                 Button {
                     sleepTimer.start(minutes: minutes)
@@ -377,7 +399,7 @@ struct PlayerView: View {
                         Text("\(minutes) min")
                             .font(.body)
                         Spacer()
-                        if sleepTimer.isActive {
+                        if sleepTimer.mode == .countdown {
                             let activeMinutes = Int(sleepTimer.remainingTime) / 60 + (Int(sleepTimer.remainingTime) % 60 > 0 ? 1 : 0)
                             if activeMinutes == minutes {
                                 Image(systemName: "checkmark")

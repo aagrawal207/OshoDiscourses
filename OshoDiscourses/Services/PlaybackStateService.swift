@@ -121,6 +121,94 @@ final class PlaybackStateService {
         completedDiscourseIDs.filter { $0.hasPrefix(seriesId + "-") }.count
     }
 
+    // MARK: - iCloud Sync (NSUbiquitousKeyValueStore)
+
+    /// Notified after a merge changes local progress (e.g. another device's
+    /// data arrived) so the UI can refresh. Set by the app on startup.
+    var onCloudMerge: (() -> Void)?
+
+    /// Called after local progress is persisted (auto-save tick / detach) so the
+    /// cloud sync can push. Set by the app on startup; nil keeps sync inert.
+    var onProgressSaved: (() -> Void)?
+
+    /// Build a bounded snapshot of progress to sync. Positions/durations are
+    /// limited to the recently-played IDs so the payload stays small (KVS caps
+    /// at 1 MB / 1024 keys); the completed set is sent in full since it's the
+    /// data most worth preserving across devices.
+    func exportCloudSnapshot() -> CloudSnapshot {
+        var positions: [String: TimeInterval] = [:]
+        var durations: [String: TimeInterval] = [:]
+        for id in recentlyPlayed {
+            let pos = getPosition(discourseId: id)
+            if pos > 0 { positions[id] = pos }
+            let dur = getDuration(discourseId: id)
+            if dur > 0 { durations[id] = dur }
+        }
+        return CloudSnapshot(
+            positions: positions,
+            durations: durations,
+            recentlyPlayed: recentlyPlayed,
+            completed: Array(completedDiscourseIDs),
+            listenedCompleted: listenedCompleted
+        )
+    }
+
+    /// Merge a cloud snapshot into local state using convergent rules:
+    /// - positions/durations: keep the larger value (never rewind a listener
+    ///   who is further ahead on another device)
+    /// - completed: union (completion is monotonic)
+    /// - recency lists: cloud entries first, then local, deduped and capped
+    /// Returns true if anything changed locally.
+    @discardableResult
+    func mergeCloudSnapshot(_ snapshot: CloudSnapshot) -> Bool {
+        var changed = false
+
+        for (id, cloudPos) in snapshot.positions where cloudPos > getPosition(discourseId: id) {
+            let cloudDur = snapshot.durations[id] ?? getDuration(discourseId: id)
+            savePosition(discourseId: id, position: cloudPos, duration: cloudDur)
+            changed = true
+        }
+        for (id, cloudDur) in snapshot.durations where cloudDur > getDuration(discourseId: id) {
+            defaults.set(cloudDur, forKey: durationKeyPrefix + id)
+            changed = true
+        }
+
+        let mergedCompleted = completedDiscourseIDs.union(snapshot.completed)
+        if mergedCompleted != completedDiscourseIDs {
+            completedDiscourseIDs = mergedCompleted
+            defaults.set(Array(completedDiscourseIDs), forKey: completedKey)
+            changed = true
+        }
+
+        let mergedRecent = Self.mergeList(cloud: snapshot.recentlyPlayed, local: recentlyPlayed, cap: maxRecent)
+        if mergedRecent != recentlyPlayed {
+            recentlyPlayed = mergedRecent
+            defaults.set(recentlyPlayed, forKey: recentKey)
+            changed = true
+        }
+
+        let mergedListened = Self.mergeList(cloud: snapshot.listenedCompleted, local: listenedCompleted, cap: 20)
+        if mergedListened != listenedCompleted {
+            listenedCompleted = mergedListened
+            defaults.set(listenedCompleted, forKey: listenedCompletedKey)
+            changed = true
+        }
+
+        if changed { onCloudMerge?() }
+        return changed
+    }
+
+    /// Union two ordered recency lists, cloud entries first, deduped, capped.
+    static func mergeList(cloud: [String], local: [String], cap: Int) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for id in cloud + local where !seen.contains(id) {
+            seen.insert(id)
+            result.append(id)
+        }
+        return Array(result.prefix(cap))
+    }
+
     /// Returns all saved discourse IDs with their positions.
     func allSavedPositions() -> [String: TimeInterval] {
         let allKeys = defaults.dictionaryRepresentation().keys
@@ -162,6 +250,7 @@ final class PlaybackStateService {
             wasPlaying = false
         }
         stats.save()
+        onProgressSaved?()
     }
 
     private func startAutoSave() {

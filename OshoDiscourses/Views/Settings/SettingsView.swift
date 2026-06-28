@@ -13,8 +13,10 @@ struct SettingsView: View {
                 appearanceSection
                 aboutSection
             }
-            .scrollContentBackground(.hidden)
-            .background(Color(.systemBackground))
+            // Use the Form's native grouped background so sections render as
+            // rounded cards: light-gray page + white cards in light mode, true
+            // black + dark-gray cards in dark mode. (An earlier systemBackground
+            // override flattened the cards to invisible in light mode.)
             .navigationTitle("Settings")
             .safeAreaInset(edge: .bottom) {
                 Spacer().frame(height: 70)
@@ -77,45 +79,55 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var appearanceSection: some View {
-        Section("Appearance") {
+        Section {
             Picker("Theme", selection: $settings.appearance) {
                 Text("System").tag(UserSettings.Appearance.system)
                 Text("Dark").tag(UserSettings.Appearance.dark)
                 Text("Light").tag(UserSettings.Appearance.light)
             }
             .pickerStyle(.segmented)
-        }
-        .listRowBackground(Color(.secondarySystemGroupedBackground))
 
-        Section("Accent Color") {
-            HStack(spacing: 10) {
-                ForEach(AccentTheme.allCases) { theme in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            settings.accentTheme = theme
-                        }
-                    } label: {
-                        Circle()
-                            .fill(theme.color)
-                            .frame(width: 30, height: 30)
-                            .overlay {
-                                if settings.accentTheme == theme {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.white)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(AccentTheme.allCases) { theme in
+                        let isSelected = settings.effectiveAccentTheme == theme
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                // Tapping a color pins it and turns off daily shuffle.
+                                settings.dailyAccentShuffle = false
+                                settings.accentTheme = theme
+                            }
+                        } label: {
+                            Circle()
+                                .fill(theme.color)
+                                .frame(width: 27, height: 27)
+                                .overlay {
+                                    if isSelected {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    }
                                 }
-                            }
-                            .padding(3)
-                            .overlay {
-                                Circle()
-                                    .strokeBorder(
-                                        settings.accentTheme == theme ? theme.color : .clear,
-                                        lineWidth: 2
-                                    )
-                            }
+                                .padding(3)
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(
+                                            isSelected ? theme.color : .clear,
+                                            lineWidth: 2
+                                        )
+                                }
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+            }
+
+            Toggle("Shuffle Color Daily", isOn: $settings.dailyAccentShuffle)
+        } header: {
+            Text("Appearance")
+        } footer: {
+            if settings.dailyAccentShuffle {
+                Text("The accent color changes to a new one each day.")
             }
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
@@ -123,9 +135,20 @@ struct SettingsView: View {
 
     // MARK: - About
 
+    /// mailto with the app version prefilled in the subject. Falls back to a
+    /// plain mailto if encoding ever fails. Tapping does nothing if no mail
+    /// account is configured, which iOS handles gracefully.
+    private var feedbackURL: URL {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let subject = "Discourse Player Feedback (v\(version))"
+        let encoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+        return URL(string: "mailto:aagrawal207@gmail.com?subject=\(encoded)")
+            ?? URL(string: "mailto:aagrawal207@gmail.com")!
+    }
+
     private var aboutSection: some View {
         Section {
-            LabeledContent("Version", value: "1.3.0")
+            LabeledContent("Version", value: "1.4.0")
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
@@ -138,11 +161,24 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Link(destination: feedbackURL) {
+                HStack {
+                    Label("Send Feedback", systemImage: "envelope")
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         } header: {
             Text("About")
         } footer: {
-            Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
-                .padding(.top, 8)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
+                Text("Your data — playback positions, downloads, and settings — stays on this device and syncs only through your own iCloud account. No accounts, no analytics, no tracking.")
+            }
+            .padding(.top, 8)
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }

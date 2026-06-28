@@ -20,7 +20,6 @@ xcodegen generate
 
 - Swift 6.0, SwiftUI, iOS 18+
 - AVFoundation + MediaPlayer (audio playback + lock screen controls)
-- ActivityKit (Dynamic Island + Live Activities)
 - No external dependencies — all Apple frameworks
 - No SwiftData — catalog is static structs, settings use UserDefaults, downloads tracked by filesystem
 
@@ -30,30 +29,40 @@ xcodegen generate
 OshoDiscourses/
 ├── App/OshoDiscoursesApp.swift         # @main entry, environment injection
 ├── Views/
-│   ├── ContentView.swift               # TabView: Browse, Downloads, Bookmarks, Settings
+│   ├── ContentView.swift               # TabView: Home, Library, My Activity, Settings
 │   ├── Home/HomeView.swift             # Browse screen — search, curated sections, all series list
+│   ├── Library/LibraryView.swift       # Full series list with dynamic filter chips + sort
 │   ├── Series/SeriesDetailView.swift   # Hero header, discourse list, download/play actions
-│   ├── Player/PlayerView.swift         # Full-screen player — artwork, slider, controls, speed
+│   ├── Player/PlayerView.swift         # Full-screen player — artwork, slider, controls, speed, sleep timer
 │   ├── Player/MiniPlayerView.swift     # Floating mini-player bar (ultraThinMaterial)
-│   ├── Downloads/DownloadsView.swift   # Grouped by series, smart download/delete toggles
-│   ├── BookmarksView.swift             # Placeholder (post-MVP)
-│   └── Settings/SettingsView.swift     # All preferences (appearance, language, sections, downloads)
+│   ├── Downloads/DownloadsView.swift   # "My Activity" tab — downloads + stats/bookmarks links + storage meter
+│   ├── BookmarksView.swift             # Bookmark list (built) — filter chips, swipe-delete, play/redownload
+│   ├── Settings/SettingsView.swift     # Preferences: language, player/downloads, noise reduction, appearance, about
+│   └── Settings/ListeningStatsView.swift # Listening stats dashboard
 ├── Services/
-│   ├── AudioPlayerService.swift        # AVPlayer + Live Activity + lock screen controls
-│   ├── DownloadService.swift           # URLSession download task with progress (filesystem-tracked)
-│   ├── PlaybackStateService.swift      # Auto-saves position per discourse every 10s
+│   ├── AudioPlayerService.swift        # AVPlayer + lock screen controls + audio-session interruption/route recovery
+│   ├── DownloadService.swift           # URLSession download task with progress (filesystem-tracked); excludes downloads from iCloud backup
+│   ├── PlaybackStateService.swift      # Auto-saves position per discourse every 10s; owns cloud merge logic
+│   ├── CloudSyncService.swift          # Silent NSUbiquitousKeyValueStore sync of progress + bookmarks + daily stats
+│   ├── SleepTimerService.swift         # Countdown + end-of-discourse sleep modes
+│   ├── BookmarkService.swift           # Bookmarks persisted to bookmarks.json; union-by-id cloud merge
+│   ├── ListeningStatsService.swift     # Daily listening totals + streak (listening_stats.json); max-per-day cloud merge
+│   ├── NoiseReductionProcessor.swift   # RNNoise wrapper (MTAudioProcessingTap, wet/dry mix)
 │   └── UserSettings.swift              # @Observable singleton over UserDefaults
+├── RNNoise/                            # Vendored RNNoise C sources + bridging header
 ├── Resources/
 │   ├── Catalog.swift                   # 261 series, 4,361 discourses — static data + URL builder
 │   └── Assets.xcassets/                # App icon placeholder
-Shared/
-├── PlaybackAttributes.swift            # ActivityAttributes for Live Activity (shared with widget)
-└── PlaybackIntents.swift               # LiveActivityIntent for Dynamic Island buttons
-OshoDiscoursesWidgets/
-├── WidgetBundle.swift                  # @main widget bundle entry
-└── PlaybackLiveActivityWidget.swift    # Dynamic Island + lock screen Live Activity UI
 OshoDiscoursesTests/
-└── OshoDiscoursesTests.swift           # Catalog + URL builder tests
+├── OshoDiscoursesTests.swift           # Catalog + URL builder tests
+├── PlaybackStateTests.swift            # Position/recent/completed + cloud-merge tests
+├── ListeningStatsTests.swift           # Daily totals + streak tests
+├── SeriesMetadataTests.swift           # Theme/metadata tests
+├── UserSettingsTests.swift             # Defaults + persisted-rate/cellular tests
+├── SleepTimerTests.swift               # Countdown + end-of-discourse mode tests
+├── CloudSyncTests.swift                # Convergent merge rules + snapshot round-trip
+├── AudioSessionInterruptionTests.swift # Resume-after-interruption decision
+└── SyncMergeTests.swift                # Bookmark union + daily-stats max merge
 ```
 
 ## Data
@@ -71,9 +80,16 @@ OshoDiscoursesTests/
 - Hindi/English OSHO: `https://www.oshoworld.com/wp-content/uploads/2020/11/{Language} Audio/OSHO-{Prefix}_{num}.mp3`
 - Spaces become %20 at request time. Numbers zero-padded to 2 digits (3 if series >= 100).
 
-### SwiftData models
-- **Series** / **Discourse** — track download state, local paths, playback position
-- **AppSettings** — persisted preferences
+### Persistence (no SwiftData)
+- **Playback positions / recently-played / completed** — `PlaybackStateService` over UserDefaults.
+- **Settings** — `UserSettings` over UserDefaults.
+- **Downloads** — files on disk, tracked by a JSON manifest in `DownloadService`. The audio folder (`Documents/Osho Discourses/`) is flagged `isExcludedFromBackup` since it's re-downloadable (avoids iCloud-backup bloat + App Store 5.1 rejection).
+- **Bookmarks** — `bookmarks.json`; **listening stats** — `listening_stats.json`.
+
+### iCloud sync (live, cross-device) vs device backup
+- **Live sync** — `CloudSyncService` mirrors one `CloudSnapshot` through `NSUbiquitousKeyValueStore` (the user's own iCloud, no account/server/toggle). Synced: recent playback positions+durations, completed set, recently-played/completed lists, **bookmarks** (union by id), and **daily listening stats** (max seconds per day). Merge rules are convergent + idempotent so devices agree regardless of write order; no merge UI, no "last synced" timestamp. Push fires on each progress auto-save and on bookmark add/remove; pull/merge on external change.
+- **NOT live-synced** — `UserSettings` (accent, language, speed, toggles) stays per-device. Bookmark *deletions* don't propagate (union-by-id, no tombstones — deletes can resurrect from another device).
+- **Device backup** — everything in the app container (settings, full position history, the JSON files) rides the normal iCloud device backup; only the downloads folder is excluded.
 
 ## What's built (MVP)
 
@@ -82,32 +98,34 @@ OshoDiscoursesTests/
 - [x] Series detail with hero header and discourse list
 - [x] Download with progress tracking (URLSession async bytes)
 - [x] Audio playback (AVPlayer with queue management)
-- [x] Background audio + lock screen controls (MPRemoteCommandCenter)
-- [x] Seek slider, playback speed (0.5x–2x), volume boost
+- [x] Background audio + lock screen / Control Center / AirPods controls (MPRemoteCommandCenter, with interruption + route-change recovery)
+- [x] Seek slider, playback speed (0.5x–2x, persisted across launches), volume boost
 - [x] Mini-player bar (ultraThinMaterial glass)
 - [x] Full player screen (Apple Music style)
-- [x] Downloads screen grouped by series
+- [x] Downloads screen grouped by series + total storage-used meter
 - [x] Smart Download (auto-download next 10 min before end)
 - [x] Smart Delete (remove after finishing)
-- [x] Settings (appearance, language hiding, section visibility, download prefs)
+- [x] Download-over-cellular toggle (default off; guards Smart Download data use)
+- [x] Settings (appearance, language, player/download prefs, noise reduction)
 - [x] Playback position persistence (auto-save every 10s)
 - [x] Series thumbnails (gradient hash + initials)
-- [x] Dynamic Island + Live Activity (track info, play/pause/skip controls)
 - [x] Light/Dark/System appearance switching
+- [x] Bookmarks — list with filter chips, swipe-delete, play/redownload (BookmarksView)
+- [x] Sleep timer — 5/10/15/30/45/60 min + "End of discourse" mode
+- [x] Listening stats dashboard + streak (My Activity tab)
+- [x] Noise reduction — RNNoise neural denoise with Light/Medium/Strong wet-dry mix
+- [x] Recently Played / Continue Listening + Recently Completed on Home
+- [x] iCloud sync of progress + bookmarks + daily stats (silent, NSUbiquitousKeyValueStore)
+- [x] Downloads excluded from iCloud backup (re-downloadable content)
+- [x] Feedback (mailto) + on-device-data privacy note in Settings > About
 
 ## What's remaining (post-MVP)
 
-- [ ] Bookmarks — time range bookmarks with notes (model exists, UI is placeholder)
 - [ ] Favourites — heart toggle on discourses
-- [ ] Recently Played section on Browse
-- [ ] Sleep timer
 - [ ] Skip silence / condense pauses
-- [ ] Share bookmarks (text + audio clip export)
-- [ ] CloudKit sync (SwiftData supports it, just needs entitlement)
-- [ ] Osho portrait bundled as player artwork
-- [x] Light mode (all views use semantic colors, adapts to color scheme)
-- [ ] Download size preview (HEAD request or static estimate)
-- [ ] Noise reduction (vDSP spectral subtraction — code exists in the RN version's iOS native module)
+- [ ] Share bookmarks (readable-text export via ShareLink)
+- [ ] Osho portrait refinements as player artwork
+- [ ] Download size preview before downloading (HEAD request or static estimate)
 - [ ] Widget (home screen widget showing current/last played)
 - [ ] App Store submission (icon, screenshots, description)
 
@@ -123,20 +141,21 @@ OshoDiscoursesTests/
 
 At `~/projects/OshoDiscourses/` — feature-complete but had stability issues (Metro bundler disconnects, native module crashes, ffmpeg-kit deprecated). This Swift rewrite resolves those by going fully native.
 
-Features that existed in RN version and should be ported:
-- Bookmarks with time ranges, notes, search, share
-- Favourites with heart toggle
-- Voice boost (1.5x volume via audio mix)
-- Skip silence (rate increase during pauses)
-- Sleep timer (15/30/45/60/90 min)
-- Smart download/delete (both implemented here)
-- Filter chips (All/Hindi/English/Downloaded/Favourited)
-- Recently played tracking
-- Download size estimates (~30MB English, ~20MB Hindi)
+Features from the RN version — port status:
+- [x] Bookmarks with time ranges and notes (share export still pending)
+- [ ] Favourites with heart toggle
+- [x] Voice boost (1.5x volume via audio mix)
+- [ ] Skip silence (rate increase during pauses)
+- [x] Sleep timer (presets + end-of-discourse)
+- [x] Smart download/delete
+- [x] Filter chips (All/Hindi/English/Downloaded/theme tags; Favourited still pending)
+- [x] Recently played tracking (Continue Listening on Home)
+- [ ] Download size estimates (~30MB English, ~20MB Hindi)
 
 ## Dev notes
 
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-05-28
+- Build succeeds as of 2026-06-27 (65 tests passing)
+- Dynamic Island / Live Activity was removed (was a Live Activity hosted by a now-deleted widget extension); standard lock-screen/Control-Center controls stay via MediaPlayer

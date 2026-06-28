@@ -33,6 +33,7 @@ final class DownloadService {
     init() {
         loadManifest()
         migrateOldDownloads()
+        excludeDownloadsFromBackup()
     }
 
     // MARK: - Public
@@ -99,6 +100,21 @@ final class DownloadService {
         activeDownloads.removeValue(forKey: discourseID)
     }
 
+    /// Delete a specific set of downloaded discourses (multi-select / per-series).
+    func deleteDownloads(ids: [String]) {
+        for id in ids {
+            try? deleteDownload(discourseID: id)
+        }
+    }
+
+    /// Delete every downloaded discourse. Iterates a snapshot since
+    /// `deleteDownload` mutates `downloadedIDs` as it goes.
+    func deleteAllDownloads() {
+        for id in Array(downloadedIDs) {
+            try? deleteDownload(discourseID: id)
+        }
+    }
+
     func isDownloaded(_ discourseID: String) -> Bool {
         downloadedIDs.contains(discourseID)
     }
@@ -143,6 +159,28 @@ final class DownloadService {
         return nil
     }
 
+    /// Actual on-disk size (bytes) of each downloaded discourse, keyed by ID.
+    /// Sums per-file allocated bytes — not the static ~20/30 MB estimate. Stats
+    /// the files off the main actor so a large library doesn't hitch the UI.
+    /// The view derives both per-series and total sizes from this one map.
+    func downloadedSizes() async -> [String: Int64] {
+        // Snapshot id→url on the main actor (localFileURL can mutate state).
+        var urls: [String: URL] = [:]
+        for id in Array(downloadedIDs) {
+            if let url = localFileURL(for: id) { urls[id] = url }
+        }
+        return await Task.detached(priority: .utility) {
+            var sizes: [String: Int64] = [:]
+            for (id, url) in urls {
+                let values = try? url.resourceValues(
+                    forKeys: [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+                )
+                sizes[id] = Int64(values?.totalFileAllocatedSize ?? values?.fileAllocatedSize ?? 0)
+            }
+            return sizes
+        }.value
+    }
+
     func downloadedDiscourses() -> [(seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] {
         var groups: [String: (seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] = [:]
 
@@ -159,6 +197,39 @@ final class DownloadService {
     // MARK: - File Paths
 
     private let rootFolderName = "Osho Discourses"
+
+    private func downloadsRootURL() -> URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent(rootFolderName)
+    }
+
+    /// Marks the downloads folder as excluded from iCloud/iTunes backup. The
+    /// discourses are re-downloadable from oshoworld.com, so backing them up
+    /// would bloat the user's iCloud storage — and Apple rejects apps that back
+    /// up re-creatable bulk data (App Store guideline 5.1 / Data Storage).
+    /// The flag is inherited by files created inside the folder, so setting it on
+    /// the directory covers everything. Idempotent and cheap; safe to call often.
+    private func excludeDownloadsFromBackup() {
+        let root = downloadsRootURL()
+        // Create the folder if it doesn't exist yet so the flag has somewhere to
+        // live before the first download writes into it.
+        if !FileManager.default.fileExists(atPath: root.path) {
+            try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        }
+        setExcludedFromBackup(root)
+    }
+
+    private func setExcludedFromBackup(_ url: URL) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var mutableURL = url
+        do {
+            try mutableURL.setResourceValues(values)
+        } catch {
+            print("[Downloads] failed to exclude from backup: \(error)")
+        }
+    }
 
     private func fileURL(for discourse: CatalogDiscourse) -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -232,6 +303,9 @@ final class DownloadService {
     private func downloadWithProgress(url: URL, discourseID: String) async throws -> URL {
         var request = URLRequest(url: url)
         request.timeoutInterval = 120
+        // Per-request cellular gate (URLSession.shared's config is immutable).
+        // When off, the task fails on cellular and surfaces via the .failed path.
+        request.allowsCellularAccess = UserSettings.shared.allowCellularDownloads
 
         let task = URLSession.shared.downloadTask(with: request)
         activeTasks[discourseID] = task
