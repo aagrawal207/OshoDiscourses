@@ -86,9 +86,9 @@ struct SettingsView: View {
     private var appearanceSection: some View {
         Section {
             Picker("Theme", selection: $settings.appearance) {
+                Text("Light").tag(UserSettings.Appearance.light)
                 Text("System").tag(UserSettings.Appearance.system)
                 Text("Dark").tag(UserSettings.Appearance.dark)
-                Text("Light").tag(UserSettings.Appearance.light)
             }
             .pickerStyle(.segmented)
 

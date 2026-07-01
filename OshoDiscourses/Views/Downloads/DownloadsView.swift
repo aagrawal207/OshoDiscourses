@@ -251,11 +251,16 @@ struct DownloadsView: View {
 
     @ViewBuilder
     private var downloadsFooter: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if !isEditing {
+        VStack(alignment: .leading, spacing: 8) {
+            let showHint = !isEditing
+            let showUsage = totalBytes > 0 && searchText.isEmpty
+            if showHint {
                 Text("Swipe a discourse left to delete, or use a series' ••• menu to clear a whole series or select several.")
             }
-            if totalBytes > 0 && searchText.isEmpty {
+            if showHint && showUsage {
+                Divider()
+            }
+            if showUsage {
                 Text("\(format(totalBytes)) used on this device")
             }
         }

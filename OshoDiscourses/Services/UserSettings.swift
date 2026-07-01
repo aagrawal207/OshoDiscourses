@@ -138,7 +138,8 @@ final class UserSettings {
             Keys.dailyAccentShuffle: false,
         ])
 
-        self.appearance = Appearance(rawValue: d.string(forKey: Keys.appearance) ?? "") ?? .system
+        // Default to light on first launch; a stored value always wins.
+        self.appearance = Appearance(rawValue: d.string(forKey: Keys.appearance) ?? "") ?? .light
         self.accentTheme = AccentTheme(rawValue: d.string(forKey: Keys.accentTheme) ?? "") ?? .purple
         self.dailyAccentShuffle = d.bool(forKey: Keys.dailyAccentShuffle)
         self.languageFilter = LanguageFilter(rawValue: d.string(forKey: Keys.languageFilter) ?? "") ?? .both
