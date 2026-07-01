@@ -226,7 +226,12 @@ private struct DiscourseRowView: View {
                     .lineLimit(1)
                     .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
 
-                if showDownloadHint {
+                if let failureMessage {
+                    Text(failureMessage)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                } else if showDownloadHint {
                     Text("Downloading...")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -269,6 +274,14 @@ private struct DiscourseRowView: View {
         guard let dl = downloads.activeDownloads[discourse.id] else { return false }
         if case .failed = dl.status { return true }
         return false
+    }
+
+    /// The plain-language reason a download failed, shown under the title so the
+    /// listener knows why nothing happened instead of a silent no-op.
+    private var failureMessage: String? {
+        guard let dl = downloads.activeDownloads[discourse.id],
+              case .failed(let message) = dl.status else { return nil }
+        return message
     }
 
     @ViewBuilder

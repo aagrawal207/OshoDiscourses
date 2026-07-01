@@ -43,10 +43,15 @@ struct SettingsView: View {
     // MARK: - Player & Downloads
 
     private var playerSection: some View {
-        Section("Player & Downloads") {
+        Section {
             Toggle("Auto-Play Next", isOn: $settings.autoPlayNext)
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
+            Toggle("Download over Cellular", isOn: $settings.allowCellularDownloads)
+        } header: {
+            Text("Player & Downloads")
+        } footer: {
+            Text("Downloads use Wi-Fi only unless this is on. Each discourse is roughly 20–30 MB.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }

@@ -16,6 +16,27 @@ final class DownloadService {
         }
     }
 
+    /// A download failure with a message the UI can show as-is. The raw system
+    /// errors ("The operation couldn't be completed") tell the listener nothing,
+    /// so every throw path maps to one of these plain-language reasons.
+    enum DownloadError: LocalizedError {
+        case wifiOnly
+        case notFound
+        case serverError(Int)
+        case notAudio
+        case offline
+
+        var errorDescription: String? {
+            switch self {
+            case .wifiOnly:  return "Wi-Fi only — turn on \"Download over Cellular\" in Settings."
+            case .notFound:  return "Not available on the server (404)."
+            case .serverError(let code): return "Server error (HTTP \(code))."
+            case .notAudio:  return "Server returned a web page, not audio."
+            case .offline:   return "No internet connection."
+            }
+        }
+    }
+
     var activeDownloads: [String: DownloadProgress] = [:]
     private(set) var downloadedIDs: Set<String> = []
     private var activeTasks: [String: URLSessionDownloadTask] = [:]
@@ -304,7 +325,7 @@ final class DownloadService {
         var request = URLRequest(url: url)
         request.timeoutInterval = 120
         // Per-request cellular gate (URLSession.shared's config is immutable).
-        // When off, the task fails on cellular and surfaces via the .failed path.
+        // The toggle lives in Settings → Player & Downloads and defaults off.
         request.allowsCellularAccess = UserSettings.shared.allowCellularDownloads
 
         let task = URLSession.shared.downloadTask(with: request)
@@ -321,22 +342,36 @@ final class DownloadService {
             activeTasks.removeValue(forKey: discourseID)
         }
 
-        let (tempURL, response) = try await withTaskCancellationHandler {
-            try await URLSession.shared.download(for: request)
-        } onCancel: {
-            task.cancel()
+        let tempURL: URL
+        let response: URLResponse
+        do {
+            (tempURL, response) = try await withTaskCancellationHandler {
+                try await URLSession.shared.download(for: request)
+            } onCancel: {
+                task.cancel()
+            }
+        } catch let error as URLError {
+            // Translate the two transport failures the listener can actually act
+            // on. Everything else keeps its system description.
+            switch error.code {
+            case .dataNotAllowed: throw DownloadError.wifiOnly   // cellular gate blocked it
+            case .notConnectedToInternet, .networkConnectionLost: throw DownloadError.offline
+            default: throw error
+            }
         }
 
         // Validate response
         if let httpResponse = response as? HTTPURLResponse {
             guard (200...299).contains(httpResponse.statusCode) else {
                 try? FileManager.default.removeItem(at: tempURL)
-                throw URLError(.badServerResponse)
+                throw httpResponse.statusCode == 404
+                    ? DownloadError.notFound
+                    : DownloadError.serverError(httpResponse.statusCode)
             }
             let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
             if contentType.contains("text/html") {
                 try? FileManager.default.removeItem(at: tempURL)
-                throw URLError(.badServerResponse)
+                throw DownloadError.notAudio
             }
         }
 

@@ -61,14 +61,19 @@ struct SyncMergeTests {
     @Test func statsMergeKeepsLargerValue() {
         let stats = ListeningStatsService.shared
         let day = "2000-01-02"
-        stats.mergeSyncedStats([day: 500])
+        // Max-merge persists to disk through the shared singleton, so a fixed
+        // absolute value isn't repeatable across runs. Anchor above whatever the
+        // day already holds and assert relative to that.
+        let base = stats.syncedDailyStats()[day] ?? 0
+        let high = base + 500
+        #expect(stats.mergeSyncedStats([day: high]) == true)
+        #expect(stats.syncedDailyStats()[day] == high)
         // A smaller incoming value must not lower the local total.
-        let changed = stats.mergeSyncedStats([day: 100])
-        #expect(changed == false)
-        #expect(stats.syncedDailyStats()[day] == 500)
+        #expect(stats.mergeSyncedStats([day: high - 400]) == false)
+        #expect(stats.syncedDailyStats()[day] == high)
         // A larger one wins.
-        #expect(stats.mergeSyncedStats([day: 900]) == true)
-        #expect(stats.syncedDailyStats()[day] == 900)
+        #expect(stats.mergeSyncedStats([day: high + 400]) == true)
+        #expect(stats.syncedDailyStats()[day] == high + 400)
     }
 
     // MARK: - Snapshot round-trip with the new fields
