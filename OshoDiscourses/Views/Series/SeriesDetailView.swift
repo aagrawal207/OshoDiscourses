@@ -230,7 +230,7 @@ private struct DiscourseRowView: View {
                     Text(failureMessage)
                         .font(.caption2)
                         .foregroundStyle(.red)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if showDownloadHint {
                     Text("Downloading...")
                         .font(.caption2)

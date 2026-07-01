@@ -25,6 +25,8 @@ final class DownloadService {
         case serverError(Int)
         case notAudio
         case offline
+        case diskFull
+        case saveFailed
 
         var errorDescription: String? {
             switch self {
@@ -33,8 +35,16 @@ final class DownloadService {
             case .serverError(let code): return "Server error (HTTP \(code))."
             case .notAudio:  return "Server returned a web page, not audio."
             case .offline:   return "No internet connection."
+            case .diskFull:  return "Not enough storage on your device."
+            case .saveFailed: return "Downloaded, but couldn't be saved. Try again."
             }
         }
+    }
+
+    /// Maps a raw file error to a short DownloadError so the UI never shows a
+    /// long, truncatable Cocoa sentence ("… couldn't be moved to … because …").
+    private static func saveError(from error: Error) -> DownloadError {
+        (error as NSError).code == NSFileWriteOutOfSpaceError ? .diskFull : .saveFailed
     }
 
     var activeDownloads: [String: DownloadProgress] = [:]
@@ -87,19 +97,25 @@ final class DownloadService {
 
             // Ensure series folder exists
             let seriesDir = destination.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: seriesDir, withIntermediateDirectories: true)
 
             let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
 
-            // moveItem refuses to overwrite, so a stray file at the destination
-            // (a duplicate request that slipped past the guard above, or a
-            // leftover from an interrupted move) makes the move throw
-            // "an item with the same name already exists." The fresh download is
-            // authoritative, so clear the destination first.
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try? FileManager.default.removeItem(at: destination)
+            // Filesystem steps throw long Cocoa sentences; map them to short
+            // messages so the UI row shows a clean reason instead of a truncated
+            // "…couldn't be moved to…because…". moveItem also refuses to
+            // overwrite, so clear any stray file at the destination first (a
+            // duplicate request that slipped past the guard above, or a leftover
+            // from an interrupted move) — the fresh download is authoritative.
+            do {
+                try FileManager.default.createDirectory(at: seriesDir, withIntermediateDirectories: true)
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try? FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.moveItem(at: localURL, to: destination)
+            } catch {
+                try? FileManager.default.removeItem(at: localURL)
+                throw Self.saveError(from: error)
             }
-            try FileManager.default.moveItem(at: localURL, to: destination)
             downloadedIDs.insert(discourse.id)
             pathMap[discourse.id] = relativePath(for: discourse)
             saveManifest()
