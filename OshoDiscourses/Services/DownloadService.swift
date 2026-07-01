@@ -91,6 +91,14 @@ final class DownloadService {
 
             let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
 
+            // moveItem refuses to overwrite, so a stray file at the destination
+            // (a duplicate request that slipped past the guard above, or a
+            // leftover from an interrupted move) makes the move throw
+            // "an item with the same name already exists." The fresh download is
+            // authoritative, so clear the destination first.
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try? FileManager.default.removeItem(at: destination)
+            }
             try FileManager.default.moveItem(at: localURL, to: destination)
             downloadedIDs.insert(discourse.id)
             pathMap[discourse.id] = relativePath(for: discourse)
