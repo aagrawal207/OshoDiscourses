@@ -211,9 +211,22 @@ final class AudioPlayerService {
         // End-of-discourse sleep: let this talk finish, then stop here (don't
         // auto-advance). discourseDidFinish() resets the timer afterward.
         let endSleepArmed = SleepTimerService.shared.mode == .endOfDiscourse
-        let shouldAutoPlay = hasNext && UserSettings.shared.autoPlayNext && !endSleepArmed
-        if shouldAutoPlay {
+        let autoNext = UserSettings.shared.autoPlayNext && !endSleepArmed
+
+        // Auto-play is download-only. Prefer the queue's next item; if the queue
+        // is exhausted — a single-item queue (e.g. started from a bookmark), or
+        // the next talk only finished downloading after playback began — fall
+        // back to the next *downloaded* discourse in the same series so a
+        // fully-downloaded series plays straight through regardless of how
+        // playback started. This never advances to a discourse not on disk.
+        if autoNext, hasNext {
             skipToNext()
+        } else if autoNext,
+                  let completedTrackId,
+                  let next = nextDownloadedItem(after: completedTrackId) {
+            queue.append(next)
+            currentIndex = queue.count - 1
+            loadAndPlay(item: next)
         } else {
             isPlaying = false
             currentTime = duration
@@ -269,6 +282,37 @@ final class AudioPlayerService {
         Task {
             _ = try? await downloadService.download(nextToDownload)
         }
+    }
+
+    /// The next *downloaded* discourse after the given one in the same series,
+    /// as a ready-to-play QueueItem, or nil if none is on disk. Used by
+    /// auto-play to continue past a queue that didn't include it (single-item
+    /// queue, or a talk downloaded after playback started).
+    private func nextDownloadedItem(after discourseId: String) -> QueueItem? {
+        guard let downloadService,
+              let lookup = Catalog.discourseLookup[discourseId] else { return nil }
+        let allInSeries = Catalog.discourses(for: lookup.series)
+        let orderedIds = allInSeries.map(\.id)
+        guard let nextId = Self.nextDownloadedId(
+            after: discourseId,
+            in: orderedIds,
+            isDownloaded: { downloadService.isDownloaded($0) }
+        ), let disc = allInSeries.first(where: { $0.id == nextId }),
+           let url = downloadService.localFileURL(for: nextId) else { return nil }
+
+        return QueueItem(id: disc.id, url: url, title: disc.displayTitle, series: lookup.series.name)
+    }
+
+    /// The first downloaded id strictly after `current` in the ordered series,
+    /// or nil if none. Pure so auto-play's advance rule is unit-testable without
+    /// a player, filesystem, or catalog.
+    nonisolated static func nextDownloadedId(
+        after current: String,
+        in orderedIds: [String],
+        isDownloaded: (String) -> Bool
+    ) -> String? {
+        guard let idx = orderedIds.firstIndex(of: current) else { return nil }
+        return orderedIds[orderedIds.index(after: idx)...].first(where: isDownloaded)
     }
 
     func setRate(_ rate: Float) {
