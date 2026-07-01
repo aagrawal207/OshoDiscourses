@@ -160,15 +160,20 @@ struct PlayerView: View {
         VStack(spacing: 6) {
             Slider(
                 value: Binding(
+                    // Only record the scrubbed value; don't infer drag state here.
+                    // SwiftUI also calls this setter as the thumb tracks playback,
+                    // so flipping isDragging here would stick it true and freeze
+                    // the label until the player was reopened. Drag start/end is
+                    // owned solely by onEditingChanged.
                     get: { displayTime },
-                    set: { newValue in
-                        isDragging = true
-                        dragTime = newValue
-                    }
+                    set: { dragTime = $0 }
                 ),
                 in: 0...max(player.duration, 1),
                 onEditingChanged: { editing in
-                    if !editing {
+                    if editing {
+                        dragTime = player.currentTime
+                        isDragging = true
+                    } else {
                         // Use seekWithHistory so a large manual scrub surfaces the
                         // "Back to position" button (same as a bookmark jump).
                         player.seekWithHistory(to: dragTime)
