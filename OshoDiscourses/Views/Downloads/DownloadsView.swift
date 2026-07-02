@@ -32,11 +32,22 @@ struct DownloadsView: View {
         }
     }
 
+    /// Discourses that were downloaded before but aren't on disk now — offered
+    /// for quick re-download. Sorted by series then number for a stable list.
+    private var previouslyDownloaded: [CatalogDiscourse] {
+        downloads.downloadHistory
+            .subtracting(downloads.downloadedIDs)
+            .compactMap { Catalog.discourseLookup[$0]?.discourse }
+            .filter { !downloads.isDownloading($0.id) }
+            .sorted { ($0.seriesName, $0.number) < ($1.seriesName, $1.number) }
+    }
+
     var body: some View {
         NavigationStack {
             List(selection: $selection) {
                 downloadsSection
                 if !isEditing {
+                    previouslyDownloadedSection
                     activitySection
                 }
             }
@@ -268,6 +279,26 @@ struct DownloadsView: View {
         .foregroundStyle(.secondary)
     }
 
+    // MARK: - Previously Downloaded Section
+
+    /// Shown only when there's history not currently on disk and the user isn't
+    /// searching, so it never clutters the normal or empty state.
+    @ViewBuilder
+    private var previouslyDownloadedSection: some View {
+        let items = searchText.isEmpty ? previouslyDownloaded : []
+        if !items.isEmpty {
+            Section {
+                ForEach(items) { discourse in
+                    RedownloadRow(discourse: discourse)
+                }
+            } header: {
+                Text("Previously Downloaded")
+            } footer: {
+                Text("Removed from this device. Tap to download again.")
+            }
+        }
+    }
+
     private var totalBytes: Int64 {
         sizesByID.values.reduce(0, +)
     }
@@ -424,5 +455,62 @@ private struct DownloadedDiscourseRow: View {
 
         let startIndex = queueItems.firstIndex { $0.id == discourse.id } ?? 0
         player.playQueue(items: queueItems, startIndex: startIndex)
+    }
+}
+
+// MARK: - Re-download Row
+
+/// A row for a previously-downloaded discourse no longer on disk. Shows the
+/// series + number and a control to fetch it again, mirroring the series
+/// screen's GET / progress / cancel affordances.
+private struct RedownloadRow: View {
+    @Environment(DownloadService.self) private var downloads
+    let discourse: CatalogDiscourse
+
+    private var isDownloading: Bool { downloads.isDownloading(discourse.id) }
+
+    private var estimatedSize: String {
+        discourse.language == .hindi ? "~20 MB" : "~30 MB"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(discourse.seriesName)
+                    .font(.body)
+                    .lineLimit(1)
+                Text("Discourse \(discourse.number)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if isDownloading {
+                Button {
+                    downloads.cancelDownload(discourseID: discourse.id)
+                } label: {
+                    ProgressView(value: downloads.progress(for: discourse.id))
+                        .progressViewStyle(.circular)
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    Task { _ = try? await downloads.download(discourse) }
+                } label: {
+                    Text("GET \(estimatedSize)")
+                        .font(.caption.bold())
+                        .fixedSize()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.accent.opacity(0.15))
+                        .foregroundStyle(Color.accent)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }

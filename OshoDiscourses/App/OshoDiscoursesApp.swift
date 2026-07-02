@@ -35,7 +35,8 @@ struct OshoDiscoursesApp: App {
                     // pull/merge on external change.
                     playbackState.onProgressSaved = { CloudSyncService.shared.push() }
                     BookmarkService.shared.onBookmarksChanged = { CloudSyncService.shared.push() }
-                    CloudSyncService.shared.start(playbackState: playbackState)
+                    downloadService.onDownloadHistoryChanged = { CloudSyncService.shared.push() }
+                    CloudSyncService.shared.start(playbackState: playbackState, downloadService: downloadService)
                 }
         }
     }

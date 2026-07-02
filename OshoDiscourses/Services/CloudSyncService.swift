@@ -15,6 +15,9 @@ struct CloudSnapshot: Codable, Equatable {
     /// Date string ("yyyy-MM-dd") → seconds listened that day. Merged by max per
     /// day so it converges idempotently (see ListeningStatsService.mergeSyncedStats).
     var dailyStats: [String: TimeInterval] = [:]
+    /// Discourse IDs ever downloaded (monotonic, union-merged). Lets a reinstall
+    /// or second device offer quick re-download of previously-downloaded talks.
+    var downloaded: [String] = []
 }
 
 /// Mirrors listening progress through `NSUbiquitousKeyValueStore` (the user's
@@ -33,14 +36,18 @@ final class CloudSyncService {
     private let store = NSUbiquitousKeyValueStore.default
     private let snapshotKey = "cloud.progress.v1"
     private weak var playbackState: PlaybackStateService?
+    private weak var downloadService: DownloadService?
     private var observer: NSObjectProtocol?
 
     private init() {}
 
     /// Begin syncing the given playback state. Registers for external-change
     /// notifications and performs an initial reconcile (pull → merge → push).
-    func start(playbackState: PlaybackStateService) {
+    /// `downloadService` is passed in (rather than a `.shared`) because it's an
+    /// `@State`-injected instance, not a singleton like the other services.
+    func start(playbackState: PlaybackStateService, downloadService: DownloadService) {
         self.playbackState = playbackState
+        self.downloadService = downloadService
         observer = NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: store,
@@ -68,6 +75,9 @@ final class CloudSyncService {
             // them with the same convergent, write-order-independent rules.
             BookmarkService.shared.mergeSyncedBookmarks(snapshot.bookmarks)
             ListeningStatsService.shared.mergeSyncedStats(snapshot.dailyStats)
+            // Download history (monotonic union) so a reinstall/second device
+            // knows what was previously downloaded.
+            downloadService?.mergeSyncedDownloadHistory(snapshot.downloaded)
         }
         if thenPush { push() }
     }
@@ -78,6 +88,7 @@ final class CloudSyncService {
         var snapshot = playbackState.exportCloudSnapshot()
         snapshot.bookmarks = BookmarkService.shared.bookmarks
         snapshot.dailyStats = ListeningStatsService.shared.syncedDailyStats()
+        snapshot.downloaded = downloadService?.syncedDownloadHistory() ?? []
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         store.set(data, forKey: snapshotKey)
     }

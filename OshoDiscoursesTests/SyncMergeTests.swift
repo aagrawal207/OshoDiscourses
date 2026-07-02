@@ -76,17 +76,42 @@ struct SyncMergeTests {
         #expect(stats.syncedDailyStats()[day] == high + 400)
     }
 
+    // MARK: - Download history (monotonic union)
+
+    @Test func downloadHistoryMergeUnionsAndReportsChange() {
+        let downloads = DownloadService()
+        let a = "hist-\(downloads.downloadHistory.count)-a"
+        let b = "hist-\(downloads.downloadHistory.count)-b"
+        // A genuinely new id is a change; the union contains it afterward.
+        #expect(downloads.mergeSyncedDownloadHistory([a, b]) == true)
+        #expect(downloads.downloadHistory.contains(a))
+        #expect(downloads.downloadHistory.contains(b))
+        // Re-merging the same ids changes nothing (monotonic + idempotent).
+        #expect(downloads.mergeSyncedDownloadHistory([a, b]) == false)
+    }
+
+    @Test func downloadHistoryMergeNeverRemoves() {
+        let downloads = DownloadService()
+        let keep = "hist-keep-\(downloads.downloadHistory.count)"
+        downloads.mergeSyncedDownloadHistory([keep])
+        // Merging an empty (or disjoint) set must not drop existing history.
+        downloads.mergeSyncedDownloadHistory([])
+        #expect(downloads.downloadHistory.contains(keep))
+    }
+
     // MARK: - Snapshot round-trip with the new fields
 
     @Test func snapshotEncodesBookmarksAndStats() throws {
         var snapshot = CloudSnapshot()
         snapshot.bookmarks = [Bookmark(discourseID: "d1", seriesName: "S", title: "A", timestamp: 5)]
         snapshot.dailyStats = ["2024-01-01": 600]
+        snapshot.downloaded = ["dl-1", "dl-2"]
 
         let data = try JSONEncoder().encode(snapshot)
         let decoded = try JSONDecoder().decode(CloudSnapshot.self, from: data)
         #expect(decoded.bookmarks.count == 1)
         #expect(decoded.bookmarks.first?.discourseID == "d1")
         #expect(decoded.dailyStats["2024-01-01"] == 600)
+        #expect(Set(decoded.downloaded) == ["dl-1", "dl-2"])
     }
 }

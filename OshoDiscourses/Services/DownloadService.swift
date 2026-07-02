@@ -54,6 +54,15 @@ final class DownloadService {
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
 
+    /// Every discourse ever downloaded, monotonic. Unlike `downloadedIDs` (which
+    /// tracks only files currently on disk and shrinks on delete/eviction), this
+    /// only grows, so a deleted discourse can be offered for quick re-download.
+    /// Synced through iCloud so the list survives app deletion and new devices.
+    private(set) var downloadHistory: Set<String> = []
+
+    /// Fired when `downloadHistory` gains an entry, so the app can push it to iCloud.
+    var onDownloadHistoryChanged: (() -> Void)?
+
     private let maxConcurrent = 3
 
     private let manifestURL: URL = {
@@ -61,8 +70,14 @@ final class DownloadService {
         return appSupport.appendingPathComponent(".download_manifest.json")
     }()
 
+    private let historyURL: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return appSupport.appendingPathComponent(".download_history.json")
+    }()
+
     init() {
         loadManifest()
+        loadHistory()
         migrateOldDownloads()
         excludeDownloadsFromBackup()
     }
@@ -76,6 +91,7 @@ final class DownloadService {
             downloadedIDs.insert(discourse.id)
             pathMap[discourse.id] = relativePath(for: discourse)
             saveManifest()
+            recordDownloaded(discourse.id)
             activeDownloads[discourse.id] = DownloadProgress(progress: 1, status: .complete)
             return destination
         }
@@ -119,6 +135,7 @@ final class DownloadService {
             downloadedIDs.insert(discourse.id)
             pathMap[discourse.id] = relativePath(for: discourse)
             saveManifest()
+            recordDownloaded(discourse.id)
             activeDownloads[discourse.id]?.status = .complete
             activeDownloads[discourse.id]?.progress = 1
             return destination
@@ -316,6 +333,51 @@ final class DownloadService {
         pathMap = map
         // Trust manifest at load time; lazily verify in localFileURL(for:)
         downloadedIDs = Set(map.keys)
+    }
+
+    // MARK: - Download History (persistent, iCloud-synced)
+
+    /// Add an id to the ever-downloaded history. No-op if already present; on a
+    /// genuine addition it persists and notifies so the change reaches iCloud.
+    private func recordDownloaded(_ id: String) {
+        guard downloadHistory.insert(id).inserted else { return }
+        saveHistory()
+        onDownloadHistoryChanged?()
+    }
+
+    /// Union in ids from another device. Returns true if anything was added, so
+    /// the caller knows whether local state changed. Monotonic: never removes.
+    @discardableResult
+    func mergeSyncedDownloadHistory(_ incoming: [String]) -> Bool {
+        let before = downloadHistory.count
+        downloadHistory.formUnion(incoming)
+        guard downloadHistory.count != before else { return false }
+        saveHistory()
+        return true
+    }
+
+    /// The history as a plain array for the cloud snapshot.
+    func syncedDownloadHistory() -> [String] { Array(downloadHistory) }
+
+    private func saveHistory() {
+        guard let data = try? JSONEncoder().encode(Array(downloadHistory)) else { return }
+        let dir = historyURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? data.write(to: historyURL)
+    }
+
+    private func loadHistory() {
+        if let data = try? Data(contentsOf: historyURL),
+           let ids = try? JSONDecoder().decode([String].self, from: data) {
+            downloadHistory = Set(ids)
+        }
+        // Anything already on disk is by definition part of the history — seed it
+        // so existing users' current downloads enter history on first launch of
+        // this version (loadManifest runs before loadHistory). Persist the seed so
+        // a later delete-then-restart can't lose an id that was never written.
+        let before = downloadHistory.count
+        downloadHistory.formUnion(downloadedIDs)
+        if downloadHistory.count != before { saveHistory() }
     }
 
     // MARK: - Migration
