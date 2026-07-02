@@ -131,3 +131,71 @@ struct DownloadDeleteTests {
         #expect(service.downloadedIDs.isEmpty)
     }
 }
+
+/// Queue-state helpers on DownloadService. Downloads run one at a time; a
+/// waiting one is "queued" — it counts as in-progress for the row's cancel
+/// control but should be labelled distinctly so it doesn't look like a stuck 0%.
+@Suite(.serialized)
+@MainActor
+struct DownloadQueueStateTests {
+
+    @Test func queuedCountsAsDownloadingButIsFlaggedQueued() {
+        let service = DownloadService()
+        service.activeDownloads["a"] = .init(status: .queued)
+        #expect(service.isDownloading("a"))   // occupies the row's progress control
+        #expect(service.isQueued("a"))         // ...but shows as "waiting", not 0%
+    }
+
+    @Test func activeTransferIsDownloadingNotQueued() {
+        let service = DownloadService()
+        service.activeDownloads["b"] = .init(status: .downloading)
+        #expect(service.isDownloading("b"))
+        #expect(!service.isQueued("b"))
+    }
+
+    @Test func finishedStatesAreNeitherDownloadingNorQueued() {
+        let service = DownloadService()
+        service.activeDownloads["done"] = .init(progress: 1, status: .complete)
+        service.activeDownloads["bad"] = .init(status: .failed("nope"))
+        for id in ["done", "bad"] {
+            #expect(!service.isDownloading(id))
+            #expect(!service.isQueued(id))
+        }
+    }
+
+    @Test func cancelClearsQueuedState() {
+        let service = DownloadService()
+        service.activeDownloads["c"] = .init(status: .queued)
+        service.cancelDownload(discourseID: "c")
+        #expect(!service.isDownloading("c"))
+        #expect(!service.isQueued("c"))
+        #expect(service.activeDownloads["c"] == nil)
+    }
+
+    @Test func isActiveMatchesQueuedAndDownloading() {
+        #expect(DownloadService.DownloadProgress(status: .queued).isActive)
+        #expect(DownloadService.DownloadProgress(status: .downloading).isActive)
+        #expect(!DownloadService.DownloadProgress(status: .complete).isActive)
+        #expect(!DownloadService.DownloadProgress(status: .failed("x")).isActive)
+    }
+
+    /// With one transfer running and several waiting, only the running one is
+    /// "downloading"; the rest report queued. Guards the one-at-a-time gate: if
+    /// queued items blocked on each other (not just the transfer) they'd never
+    /// start. Every entry stays active (occupies a row control) until it finishes.
+    @Test func multipleQueuedBehindOneTransfer() {
+        let service = DownloadService()
+        service.activeDownloads["run"] = .init(status: .downloading)
+        service.activeDownloads["wait1"] = .init(status: .queued)
+        service.activeDownloads["wait2"] = .init(status: .queued)
+
+        #expect(service.isDownloading("run") && !service.isQueued("run"))
+        #expect(service.isQueued("wait1") && service.isDownloading("wait1"))
+        #expect(service.isQueued("wait2") && service.isDownloading("wait2"))
+        // Exactly one is actually transferring at a time.
+        let transferring = service.activeDownloads.filter {
+            if case .downloading = $0.value.status { return true } else { return false }
+        }
+        #expect(transferring.count == 1)
+    }
+}

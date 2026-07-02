@@ -490,9 +490,18 @@ private struct RedownloadRow: View {
                 Button {
                     downloads.cancelDownload(discourseID: discourse.id)
                 } label: {
-                    ProgressView(value: downloads.progress(for: discourse.id))
-                        .progressViewStyle(.circular)
-                        .frame(width: 26, height: 26)
+                    // Queued items show an indeterminate spinner; active ones a
+                    // determinate ring that tracks real bytes-downloaded.
+                    if downloads.isQueued(discourse.id) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .controlSize(.small)
+                            .frame(width: 26, height: 26)
+                    } else {
+                        ProgressView(value: downloads.progress(for: discourse.id))
+                            .progressViewStyle(.circular)
+                            .frame(width: 26, height: 26)
+                    }
                 }
                 .buttonStyle(.plain)
             } else {

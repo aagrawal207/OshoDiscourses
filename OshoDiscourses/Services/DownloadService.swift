@@ -10,9 +10,21 @@ final class DownloadService {
         var status: Status = .downloading
 
         enum Status {
+            /// Requested but waiting its turn behind another transfer (downloads
+            /// run one at a time so the active one gets the server's full speed).
+            case queued
             case downloading
             case complete
             case failed(String)
+        }
+
+        /// True while this download is either transferring or waiting to — i.e.
+        /// it occupies a slot and isn't finished or failed.
+        var isActive: Bool {
+            switch status {
+            case .queued, .downloading: return true
+            case .complete, .failed: return false
+            }
         }
     }
 
@@ -50,6 +62,10 @@ final class DownloadService {
     var activeDownloads: [String: DownloadProgress] = [:]
     private(set) var downloadedIDs: Set<String> = []
     private var activeTasks: [String: URLSessionDownloadTask] = [:]
+    /// KVO handles for each in-flight task's `.progress`. Held here (not as a
+    /// local) so the observation outlives the continuation closure that sets it
+    /// up and keeps firing for the life of the download.
+    private var progressObservations: [String: NSKeyValueObservation] = [:]
 
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
@@ -62,8 +78,6 @@ final class DownloadService {
 
     /// Fired when `downloadHistory` gains an entry, so the app can push it to iCloud.
     var onDownloadHistoryChanged: (() -> Void)?
-
-    private let maxConcurrent = 3
 
     private let manifestURL: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -96,17 +110,30 @@ final class DownloadService {
             return destination
         }
 
-        // Prevent concurrent downloads of the same discourse
-        if let existing = activeDownloads[discourse.id], case .downloading = existing.status {
-            return destination
+        // Ignore a duplicate request for something already in flight or waiting.
+        if let existing = activeDownloads[discourse.id] {
+            switch existing.status {
+            case .downloading, .queued: return destination
+            default: break
+            }
         }
 
-        // Limit concurrent downloads
-        while activeDownloads.values.filter({ if case .downloading = $0.status { return true } else { return false } }).count >= maxConcurrent {
+        // One transfer at a time: while another is actively transferring, sit in
+        // the queue so the running download keeps the server's full bandwidth.
+        // Show a queued state meanwhile so the row reads as "waiting", not "not
+        // started". We wait only on the *transferring* item, never on other
+        // queued ones — otherwise two queued downloads would each wait for the
+        // other and neither would start. Because this runs on @MainActor and
+        // there's no `await` between the exit check and marking ourselves
+        // `.downloading`, exactly one queued item can claim the slot at a time.
+        activeDownloads[discourse.id] = DownloadProgress(status: .queued)
+        while isAnyTransferActive(excluding: discourse.id) {
             try await Task.sleep(for: .milliseconds(500))
+            // Bail if this download was cancelled while waiting in the queue.
+            if activeDownloads[discourse.id] == nil { throw CancellationError() }
         }
 
-        activeDownloads[discourse.id] = DownloadProgress()
+        activeDownloads[discourse.id] = DownloadProgress(status: .downloading)
 
         do {
             let url = try encodedURL(from: discourse.audioURL)
@@ -181,15 +208,36 @@ final class DownloadService {
         downloadedIDs.contains(discourseID)
     }
 
+    /// True while a download is transferring OR waiting in the queue — both are
+    /// "in progress" as far as the row's cancel/progress control is concerned.
     func isDownloading(_ discourseID: String) -> Bool {
+        activeDownloads[discourseID]?.isActive ?? false
+    }
+
+    /// True only while waiting its turn behind another transfer. The UI uses this
+    /// to show "Queued" instead of a 0% progress ring that isn't moving yet.
+    func isQueued(_ discourseID: String) -> Bool {
         guard let dl = activeDownloads[discourseID] else { return false }
-        if case .downloading = dl.status { return true }
+        if case .queued = dl.status { return true }
         return false
+    }
+
+    /// Whether any discourse other than `id` is actively transferring (not merely
+    /// queued). Gates the one-at-a-time queue so waiting downloads only block on
+    /// the running one, never on each other.
+    private func isAnyTransferActive(excluding id: String) -> Bool {
+        activeDownloads.contains { key, value in
+            guard key != id else { return false }
+            if case .downloading = value.status { return true }
+            return false
+        }
     }
 
     func cancelDownload(discourseID: String) {
         activeTasks[discourseID]?.cancel()
         activeTasks.removeValue(forKey: discourseID)
+        progressObservations[discourseID]?.invalidate()
+        progressObservations.removeValue(forKey: discourseID)
         activeDownloads.removeValue(forKey: discourseID)
     }
 
@@ -414,31 +462,57 @@ final class DownloadService {
         // The toggle lives in Settings → Player & Downloads and defaults off.
         request.allowsCellularAccess = UserSettings.shared.allowCellularDownloads
 
-        let task = URLSession.shared.downloadTask(with: request)
-        activeTasks[discourseID] = task
-
-        let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
-            Task { @MainActor [weak self] in
-                self?.activeDownloads[discourseID]?.progress = progress.fractionCompleted
-            }
-        }
-
+        // Whether the transfer completes, throws, or is cancelled, drop the
+        // task + observation handles for this id so nothing leaks.
         defer {
-            observation.invalidate()
+            progressObservations[discourseID]?.invalidate()
+            progressObservations.removeValue(forKey: discourseID)
             activeTasks.removeValue(forKey: discourseID)
         }
 
+        // Run the transfer on a task we create AND resume ourselves. The old code
+        // observed `.progress` on this task but downloaded through the separate,
+        // hidden task inside `URLSession.download(for:)` — so the bar sat at 0 the
+        // whole time and cancelling this idle task never stopped the real one.
+        // Bridging the delegate-style task into async/await via a continuation
+        // fixes both: real byte-level progress, and a cancel that actually bites.
         let tempURL: URL
         let response: URLResponse
         do {
             (tempURL, response) = try await withTaskCancellationHandler {
-                try await URLSession.shared.download(for: request)
+                try await withCheckedThrowingContinuation { continuation in
+                    let task = URLSession.shared.downloadTask(with: request) { location, response, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else if let location, let response {
+                            // The completion-handler temp file is deleted the moment
+                            // this closure returns, so move it somewhere stable now.
+                            let stable = FileManager.default.temporaryDirectory
+                                .appendingPathComponent(UUID().uuidString + ".mp3")
+                            do {
+                                try FileManager.default.moveItem(at: location, to: stable)
+                                continuation.resume(returning: (stable, response))
+                            } catch {
+                                continuation.resume(throwing: error)
+                            }
+                        } else {
+                            continuation.resume(throwing: URLError(.unknown))
+                        }
+                    }
+                    activeTasks[discourseID] = task
+                    progressObservations[discourseID] = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+                        Task { @MainActor [weak self] in
+                            self?.activeDownloads[discourseID]?.progress = progress.fractionCompleted
+                        }
+                    }
+                    task.resume()
+                }
             } onCancel: {
-                task.cancel()
+                Task { @MainActor [weak self] in self?.activeTasks[discourseID]?.cancel() }
             }
         } catch let error as URLError {
             // Translate the two transport failures the listener can actually act
-            // on. Everything else keeps its system description.
+            // on, plus explicit cancellation. Everything else keeps its description.
             switch error.code {
             case .dataNotAllowed: throw DownloadError.wifiOnly   // cellular gate blocked it
             case .notConnectedToInternet, .networkConnectionLost: throw DownloadError.offline
@@ -461,10 +535,8 @@ final class DownloadService {
             }
         }
 
-        // Move to a stable temp location so the caller can move it to final destination
-        let stableTempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".mp3")
-        try FileManager.default.moveItem(at: tempURL, to: stableTempURL)
-        return stableTempURL
+        // tempURL is already at a stable location (moved inside the completion
+        // handler above), so the caller can move it straight to its destination.
+        return tempURL
     }
 }

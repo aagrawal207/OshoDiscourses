@@ -290,8 +290,11 @@ private struct DiscourseRowView: View {
             Button {
                 downloads.cancelDownload(discourseID: discourse.id)
             } label: {
-                CircularProgressView(progress: downloads.progress(for: discourse.id))
-                    .frame(width: 28, height: 28)
+                CircularProgressView(
+                    progress: downloads.progress(for: discourse.id),
+                    isQueued: downloads.isQueued(discourse.id)
+                )
+                .frame(width: 28, height: 28)
             }
         } else if isFailed {
             Button {
@@ -364,20 +367,28 @@ private struct DiscourseRowView: View {
 
 private struct CircularProgressView: View {
     let progress: Double
+    /// When waiting behind another transfer, show a gentle indeterminate spinner
+    /// instead of a progress ring pinned at 0% (which reads as "stuck").
+    var isQueued: Bool = false
 
     var body: some View {
         ZStack {
             Circle()
                 .stroke(Color.primary.opacity(0.15), lineWidth: 2.5)
 
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(Color.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            if isQueued {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
 
-            Image(systemName: "stop.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(Color.accent)
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(Color.accent)
+            }
         }
     }
 }
