@@ -437,7 +437,9 @@ private struct DownloadedDiscourseRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 24)
 
-            Text(discourse.displayTitle)
+            // The series name is in the section header above, so the row just
+            // labels the discourse — no repeated, truncated series name.
+            Text("Discourse \(discourse.number)")
                 .font(.body)
                 .lineLimit(1)
                 .foregroundStyle(isCurrentlyPlaying ? Color.accent : .primary)
@@ -510,9 +512,11 @@ private struct RedownloadRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
+                // Flat list (not grouped under a series header), so show the full
+                // series name — wrap rather than truncate long ones.
                 Text(discourse.seriesName)
                     .font(.body)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Text("Discourse \(discourse.number)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -573,9 +577,10 @@ private struct InProgressRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
+                // Flat list — show the full series name, wrapping if long.
                 Text(discourse.seriesName)
                     .font(.body)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Text("Discourse \(discourse.number)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

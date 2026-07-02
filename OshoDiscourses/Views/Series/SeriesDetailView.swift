@@ -221,7 +221,10 @@ private struct DiscourseRowView: View {
             .frame(width: 28, alignment: .center)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(discourse.displayTitle)
+                // No per-discourse titles exist in the catalog, and the series
+                // name is already in the hero header, so a plain "Discourse N"
+                // reads clearly without repeating (and truncating) the series name.
+                Text("Discourse \(discourse.number)")
                     .font(.body)
                     .lineLimit(1)
                     .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
