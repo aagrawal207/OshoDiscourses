@@ -55,7 +55,10 @@ struct HomeView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 70)
             }
-            .background(Color(.systemBackground))
+            // Grouped background (light gray in light mode, true black in dark)
+            // so the section cards below read as distinct blocks. Fixes the
+            // boundary-less look where headings floated on one flat backdrop.
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Home")
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
@@ -186,6 +189,9 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal)
         }
     }
 
@@ -223,6 +229,9 @@ struct HomeView: View {
                     }
                 }
             }
+            .padding(.horizontal)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
     }
