@@ -436,6 +436,21 @@ final class DownloadService {
         return true
     }
 
+    /// Drop ids from the "previously downloaded" history so the user can dismiss
+    /// entries they don't want offered for re-download. Persists and pushes the
+    /// smaller set to iCloud. No tombstones: as with bookmark deletes, a second
+    /// device that still has an id can resurrect it on the next sync — acceptable
+    /// for a convenience list. Anything currently on disk stays in history (it'd
+    /// only be re-seeded on next launch anyway), so we ignore those.
+    func forgetDownloadHistory(ids: [String]) {
+        let removable = ids.filter { !downloadedIDs.contains($0) }
+        let before = downloadHistory.count
+        downloadHistory.subtract(removable)
+        guard downloadHistory.count != before else { return }
+        saveHistory()
+        onDownloadHistoryChanged?()
+    }
+
     /// The history as a plain array for the cloud snapshot.
     func syncedDownloadHistory() -> [String] { Array(downloadHistory) }
 

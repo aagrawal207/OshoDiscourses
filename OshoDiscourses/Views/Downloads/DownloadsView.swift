@@ -321,10 +321,14 @@ struct DownloadsView: View {
                 ForEach(items) { discourse in
                     RedownloadRow(discourse: discourse)
                 }
+                .onDelete { offsets in
+                    let ids = offsets.map { items[$0].id }
+                    downloads.forgetDownloadHistory(ids: ids)
+                }
             } header: {
                 Text("Previously Downloaded")
             } footer: {
-                Text("Removed from this device. Tap to download again.")
+                Text("Removed from this device. Tap to download again, or swipe to remove from this list.")
             }
         }
     }

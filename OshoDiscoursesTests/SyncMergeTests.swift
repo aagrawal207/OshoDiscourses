@@ -99,6 +99,20 @@ struct SyncMergeTests {
         #expect(downloads.downloadHistory.contains(keep))
     }
 
+    @Test func forgetDownloadHistoryDropsSelectedIDs() {
+        let downloads = DownloadService()
+        let a = "forget-\(downloads.downloadHistory.count)-a"
+        let b = "forget-\(downloads.downloadHistory.count)-b"
+        downloads.mergeSyncedDownloadHistory([a, b])
+
+        downloads.forgetDownloadHistory(ids: [a])
+        #expect(!downloads.downloadHistory.contains(a))
+        #expect(downloads.downloadHistory.contains(b))
+        // Forgetting an id that isn't in history is a harmless no-op.
+        downloads.forgetDownloadHistory(ids: ["never-existed"])
+        #expect(downloads.downloadHistory.contains(b))
+    }
+
     // MARK: - Snapshot round-trip with the new fields
 
     @Test func snapshotEncodesBookmarksAndStats() throws {
