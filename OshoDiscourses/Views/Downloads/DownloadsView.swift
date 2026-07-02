@@ -32,6 +32,13 @@ struct DownloadsView: View {
         }
     }
 
+    /// Discourses currently downloading or queued, in run order (active first,
+    /// then the queue). Surfaced here so progress is visible from My Activity,
+    /// not only the series page.
+    private var inProgress: [CatalogDiscourse] {
+        downloads.inProgressIDs().compactMap { Catalog.discourseLookup[$0]?.discourse }
+    }
+
     /// Discourses that were downloaded before but aren't on disk now — offered
     /// for quick re-download. Sorted by series then number for a stable list.
     private var previouslyDownloaded: [CatalogDiscourse] {
@@ -45,6 +52,9 @@ struct DownloadsView: View {
     var body: some View {
         NavigationStack {
             List(selection: $selection) {
+                if !isEditing {
+                    inProgressSection
+                }
                 downloadsSection
                 if !isEditing {
                     previouslyDownloadedSection
@@ -277,6 +287,26 @@ struct DownloadsView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    // MARK: - In Progress Section
+
+    /// Live downloads (transferring + queued) so progress is visible from My
+    /// Activity. Hidden while searching or when nothing is in flight.
+    @ViewBuilder
+    private var inProgressSection: some View {
+        let items = searchText.isEmpty ? inProgress : []
+        if !items.isEmpty {
+            Section {
+                ForEach(items) { discourse in
+                    InProgressRow(discourse: discourse)
+                }
+            } header: {
+                Text("Downloading")
+            } footer: {
+                Text("Downloads run one at a time. Tap to cancel.")
+            }
+        }
     }
 
     // MARK: - Previously Downloaded Section
@@ -519,6 +549,57 @@ private struct RedownloadRow: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - In-Progress Row
+
+/// A row for a discourse that's currently downloading or queued. Shows the
+/// series + number, a status line (percent while transferring, "Queued" while
+/// waiting), a linear bar for the active transfer, and an X to cancel.
+private struct InProgressRow: View {
+    @Environment(DownloadService.self) private var downloads
+    let discourse: CatalogDiscourse
+
+    private var isQueued: Bool { downloads.isQueued(discourse.id) }
+    private var progress: Double { downloads.progress(for: discourse.id) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(discourse.seriesName)
+                    .font(.body)
+                    .lineLimit(1)
+                Text("Discourse \(discourse.number)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                if isQueued {
+                    Text("Queued")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ProgressView(value: progress)
+                        .tint(Color.accent)
+                    Text("\(Int(progress * 100))%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+
+            Spacer()
+
+            Button {
+                downloads.cancelDownload(discourseID: discourse.id)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
         }
         .contentShape(Rectangle())
     }

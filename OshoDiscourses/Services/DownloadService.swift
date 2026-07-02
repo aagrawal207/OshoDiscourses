@@ -67,6 +67,13 @@ final class DownloadService {
     /// up and keeps firing for the life of the download.
     private var progressObservations: [String: NSKeyValueObservation] = [:]
 
+    /// IDs waiting their turn, in the order they were requested. Downloads start
+    /// strictly front-to-back: a waiting item proceeds only when it's at the head
+    /// AND no transfer is active. Without this explicit order, each queued task
+    /// polled independently and whichever woke first when the slot freed would
+    /// win — so 16,17,18,19 could start as 16,18,17,19.
+    private var pendingQueue: [String] = []
+
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
 
@@ -118,21 +125,25 @@ final class DownloadService {
             }
         }
 
-        // One transfer at a time: while another is actively transferring, sit in
-        // the queue so the running download keeps the server's full bandwidth.
-        // Show a queued state meanwhile so the row reads as "waiting", not "not
-        // started". We wait only on the *transferring* item, never on other
-        // queued ones — otherwise two queued downloads would each wait for the
-        // other and neither would start. Because this runs on @MainActor and
-        // there's no `await` between the exit check and marking ourselves
-        // `.downloading`, exactly one queued item can claim the slot at a time.
+        // One transfer at a time, first-come-first-served. Join the tail of the
+        // queue and wait until we're at its head with no transfer active — so the
+        // running download keeps the server's full bandwidth and the rest start
+        // in request order (16 → 17 → 18 → 19). Show a queued state meanwhile so
+        // the row reads as "waiting", not "not started". Because this runs on
+        // @MainActor with no `await` between the exit check and claiming the slot,
+        // exactly one queued item advances at a time.
         activeDownloads[discourse.id] = DownloadProgress(status: .queued)
-        while isAnyTransferActive(excluding: discourse.id) {
-            try await Task.sleep(for: .milliseconds(500))
+        pendingQueue.append(discourse.id)
+        while pendingQueue.first != discourse.id || isAnyTransferActive(excluding: discourse.id) {
+            try await Task.sleep(for: .milliseconds(200))
             // Bail if this download was cancelled while waiting in the queue.
-            if activeDownloads[discourse.id] == nil { throw CancellationError() }
+            if activeDownloads[discourse.id] == nil {
+                pendingQueue.removeAll { $0 == discourse.id }
+                throw CancellationError()
+            }
         }
 
+        pendingQueue.removeAll { $0 == discourse.id }
         activeDownloads[discourse.id] = DownloadProgress(status: .downloading)
 
         do {
@@ -222,6 +233,26 @@ final class DownloadService {
         return false
     }
 
+    /// IDs currently transferring or queued, ordered for display: the active
+    /// transfer first, then the queued ones in the order they'll run. Membership
+    /// comes from live status in `activeDownloads`; `pendingQueue` supplies the
+    /// order (any queued id somehow not in it falls to the end). Lets "My
+    /// Activity" show in-progress downloads, not just the series page.
+    func inProgressIDs() -> [String] {
+        let transferring = activeDownloads.compactMap { id, dl -> String? in
+            if case .downloading = dl.status { return id }
+            return nil
+        }
+        let queued = activeDownloads.compactMap { id, dl -> String? in
+            if case .queued = dl.status { return id }
+            return nil
+        }
+        let ordered = queued.sorted {
+            (pendingQueue.firstIndex(of: $0) ?? .max) < (pendingQueue.firstIndex(of: $1) ?? .max)
+        }
+        return transferring + ordered
+    }
+
     /// Whether any discourse other than `id` is actively transferring (not merely
     /// queued). Gates the one-at-a-time queue so waiting downloads only block on
     /// the running one, never on each other.
@@ -238,6 +269,7 @@ final class DownloadService {
         activeTasks.removeValue(forKey: discourseID)
         progressObservations[discourseID]?.invalidate()
         progressObservations.removeValue(forKey: discourseID)
+        pendingQueue.removeAll { $0 == discourseID }
         activeDownloads.removeValue(forKey: discourseID)
     }
 

@@ -198,4 +198,24 @@ struct DownloadQueueStateTests {
         }
         #expect(transferring.count == 1)
     }
+
+    /// inProgressIDs() lists the active transfer first, then queued items. The
+    /// "My Activity" download list renders in this order.
+    @Test func inProgressListsTransferBeforeQueued() {
+        let service = DownloadService()
+        service.activeDownloads["run"] = .init(status: .downloading)
+        service.activeDownloads["q1"] = .init(status: .queued)
+        service.activeDownloads["q2"] = .init(status: .queued)
+
+        let ids = service.inProgressIDs()
+        #expect(Set(ids) == ["run", "q1", "q2"])
+        #expect(ids.first == "run")   // the transfer is always shown first
+    }
+
+    @Test func inProgressExcludesFinishedDownloads() {
+        let service = DownloadService()
+        service.activeDownloads["done"] = .init(progress: 1, status: .complete)
+        service.activeDownloads["bad"] = .init(status: .failed("x"))
+        #expect(service.inProgressIDs().isEmpty)
+    }
 }
