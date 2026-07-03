@@ -25,10 +25,14 @@ targets:
   OshoDiscourses:
     type: application
     platform: iOS
+    dependencies:
+      - target: OshoWidgets
+        embed: true          # copy the .appex into PlugIns/ (xcodegen default; explicit for clarity)
     sources:
       - path: OshoDiscourses
         excludes:
           - Info.plist
+      - path: OshoWidgets/ResumePlaybackIntent.swift   # shared into the app target so openAppWhenRun is valid
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses
@@ -64,6 +68,36 @@ targets:
       path: OshoDiscourses/OshoDiscourses.entitlements
       properties:
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
+        com.apple.security.application-groups:
+          - group.com.agraabhi.oshodiscourses
+  OshoWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: OshoWidgets
+        excludes:
+          - Info.plist
+      - path: OshoDiscourses/Shared/ControlHandoff.swift   # shared into the extension too
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses.OshoWidgets
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        SWIFT_VERSION: "6.0"
+    info:
+      path: OshoWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Discourse Player
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: OshoWidgets/OshoWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.agraabhi.oshodiscourses
   OshoDiscoursesTests:
     type: bundle.unit-test
     platform: iOS

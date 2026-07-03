@@ -22,6 +22,12 @@ struct OshoDiscoursesApp: App {
                         // The day may have rolled over while backgrounded; refresh
                         // the shuffled accent so it advances without a relaunch.
                         UserSettings.shared.refreshShuffledTheme()
+                        // Control Center "Resume Discourse": the widget wrote a
+                        // one-shot request; act on it exactly once (audio can only
+                        // start here, in the app, not in the widget extension).
+                        if ControlHandoff.consumePendingAction() == .resume {
+                            resumeMostRecentDiscourse()
+                        }
                     }
                 }
                 .onAppear {
@@ -42,5 +48,32 @@ struct OshoDiscoursesApp: App {
                     CloudSyncService.shared.start(playbackState: playbackState, downloadService: downloadService)
                 }
         }
+    }
+
+    /// Start (or resume) the listener's most-recent discourse — the action behind
+    /// the Control Center "Resume Discourse" control. Mirrors Home's Continue
+    /// Listening: only downloaded discourses are playable, and playback runs the
+    /// whole downloaded series so it can auto-advance. No-op if nothing qualifies.
+    @MainActor
+    private func resumeMostRecentDiscourse() {
+        // Most-recent played discourse that is actually on disk.
+        guard let id = playbackState.recentlyPlayed.first(where: { downloadService.isDownloaded($0) }),
+              let series = Catalog.discourseLookup[id]?.series
+        else { return }
+
+        // Already loaded — just resume rather than restart.
+        if audioPlayer.currentTrackId == id {
+            if !audioPlayer.isPlaying { audioPlayer.togglePlayPause() }
+            return
+        }
+
+        let queueItems = Catalog.discourses(for: series)
+            .filter { downloadService.isDownloaded($0.id) }
+            .compactMap { d -> AudioPlayerService.QueueItem? in
+                guard let url = downloadService.localFileURL(for: d.id) else { return nil }
+                return AudioPlayerService.QueueItem(id: d.id, url: url, title: d.displayTitle, series: series.name)
+            }
+        guard let startIndex = queueItems.firstIndex(where: { $0.id == id }) else { return }
+        audioPlayer.playQueue(items: queueItems, startIndex: startIndex)
     }
 }
