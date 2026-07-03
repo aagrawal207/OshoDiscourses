@@ -3,8 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
     @Environment(AudioPlayerService.self) private var player
-    @Environment(\.openURL) private var openURL
-    @State private var showMailClientPicker = false
 
     var body: some View {
         NavigationStack {
@@ -140,71 +138,11 @@ struct SettingsView: View {
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 
-    // MARK: - About / Feedback
-
-    private let feedbackAddress = "handsaw2pixels@icloud.com"
-
-    /// Version-stamped subject so replies say which build the note came from.
-    private var feedbackSubject: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        return "Discourse Player Feedback (v\(version))"
-    }
-
-    /// A mail app the feedback button can hand off to. `url` is the app-specific
-    /// compose deep link; `scheme` is what we probe with canOpenURL to know it's
-    /// installed. The default Mail app uses `mailto:` (always available), so it
-    /// has no probe scheme and is always offered.
-    private struct MailClient: Identifiable {
-        let id = UUID()
-        let name: String
-        let scheme: String?
-        let url: URL
-    }
-
-    /// Compose links per client, built with the address + version subject. Order
-    /// is default Mail first, then popular third-party apps.
-    private var mailClients: [MailClient] {
-        let to = feedbackAddress
-        let subject = feedbackSubject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? feedbackSubject
-
-        func make(_ name: String, _ scheme: String?, _ string: String) -> MailClient? {
-            guard let url = URL(string: string) else { return nil }
-            return MailClient(name: name, scheme: scheme, url: url)
-        }
-
-        return [
-            make("Mail", nil, "mailto:\(to)?subject=\(subject)"),
-            make("Gmail", "googlegmail", "googlegmail://co?to=\(to)&subject=\(subject)"),
-            make("Outlook", "ms-outlook", "ms-outlook://compose?to=\(to)&subject=\(subject)"),
-            make("Spark", "readdle-spark", "readdle-spark://compose?recipient=\(to)&subject=\(subject)"),
-            make("Yahoo Mail", "ymail", "ymail://mail/compose?to=\(to)&subject=\(subject)"),
-        ].compactMap { $0 }
-    }
-
-    /// Clients actually installed: the default Mail app (no scheme) plus any
-    /// third-party app whose scheme canOpenURL confirms is present.
-    private var availableMailClients: [MailClient] {
-        mailClients.filter { client in
-            guard let scheme = client.scheme else { return true }  // default Mail
-            guard let probe = URL(string: "\(scheme)://") else { return false }
-            return UIApplication.shared.canOpenURL(probe)
-        }
-    }
-
-    /// Route the feedback tap: if more than the default Mail app is available,
-    /// let the user choose; otherwise open the one option directly.
-    private func handleFeedbackTap() {
-        let clients = availableMailClients
-        if clients.count > 1 {
-            showMailClientPicker = true
-        } else if let only = clients.first {
-            openURL(only.url)
-        }
-    }
+    // MARK: - About
 
     private var aboutSection: some View {
         Section {
-            LabeledContent("Version", value: "1.5.2")
+            LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0")
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
@@ -215,13 +153,6 @@ struct SettingsView: View {
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }
-
-            Button {
-                handleFeedbackTap()
-            } label: {
-                linkRow("Send Feedback", icon: "envelope")
-            }
-            .buttonStyle(.plain)
         } header: {
             Text("About")
         } footer: {
@@ -233,12 +164,6 @@ struct SettingsView: View {
             .padding(.top, 8)
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
-        .confirmationDialog("Send feedback with", isPresented: $showMailClientPicker, titleVisibility: .visible) {
-            ForEach(availableMailClients) { client in
-                Button(client.name) { openURL(client.url) }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
     }
 
     /// Compact About-link row: smaller label, subtle trailing arrow, tighter
