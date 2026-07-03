@@ -20,10 +20,10 @@
         </dict>
         <dict>
             <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <string>NSPrivacyAccessedAPICategoryDiskSpace</string>
             <key>NSPrivacyAccessedAPITypeReasons</key>
             <array>
-                <string>C617.1</string>
+                <string>E174.1</string>
             </array>
         </dict>
     </array>

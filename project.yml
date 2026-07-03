@@ -19,20 +19,16 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: W2NS9DM63G
-    MARKETING_VERSION: "1.5.2"
-    CURRENT_PROJECT_VERSION: "6"
+    MARKETING_VERSION: "1.6.0"
+    CURRENT_PROJECT_VERSION: "7"
 targets:
   OshoDiscourses:
     type: application
     platform: iOS
-    dependencies:
-      - target: OshoWidgets
-        embed: true          # copy the .appex into PlugIns/ (xcodegen default; explicit for clarity)
     sources:
       - path: OshoDiscourses
         excludes:
           - Info.plist
-      - path: OshoWidgets/ResumePlaybackIntent.swift   # shared into the app target so openAppWhenRun is valid
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses
@@ -47,15 +43,11 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDisplayName: Discourse Player
+        CFBundleDisplayName: Osho Talks
+        # HTTPS/TLS only, no proprietary encryption — declaring exempt so uploads
+        # skip the manual export-compliance questionnaire each build.
+        ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes: [audio]
-        # Lets canOpenURL detect which mail apps are installed so the feedback
-        # button can offer a client picker. mailto is exempt (no need to list).
-        LSApplicationQueriesSchemes:
-          - googlegmail
-          - ms-outlook
-          - readdle-spark
-          - ymail
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:
@@ -63,41 +55,11 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        UILaunchScreen: {}
+        UILaunchStoryboardName: SplashScreen
     entitlements:
       path: OshoDiscourses/OshoDiscourses.entitlements
       properties:
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
-        com.apple.security.application-groups:
-          - group.com.agraabhi.oshodiscourses
-  OshoWidgets:
-    type: app-extension
-    platform: iOS
-    deploymentTarget: "18.0"
-    sources:
-      - path: OshoWidgets
-        excludes:
-          - Info.plist
-      - path: OshoDiscourses/Shared/ControlHandoff.swift   # shared into the extension too
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses.OshoWidgets
-        GENERATE_INFOPLIST_FILE: NO
-        SKIP_INSTALL: YES
-        SWIFT_VERSION: "6.0"
-    info:
-      path: OshoWidgets/Info.plist
-      properties:
-        CFBundleDisplayName: Discourse Player
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
-    entitlements:
-      path: OshoWidgets/OshoWidgets.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.agraabhi.oshodiscourses
   OshoDiscoursesTests:
     type: bundle.unit-test
     platform: iOS
