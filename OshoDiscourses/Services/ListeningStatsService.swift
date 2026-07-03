@@ -87,6 +87,13 @@ final class ListeningStatsService {
         entries.reduce(0) { $0 + $1.seconds }
     }
 
+    /// Number of distinct days with any listening activity. Used as the "active
+    /// use" signal for the App Store review prompt — a better trigger than days
+    /// since install, which would count days the app was never opened.
+    var distinctActiveDays: Int {
+        entries.filter { $0.seconds > 0 }.count
+    }
+
     var totalToday: TimeInterval {
         let today = Self.dateString(for: Date())
         return entries.first(where: { $0.date == today })?.seconds ?? 0

@@ -31,4 +31,16 @@ struct ListeningStatsTests {
         stats.recordListeningTime(1)
         #expect(stats.totalLastMonth > 0)
     }
+
+    /// distinctActiveDays counts days with any listening. Recording today keeps
+    /// it at least 1, and adding more time the same day doesn't inflate the count
+    /// (it's distinct *days*, the review-prompt gate, not sessions).
+    @Test func distinctActiveDaysCountsTodayOnce() {
+        let stats = ListeningStatsService.shared
+        stats.recordListeningTime(3)
+        let after = stats.distinctActiveDays
+        #expect(after >= 1)
+        stats.recordListeningTime(3)  // same day again
+        #expect(stats.distinctActiveDays == after)
+    }
 }

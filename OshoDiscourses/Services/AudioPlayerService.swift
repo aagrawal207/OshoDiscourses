@@ -248,6 +248,11 @@ final class AudioPlayerService {
 
         // Notify the sleep timer so an armed end-of-discourse timer fires/resets.
         SleepTimerService.shared.discourseDidFinish()
+
+        // Finishing a discourse is a natural high point — a good, non-intrusive
+        // moment to ask for an App Store rating. The service self-gates on active
+        // days and once-per-version, so this is safe to call on every finish.
+        ReviewRequestService.requestReviewIfAppropriate()
     }
 
     private func markCurrentAsCompleted() {
