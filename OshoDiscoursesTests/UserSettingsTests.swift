@@ -109,6 +109,24 @@ struct UserSettingsTests {
         settings.dailyAccentShuffle = originalShuffle
         settings.accentTheme = originalTheme
     }
+
+    /// With shuffle on, the effective theme follows the stored shuffled color
+    /// (an observable property so views react), which equals today's palette
+    /// pick — not the pinned accentTheme.
+    @Test func effectiveThemeUsesStoredShuffleWhenOn() {
+        let settings = UserSettings.shared
+        let originalShuffle = settings.dailyAccentShuffle
+        let originalTheme = settings.accentTheme
+
+        settings.accentTheme = .pink       // pinned value that must be ignored
+        settings.dailyAccentShuffle = true // toggling refreshes the shuffled color
+        #expect(settings.effectiveAccentTheme == settings.shuffledThemeToday)
+        #expect(settings.shuffledThemeToday
+                == UserSettings.shuffledTheme(forDaysSinceEpoch: UserSettings.daysSinceEpoch()))
+
+        settings.dailyAccentShuffle = originalShuffle
+        settings.accentTheme = originalTheme
+    }
 }
 
 /// Bulk-delete helpers on DownloadService. We don't write real files here; with

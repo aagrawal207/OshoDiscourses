@@ -42,8 +42,17 @@ final class UserSettings {
     /// When on, the accent color advances to a new palette color each day.
     /// Picking a color manually in Settings turns this off and pins that color.
     var dailyAccentShuffle: Bool {
-        didSet { defaults.set(dailyAccentShuffle, forKey: Keys.dailyAccentShuffle) }
+        didSet {
+            defaults.set(dailyAccentShuffle, forKey: Keys.dailyAccentShuffle)
+            refreshShuffledTheme()  // flip the observable color the moment it toggles
+        }
     }
+
+    /// Today's shuffled color, held as a real observable property so views update
+    /// when it changes. It can't be a pure computed value off `Date()` — the clock
+    /// isn't observable, so SwiftUI would never see the day roll over. Recomputed
+    /// at launch and on foreground via `refreshShuffledTheme()`.
+    private(set) var shuffledThemeToday: AccentTheme = .blue
     var languageFilter: LanguageFilter {
         didSet { defaults.set(languageFilter.rawValue, forKey: Keys.languageFilter) }
     }
@@ -78,13 +87,18 @@ final class UserSettings {
     var hideHindi: Bool { languageFilter == .english }
     var hideEnglish: Bool { languageFilter == .hindi }
 
-    /// The accent color actually used app-wide. When daily shuffle is on, it's a
-    /// deterministic function of the calendar day (cycles through the palette, a
-    /// different color each day, no consecutive repeats); otherwise the user's
-    /// pinned `accentTheme`. Deterministic so every view agrees within a day.
+    /// The accent color actually used app-wide: today's shuffled color when daily
+    /// shuffle is on, otherwise the user's pinned `accentTheme`. Both are stored
+    /// observable properties, so every view reacts when either changes.
     var effectiveAccentTheme: AccentTheme {
-        guard dailyAccentShuffle else { return accentTheme }
-        return Self.shuffledTheme(forDaysSinceEpoch: Self.daysSinceEpoch())
+        dailyAccentShuffle ? shuffledThemeToday : accentTheme
+    }
+
+    /// Recompute today's shuffled color from the current date. Call at launch and
+    /// when returning to the foreground so a day-rollover (or the toggle flipping)
+    /// updates the observable property and, with it, the whole UI.
+    func refreshShuffledTheme() {
+        shuffledThemeToday = Self.shuffledTheme(forDaysSinceEpoch: Self.daysSinceEpoch())
     }
 
     /// Maps a day index to a palette color by cycling through all cases in order.
@@ -95,7 +109,7 @@ final class UserSettings {
     }
 
     /// Whole days between the reference date and now, in the current calendar.
-    private static func daysSinceEpoch() -> Int {
+    static func daysSinceEpoch() -> Int {
         let cal = Calendar.current
         let start = cal.startOfDay(for: Date(timeIntervalSince1970: 0))
         let today = cal.startOfDay(for: Date())
@@ -150,6 +164,9 @@ final class UserSettings {
         self.noiseReduction = d.bool(forKey: Keys.noiseReduction)
         self.denoiseStrength = d.string(forKey: Keys.denoiseStrength) ?? "medium"
         self.defaultPlaybackRate = d.double(forKey: Keys.defaultPlaybackRate)
+
+        // Seed today's shuffled color now that all stored props are set.
+        self.shuffledThemeToday = Self.shuffledTheme(forDaysSinceEpoch: Self.daysSinceEpoch())
     }
 }
 

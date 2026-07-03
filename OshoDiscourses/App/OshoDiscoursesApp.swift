@@ -19,6 +19,9 @@ struct OshoDiscoursesApp: App {
                     // controls come back if iOS handed focus away while backgrounded.
                     if newPhase == .active {
                         audioPlayer.handleForegroundReturn()
+                        // The day may have rolled over while backgrounded; refresh
+                        // the shuffled accent so it advances without a relaunch.
+                        UserSettings.shared.refreshShuffledTheme()
                     }
                 }
                 .onAppear {
