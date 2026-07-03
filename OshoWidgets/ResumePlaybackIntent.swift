@@ -6,7 +6,7 @@ import AppIntents
 /// process, so this intent only records intent and hands off — it never touches
 /// AVFoundation.
 ///
-/// `openAppWhenRun = true` requires this type to be a member of the app target
+/// `openAppWhenRun = true` requires these types to be members of the app target
 /// too (it errors inside a pure extension), which is why the file is shared.
 struct ResumePlaybackIntent: AppIntent {
     static let title: LocalizedStringResource = "Resume Discourse"
@@ -15,7 +15,22 @@ struct ResumePlaybackIntent: AppIntent {
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
-        ControlHandoff.requestResume()
+        ControlHandoff.request(.resume)
+        return .result()
+    }
+}
+
+/// Backs the "Open Discourse Player" control — just brings the app forward, no
+/// playback. Same handoff mechanism; the app consumes `.open` as a no-op beyond
+/// foregrounding.
+struct OpenAppIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Discourse Player"
+    static let description = IntentDescription("Open Discourse Player.")
+
+    static let openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult {
+        ControlHandoff.request(.open)
         return .result()
     }
 }

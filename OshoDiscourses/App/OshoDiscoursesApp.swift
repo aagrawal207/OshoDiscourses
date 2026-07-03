@@ -22,9 +22,10 @@ struct OshoDiscoursesApp: App {
                         // The day may have rolled over while backgrounded; refresh
                         // the shuffled accent so it advances without a relaunch.
                         UserSettings.shared.refreshShuffledTheme()
-                        // Control Center "Resume Discourse": the widget wrote a
-                        // one-shot request; act on it exactly once (audio can only
-                        // start here, in the app, not in the widget extension).
+                        // Control Center controls wrote a one-shot request; act on
+                        // it exactly once. `.open` just needs the app foreground
+                        // (nothing more to do); `.resume` starts playback here —
+                        // audio can only run in the app, not the widget extension.
                         if ControlHandoff.consumePendingAction() == .resume {
                             resumeMostRecentDiscourse()
                         }

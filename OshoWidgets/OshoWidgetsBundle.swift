@@ -6,5 +6,6 @@ import SwiftUI
 struct OshoWidgetsBundle: WidgetBundle {
     var body: some Widget {
         ResumeControl()
+        OpenAppControl()
     }
 }

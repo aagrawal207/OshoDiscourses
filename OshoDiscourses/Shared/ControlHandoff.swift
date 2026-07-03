@@ -12,6 +12,7 @@ enum ControlHandoff {
     private static let lastConsumedTokenKey = "controlHandoff.lastConsumedToken"
 
     enum Action: String {
+        case open     // just bring the app to the foreground
         case resume   // resume the most-recent discourse
     }
 
@@ -19,11 +20,13 @@ enum ControlHandoff {
         UserDefaults(suiteName: appGroup)
     }
 
-    /// Called from the extension's intent (fires before the app is foregrounded).
+    /// Called from an extension intent (fires before the app is foregrounded).
     /// A fresh token per request lets the app tell a real tap from a stale flag.
-    static func requestResume() {
+    /// `.open` is a plain launch, so it writes only the dedupe token — no action
+    /// for the app to run beyond coming forward.
+    static func request(_ action: Action) {
         guard let defaults else { return }
-        defaults.set(Action.resume.rawValue, forKey: actionKey)
+        defaults.set(action.rawValue, forKey: actionKey)
         defaults.set(UUID().uuidString, forKey: tokenKey)
     }
 
