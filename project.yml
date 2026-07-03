@@ -45,6 +45,13 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Discourse Player
         UIBackgroundModes: [audio]
+        # Lets canOpenURL detect which mail apps are installed so the feedback
+        # button can offer a client picker. mailto is exempt (no need to list).
+        LSApplicationQueriesSchemes:
+          - googlegmail
+          - ms-outlook
+          - readdle-spark
+          - ymail
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:

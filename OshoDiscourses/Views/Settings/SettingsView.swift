@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
     @Environment(AudioPlayerService.self) private var player
+    @Environment(\.openURL) private var openURL
+    @State private var showMailClientPicker = false
 
     var body: some View {
         NavigationStack {
@@ -138,17 +140,66 @@ struct SettingsView: View {
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 
-    // MARK: - About
+    // MARK: - About / Feedback
 
-    /// mailto with the app version prefilled in the subject. Falls back to a
-    /// plain mailto if encoding ever fails. Tapping does nothing if no mail
-    /// account is configured, which iOS handles gracefully.
-    private var feedbackURL: URL {
+    private let feedbackAddress = "aagrawal207@gmail.com"
+
+    /// Version-stamped subject so replies say which build the note came from.
+    private var feedbackSubject: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let subject = "Discourse Player Feedback (v\(version))"
-        let encoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
-        return URL(string: "mailto:aagrawal207@gmail.com?subject=\(encoded)")
-            ?? URL(string: "mailto:aagrawal207@gmail.com")!
+        return "Discourse Player Feedback (v\(version))"
+    }
+
+    /// A mail app the feedback button can hand off to. `url` is the app-specific
+    /// compose deep link; `scheme` is what we probe with canOpenURL to know it's
+    /// installed. The default Mail app uses `mailto:` (always available), so it
+    /// has no probe scheme and is always offered.
+    private struct MailClient: Identifiable {
+        let id = UUID()
+        let name: String
+        let scheme: String?
+        let url: URL
+    }
+
+    /// Compose links per client, built with the address + version subject. Order
+    /// is default Mail first, then popular third-party apps.
+    private var mailClients: [MailClient] {
+        let to = feedbackAddress
+        let subject = feedbackSubject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? feedbackSubject
+
+        func make(_ name: String, _ scheme: String?, _ string: String) -> MailClient? {
+            guard let url = URL(string: string) else { return nil }
+            return MailClient(name: name, scheme: scheme, url: url)
+        }
+
+        return [
+            make("Mail", nil, "mailto:\(to)?subject=\(subject)"),
+            make("Gmail", "googlegmail", "googlegmail://co?to=\(to)&subject=\(subject)"),
+            make("Outlook", "ms-outlook", "ms-outlook://compose?to=\(to)&subject=\(subject)"),
+            make("Spark", "readdle-spark", "readdle-spark://compose?recipient=\(to)&subject=\(subject)"),
+            make("Yahoo Mail", "ymail", "ymail://mail/compose?to=\(to)&subject=\(subject)"),
+        ].compactMap { $0 }
+    }
+
+    /// Clients actually installed: the default Mail app (no scheme) plus any
+    /// third-party app whose scheme canOpenURL confirms is present.
+    private var availableMailClients: [MailClient] {
+        mailClients.filter { client in
+            guard let scheme = client.scheme else { return true }  // default Mail
+            guard let probe = URL(string: "\(scheme)://") else { return false }
+            return UIApplication.shared.canOpenURL(probe)
+        }
+    }
+
+    /// Route the feedback tap: if more than the default Mail app is available,
+    /// let the user choose; otherwise open the one option directly.
+    private func handleFeedbackTap() {
+        let clients = availableMailClients
+        if clients.count > 1 {
+            showMailClientPicker = true
+        } else if let only = clients.first {
+            openURL(only.url)
+        }
     }
 
     private var aboutSection: some View {
@@ -158,35 +209,19 @@ struct SettingsView: View {
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
             Link(destination: URL(string: "https://buymeacoffee.com/aagrawal207")!) {
-                HStack {
-                    Label("Support Development", systemImage: "cup.and.saucer.fill")
-                        .foregroundStyle(Color.accent)
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent)
             }
 
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
-                HStack {
-                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }
 
-            Link(destination: feedbackURL) {
-                HStack {
-                    Label("Send Feedback", systemImage: "envelope")
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            Button {
+                handleFeedbackTap()
+            } label: {
+                linkRow("Send Feedback", icon: "envelope")
             }
+            .buttonStyle(.plain)
         } header: {
             Text("About")
         } footer: {
@@ -198,6 +233,27 @@ struct SettingsView: View {
             .padding(.top, 8)
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
+        .confirmationDialog("Send feedback with", isPresented: $showMailClientPicker, titleVisibility: .visible) {
+            ForEach(availableMailClients) { client in
+                Button(client.name) { openURL(client.url) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Compact About-link row: smaller label, subtle trailing arrow, tighter
+    /// height than a default Form row. Shared by all three links so they match.
+    private func linkRow(_ title: String, icon: String, tint: Color = .primary) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .font(.subheadline)
+                .foregroundStyle(tint)
+            Spacer()
+            Image(systemName: "arrow.up.right")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
     }
 }
 
