@@ -142,7 +142,7 @@ struct SettingsView: View {
 
     // MARK: - About / Feedback
 
-    private let feedbackAddress = "aagrawal207@gmail.com"
+    private let feedbackAddress = "handsaw2pixels@icloud.com"
 
     /// Version-stamped subject so replies say which build the note came from.
     private var feedbackSubject: String {
