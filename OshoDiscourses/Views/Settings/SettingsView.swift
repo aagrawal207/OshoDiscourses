@@ -157,6 +157,17 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
+            Link(destination: URL(string: "https://buymeacoffee.com/aagrawal207")!) {
+                HStack {
+                    Label("Support Development", systemImage: "cup.and.saucer.fill")
+                        .foregroundStyle(Color.accent)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 HStack {
                     Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
@@ -181,6 +192,7 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
                 Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
+                Text("Support keeps development going — new features, fixes, and upkeep. It's a voluntary thank-you for the app, not a purchase, and unlocks nothing.")
                 Text("Your listening progress, bookmarks, and stats sync across your devices through your own iCloud. Everything else stays on this device. No accounts, no servers, no analytics, no tracking.")
             }
             .padding(.top, 8)
