@@ -92,7 +92,17 @@ final class AudioPlayerService {
     // seeking *to*; skips accumulate from it, and the observer defers to it.
     // `seekGeneration` makes the completion idempotent: only the most recent
     // seek clears the pending target, so a superseded seek can't wipe it early.
+    //
+    // `pendingSeekIssuedAt` guards against the opposite failure: a seek whose
+    // completion never arrives (app suspended on the lock screen mid-seek,
+    // media services reset, interruption). Without it, a lost completion left
+    // `pendingSeekTarget` set forever — the observer stopped tracking time and
+    // skips anchored on a position minutes in the past, so a lock-screen -15
+    // jumped back "2 minutes instead of 15 seconds". A pending target is only
+    // trusted while fresh (`pendingSeekMaxAge`); after that the live player
+    // clock is the truth again.
     private var pendingSeekTarget: TimeInterval?
+    private var pendingSeekIssuedAt: Date?
     private var seekGeneration = 0
 
     // Audio-session lifecycle observers. iOS tears the session down on calls,
@@ -157,6 +167,7 @@ final class AudioPlayerService {
         // stale player clock) and the periodic observer doesn't snap us back
         // while the seek is in flight.
         pendingSeekTarget = time
+        pendingSeekIssuedAt = Date()
         seekGeneration += 1
         let generation = seekGeneration
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
@@ -168,6 +179,7 @@ final class AudioPlayerService {
                 // release the guard before the final one lands.
                 if generation == self.seekGeneration {
                     self.pendingSeekTarget = nil
+                    self.pendingSeekIssuedAt = nil
                 }
                 self.updateNowPlayingInfo()
             }
@@ -194,10 +206,43 @@ final class AudioPlayerService {
         previousPosition = nil
     }
 
-    /// The position a skip acts from. While a seek is in flight this is the
-    /// seek's target (not the player's lagging clock), so rapid taps accumulate:
-    /// two +30s taps advance 60s, not 30s.
-    private var skipAnchor: TimeInterval { pendingSeekTarget ?? currentTime }
+    /// How long an in-flight seek's target is trusted as the skip anchor.
+    /// Local-file seeks land in milliseconds; if a completion hasn't arrived
+    /// after this long it was lost (suspension, media-services reset) and the
+    /// live player clock is the truth again.
+    nonisolated static let pendingSeekMaxAge: TimeInterval = 2.0
+
+    /// The position a skip acts from. While a *fresh* seek is in flight this is
+    /// the seek's target (not the player's lagging clock), so rapid taps
+    /// accumulate: two +30s taps advance 60s, not 30s. A stale pending target
+    /// (lost completion) is ignored — otherwise skips anchor on a position
+    /// minutes in the past. The fallback reads the player's live clock, not
+    /// `currentTime`: a stuck pending target also froze `currentTime`, so only
+    /// the player itself knows where playback actually is.
+    private var skipAnchor: TimeInterval {
+        let liveClock = player?.currentTime().seconds
+        let clock = (liveClock?.isFinite == true) ? liveClock! : currentTime
+        return Self.skipAnchor(
+            pendingTarget: pendingSeekTarget,
+            pendingAge: pendingSeekIssuedAt.map { Date().timeIntervalSince($0) },
+            currentTime: clock
+        )
+    }
+
+    /// Pure anchor selection so the staleness rule is unit-testable without a
+    /// player: trust the pending target only while its age is within
+    /// `pendingSeekMaxAge`; otherwise fall back to the live clock.
+    nonisolated static func skipAnchor(
+        pendingTarget: TimeInterval?,
+        pendingAge: TimeInterval?,
+        currentTime: TimeInterval,
+        maxAge: TimeInterval = AudioPlayerService.pendingSeekMaxAge
+    ) -> TimeInterval {
+        if let pendingTarget, let pendingAge, pendingAge <= maxAge {
+            return pendingTarget
+        }
+        return currentTime
+    }
 
     /// What a forward skip should do. Pure so the two things that actually caused
     /// bugs — accumulating from the right anchor and NOT finishing a track whose
@@ -418,6 +463,7 @@ final class AudioPlayerService {
         currentTitle = ""
         currentSeries = ""
         pendingSeekTarget = nil
+        pendingSeekIssuedAt = nil
         removeTimeObserver()
         removeEndObserver()
         player = nil
@@ -444,6 +490,7 @@ final class AudioPlayerService {
         // Drop any in-flight seek from the outgoing track so it can't block the
         // new track's time observer.
         pendingSeekTarget = nil
+        pendingSeekIssuedAt = nil
         didTriggerPreemptiveDownload = false
 
         let playerItem = AVPlayerItem(url: item.url)
@@ -753,8 +800,16 @@ final class AudioPlayerService {
                 guard let self, self.isPlaying else { return }
                 // Don't clobber currentTime while a seek is in flight — the
                 // player's clock still reads the pre-seek position and would
-                // snap us backward, breaking skip accumulation.
-                guard self.pendingSeekTarget == nil else { return }
+                // snap us backward, breaking skip accumulation. But self-heal:
+                // if the completion was lost (suspension, media-services reset),
+                // release the guard once the seek is stale so time tracking
+                // doesn't stay frozen forever.
+                if self.pendingSeekTarget != nil {
+                    let age = self.pendingSeekIssuedAt.map { Date().timeIntervalSince($0) } ?? .infinity
+                    guard age > Self.pendingSeekMaxAge else { return }
+                    self.pendingSeekTarget = nil
+                    self.pendingSeekIssuedAt = nil
+                }
                 let seconds = time.seconds
                 if seconds.isFinite {
                     self.currentTime = seconds

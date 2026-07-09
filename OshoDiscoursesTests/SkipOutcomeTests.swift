@@ -79,4 +79,60 @@ struct SkipOutcomeTests {
     @Test func backwardSkipClampsToZero() {
         #expect(AudioPlayerService.skipBackwardTarget(anchor: 10, seconds: 15) == 0)
     }
+
+    // MARK: - Anchor staleness (the lock-screen "-15 jumped back 2 minutes" bug)
+    //
+    // A seek whose completion never arrives (app suspended mid-seek, media
+    // services reset) used to leave the pending target trusted forever: the
+    // clock froze and a later -15 anchored on a position minutes in the past.
+    // The anchor must only trust a pending target while it's fresh.
+
+    @Test func freshPendingSeekIsTrustedAsAnchor() {
+        // Tap burst: seek to 130 issued 0.1s ago, clock still reads 100.
+        let anchor = AudioPlayerService.skipAnchor(
+            pendingTarget: 130, pendingAge: 0.1, currentTime: 100
+        )
+        #expect(anchor == 130)
+    }
+
+    @Test func stalePendingSeekFallsBackToLiveClock() {
+        // Completion was lost 2 minutes ago; playback continued to 250.
+        // -15 must compute 250 - 15, not 130 - 15.
+        let anchor = AudioPlayerService.skipAnchor(
+            pendingTarget: 130, pendingAge: 120, currentTime: 250
+        )
+        #expect(anchor == 250)
+    }
+
+    @Test func pendingSeekAtExactMaxAgeIsStillTrusted() {
+        let maxAge = AudioPlayerService.pendingSeekMaxAge
+        let anchor = AudioPlayerService.skipAnchor(
+            pendingTarget: 130, pendingAge: maxAge, currentTime: 250
+        )
+        #expect(anchor == 130)
+    }
+
+    @Test func pendingSeekJustPastMaxAgeIsIgnored() {
+        let maxAge = AudioPlayerService.pendingSeekMaxAge
+        let anchor = AudioPlayerService.skipAnchor(
+            pendingTarget: 130, pendingAge: maxAge + 0.01, currentTime: 250
+        )
+        #expect(anchor == 250)
+    }
+
+    @Test func noPendingSeekUsesLiveClock() {
+        let anchor = AudioPlayerService.skipAnchor(
+            pendingTarget: nil, pendingAge: nil, currentTime: 250
+        )
+        #expect(anchor == 250)
+    }
+
+    @Test func pendingTargetWithoutTimestampIsIgnored() {
+        // Defensive: a target with no issue time can't prove freshness — fall
+        // back to the clock rather than trust a possibly-ancient value.
+        let anchor = AudioPlayerService.skipAnchor(
+            pendingTarget: 130, pendingAge: nil, currentTime: 250
+        )
+        #expect(anchor == 250)
+    }
 }
