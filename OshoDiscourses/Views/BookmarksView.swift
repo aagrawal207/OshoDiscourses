@@ -218,9 +218,7 @@ private struct BookmarkRow: View {
 
     private func redownload() {
         guard let discourse = findCatalogDiscourse() else { return }
-        Task {
-            _ = try? await downloads.download(discourse)
-        }
+        downloads.startDownload(discourse)
     }
 
     private func findCatalogDiscourse() -> CatalogDiscourse? {

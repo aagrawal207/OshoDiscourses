@@ -153,10 +153,15 @@ struct SettingsView: View {
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }
+
+            Link(destination: URL(string: "mailto:agraabhi@gmail.com?subject=Osho%20Talks%20Feedback")!) {
+                linkRow("Send Feedback", icon: "envelope")
+            }
         } header: {
             Text("About")
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
+                Text("Acknowledgements: All discourses are copyright OSHO International Foundation. Audio is served from oshoworld.com.")
                 Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
                 Text("Support keeps development going — new features, fixes, and upkeep. It's a voluntary thank-you for the app, not a purchase, and unlocks nothing.")
                 Text("Your listening progress, bookmarks, and stats sync across your devices through your own iCloud. Everything else stays on this device. No accounts, no servers, no analytics, no tracking.")

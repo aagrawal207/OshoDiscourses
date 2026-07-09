@@ -100,10 +100,13 @@ struct LibraryView: View {
         var result = visibleSeries
 
         if !searchText.isEmpty {
-            let lower = searchText.lowercased()
+            let query = searchText.lowercased()
+            // Match against the precomputed lowercased corpus (name +
+            // description + themes) instead of rebuilding a concatenated
+            // string per series per keystroke.
             result = result.filter {
-                $0.name.localizedCaseInsensitiveContains(lower) ||
-                SeriesMetadata.searchableText(for: $0.name).localizedCaseInsensitiveContains(lower)
+                SeriesMetadata.searchCorpus[$0.name]?.contains(query)
+                    ?? $0.name.lowercased().contains(query)
             }
         }
 

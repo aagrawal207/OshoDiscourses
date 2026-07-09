@@ -16,69 +16,84 @@ struct PlayerView: View {
     @State private var showTotalTime = false
     private var bookmarks = BookmarkService.shared
 
+    // Scale the fixed artwork/glyph sizes with Dynamic Type, capped so the
+    // layout doesn't blow past the screen at accessibility sizes — the
+    // ScrollView below handles anything that still overflows.
+    @ScaledMetric(relativeTo: .body) private var artworkSize: CGFloat = 280
+    @ScaledMetric(relativeTo: .body) private var playGlyphSize: CGFloat = 64
+
     private var displayTime: TimeInterval {
         isDragging ? dragTime : player.currentTime
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Drag handle
-                Capsule()
-                    .fill(Color.secondary.opacity(0.5))
-                    .frame(width: 36, height: 5)
-                    .padding(.top, 8)
-                    .accessibilityHidden(true)
+            // GeometryReader + minHeight keeps the Spacer()-driven layout
+            // identical when everything fits (default text size), while the
+            // ScrollView keeps the transport controls reachable once Dynamic
+            // Type pushes the column taller than the screen.
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Drag handle
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.5))
+                            .frame(width: 36, height: 5)
+                            .padding(.top, 8)
+                            .accessibilityHidden(true)
 
-                // Top row: output route (AirPlay) + Up Next queue
-                topBar
-                    .padding(.top, 8)
+                        // Top row: output route (AirPlay) + Up Next queue
+                        topBar
+                            .padding(.top, 8)
 
-                Spacer()
+                        Spacer()
 
-                // Artwork
-                artworkView
+                        // Artwork
+                        artworkView
 
-                Spacer()
+                        Spacer()
 
-                // Track info
-                trackInfo
+                        // Track info
+                        trackInfo
 
-                // Return to position button
-                if player.hasPreviousPosition {
-                    Button {
-                        player.returnToPreviousPosition()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.uturn.backward")
-                                .font(.caption)
-                            Text("Back to \(formatTime(player.previousPosition ?? 0))")
-                                .font(.caption.weight(.medium))
+                        // Return to position button
+                        if player.hasPreviousPosition {
+                            Button {
+                                player.returnToPreviousPosition()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.uturn.backward")
+                                        .font(.caption)
+                                    Text("Back to \(formatTime(player.previousPosition ?? 0))")
+                                        .font(.caption.weight(.medium))
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(UserSettings.shared.effectiveAccentTheme.color.opacity(0.15))
+                                .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
+                                .clipShape(Capsule())
+                            }
+                            .padding(.top, 12)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(UserSettings.shared.effectiveAccentTheme.color.opacity(0.15))
-                        .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
-                        .clipShape(Capsule())
+
+                        // Seek slider
+                        seekSlider
+                            .padding(.top, 24)
+
+                        // Transport controls
+                        transportControls
+                            .padding(.top, 24)
+
+                        // Bottom controls
+                        bottomControls
+                            .padding(.top, 32)
+
+                        Spacer()
                     }
-                    .padding(.top, 12)
+                    .padding(.horizontal, 24)
+                    .frame(minHeight: proxy.size.height)
                 }
-
-                // Seek slider
-                seekSlider
-                    .padding(.top, 24)
-
-                // Transport controls
-                transportControls
-                    .padding(.top, 24)
-
-                // Bottom controls
-                bottomControls
-                    .padding(.top, 32)
-
-                Spacer()
             }
-            .padding(.horizontal, 24)
             .background(Color(.systemBackground))
         }
         .presentationDragIndicator(.hidden)
@@ -124,7 +139,8 @@ struct PlayerView: View {
         Image("OshoPortrait")
             .resizable()
             .aspectRatio(contentMode: .fill)
-            .frame(width: 280, height: 280)
+            // Cap so the scaled artwork never eats the whole screen at AX sizes.
+            .frame(width: min(artworkSize, 340), height: min(artworkSize, 340))
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .white.opacity(0.08), radius: 30)
             .accessibilityHidden(true)
@@ -240,6 +256,18 @@ struct PlayerView: View {
                 .onTapGesture {
                     showTotalTime.toggle()
                 }
+                // The toggle is a bare tap gesture on a Text — surface it to
+                // VoiceOver as a button so the mode switch is reachable.
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(showTotalTime ? "Total time" : "Time remaining")
+                .accessibilityValue(showTotalTime
+                    ? formatTime(player.duration)
+                    : formatTime(max(player.duration - displayTime, 0))
+                )
+                .accessibilityHint("Switches between time remaining and total time")
+                .accessibilityAction {
+                    showTotalTime.toggle()
+                }
             }
         }
     }
@@ -272,7 +300,9 @@ struct PlayerView: View {
                 player.togglePlayPause()
             } label: {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 64))
+                    // Scaled with Dynamic Type but capped so the transport row
+                    // still fits on screen at accessibility sizes.
+                    .font(.system(size: min(playGlyphSize, 88)))
             }
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 

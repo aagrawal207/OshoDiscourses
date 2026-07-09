@@ -172,7 +172,6 @@ struct SeriesDetailView: View {
         LazyVStack(spacing: 0) {
             ForEach(discourses) { discourse in
                 DiscourseRowView(discourse: discourse, seriesInfo: seriesInfo)
-                    .id("\(discourse.id)-\(playbackState.isCompleted(discourse.id))")
 
                 if discourse.id != discourses.last?.id {
                     Divider()
@@ -254,6 +253,14 @@ private struct DiscourseRowView: View {
         .onTapGesture {
             playDiscourse()
         }
+        // The row plays on tap of a plain HStack, which VoiceOver can't
+        // discover on its own — expose it as a button with the same action.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Discourse \(discourse.number)\(isCompleted ? ", completed" : "")")
+        .accessibilityHint(isDownloaded ? "Plays this discourse" : "Downloads this discourse")
+        .accessibilityAction {
+            playDiscourse()
+        }
         .contextMenu {
             if playbackState.isCompleted(discourse.id) {
                 Button {
@@ -305,8 +312,7 @@ private struct DiscourseRowView: View {
             .accessibilityValue(downloads.isQueued(discourse.id) ? "Queued" : "\(Int(downloads.progress(for: discourse.id) * 100)) percent")
         } else if isFailed {
             Button {
-                downloads.activeDownloads.removeValue(forKey: discourse.id)
-                Task { _ = try? await downloads.download(discourse) }
+                downloads.startDownload(discourse)
             } label: {
                 Image(systemName: "exclamationmark.arrow.circlepath")
                     .font(.title3)
@@ -324,7 +330,7 @@ private struct DiscourseRowView: View {
             .accessibilityLabel(isCurrentlyPlaying ? "Pause" : "Play")
         } else {
             Button {
-                Task { _ = try? await downloads.download(discourse) }
+                downloads.startDownload(discourse)
             } label: {
                 Text("GET \(estimatedSize)")
                     .font(.caption.bold())
@@ -341,7 +347,7 @@ private struct DiscourseRowView: View {
     private func playDiscourse() {
         guard downloads.localFileURL(for: discourse.id) != nil else {
             // Not downloaded yet — start download and show hint
-            Task { _ = try? await downloads.download(discourse) }
+            downloads.startDownload(discourse)
             withAnimation {
                 showDownloadHint = true
             }

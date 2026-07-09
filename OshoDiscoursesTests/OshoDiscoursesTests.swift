@@ -49,4 +49,23 @@ struct OshoDiscoursesTests {
         #expect(!Catalog.popularHindi.isEmpty)
         #expect(!Catalog.beginnerHindi.isEmpty)
     }
+
+    @Test func curatedListsResolveEveryName() {
+        // compactMap silently drops a typo'd name — a misspelling would just
+        // shrink the Home section with no other signal. Pin exact counts.
+        #expect(Catalog.popularEnglish.count == Catalog.popularEnglishNames.count)
+        #expect(Catalog.beginnerEnglish.count == Catalog.beginnerEnglishNames.count)
+        #expect(Catalog.popularHindi.count == Catalog.popularHindiNames.count)
+        #expect(Catalog.beginnerHindi.count == Catalog.beginnerHindiNames.count)
+    }
+
+    @Test func cachedDiscoursesMatchSeriesCounts() {
+        // The per-series cache must cover every series with the exact count and
+        // ids the URL builder used to produce on the fly.
+        for series in Catalog.allSeries {
+            let discourses = Catalog.discourses(for: series)
+            #expect(discourses.count == series.count)
+            #expect(discourses.first?.id == "\(series.id)-1")
+        }
+    }
 }

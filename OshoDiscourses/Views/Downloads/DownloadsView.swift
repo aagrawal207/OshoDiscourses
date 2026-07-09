@@ -474,6 +474,15 @@ private struct DownloadedDiscourseRow: View {
             guard !isEditing else { return }
             playDiscourse()
         }
+        // The tap gesture on a plain HStack is invisible to VoiceOver — expose
+        // the row as a button with the same guarded action.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Discourse \(discourse.number)")
+        .accessibilityHint("Plays this discourse")
+        .accessibilityAction {
+            guard !isEditing else { return }
+            playDiscourse()
+        }
     }
 
     private func playDiscourse() {
@@ -549,7 +558,7 @@ private struct RedownloadRow: View {
                 .accessibilityValue(downloads.isQueued(discourse.id) ? "Queued" : "\(Int(downloads.progress(for: discourse.id) * 100)) percent")
             } else {
                 Button {
-                    Task { _ = try? await downloads.download(discourse) }
+                    downloads.startDownload(discourse)
                 } label: {
                     Text("GET \(estimatedSize)")
                         .font(.caption.bold())

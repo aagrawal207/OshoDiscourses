@@ -22,6 +22,18 @@ enum SeriesMetadata {
         return "\(seriesName) \(desc.sourceText) \(desc.themes.joined(separator: " "))"
     }
 
+    /// Pre-lowercased "name + description + themes" per series, built once.
+    /// The Library search runs on every keystroke over all 261 series —
+    /// rebuilding and lowercasing the concatenated string each time was
+    /// wasted work. Series without metadata map to just their lowercased name.
+    static let searchCorpus: [String: String] = {
+        var corpus: [String: String] = [:]
+        for series in Catalog.allSeries {
+            corpus[series.name] = searchableText(for: series.name).lowercased()
+        }
+        return corpus
+    }()
+
     // MARK: - Descriptions
 
     private static let descriptions: [String: SeriesDescription] = [

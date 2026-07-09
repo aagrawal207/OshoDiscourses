@@ -46,7 +46,7 @@ struct SeriesInfo: Identifiable, Hashable, Sendable {
     }
 }
 
-// MARK: - Catalog Discourse (value type for URL generation, distinct from SwiftData @Model Discourse)
+// MARK: - Catalog Discourse (value type carrying the built audio URL)
 
 struct CatalogDiscourse: Identifiable, Hashable, Sendable {
     let id: String
@@ -118,31 +118,32 @@ enum Catalog {
     }
 
     static func allDiscourses() -> [CatalogDiscourse] {
-        allSeries.flatMap { series in
-            (1...series.count).map { num in
-                let url = buildAudioURL(series: series, discourseNumber: num)
-                return CatalogDiscourse(
+        allSeries.flatMap { discourses(for: $0) }
+    }
+
+    /// Per-series discourse arrays, built once. `discourses(for:)` is called
+    /// from view bodies (series detail rows, downloads grouping, play actions),
+    /// and rebuilding structs + URL strings for a whole series on every render
+    /// was measurable churn. The catalog is immutable, so cache it — same
+    /// pattern as `discourseLookup`.
+    private static let discoursesBySeriesID: [String: [CatalogDiscourse]] = {
+        var dict = [String: [CatalogDiscourse]](minimumCapacity: allSeries.count)
+        for series in allSeries {
+            dict[series.id] = (1...series.count).map { num in
+                CatalogDiscourse(
                     id: "\(series.id)-\(num)",
                     seriesName: series.name,
                     number: num,
-                    audioURL: url,
+                    audioURL: buildAudioURL(series: series, discourseNumber: num),
                     language: series.language
                 )
             }
         }
-    }
+        return dict
+    }()
 
     static func discourses(for series: SeriesInfo) -> [CatalogDiscourse] {
-        (1...series.count).map { num in
-            let url = buildAudioURL(series: series, discourseNumber: num)
-            return CatalogDiscourse(
-                id: "\(series.id)-\(num)",
-                seriesName: series.name,
-                number: num,
-                audioURL: url,
-                language: series.language
-            )
-        }
+        discoursesBySeriesID[series.id] ?? []
     }
 
     static let discourseLookup: [String: (discourse: CatalogDiscourse, series: SeriesInfo)] = {
@@ -199,21 +200,20 @@ enum Catalog {
         "Jeevan Kranti Ke Sutra",
     ]
 
-    static var popularEnglish: [SeriesInfo] {
+    // Resolved once — computed vars re-ran the name scan per Home render, and a
+    // typo'd name silently vanished from the list (now pinned by tests asserting
+    // resolved count == name count).
+    static let popularEnglish: [SeriesInfo] =
         popularEnglishNames.compactMap { name in allSeries.first { $0.name == name } }
-    }
 
-    static var beginnerEnglish: [SeriesInfo] {
+    static let beginnerEnglish: [SeriesInfo] =
         beginnerEnglishNames.compactMap { name in allSeries.first { $0.name == name } }
-    }
 
-    static var popularHindi: [SeriesInfo] {
+    static let popularHindi: [SeriesInfo] =
         popularHindiNames.compactMap { name in allSeries.first { $0.name == name } }
-    }
 
-    static var beginnerHindi: [SeriesInfo] {
+    static let beginnerHindi: [SeriesInfo] =
         beginnerHindiNames.compactMap { name in allSeries.first { $0.name == name } }
-    }
 }
 
 // MARK: - English Underscore Series

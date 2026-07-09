@@ -92,12 +92,16 @@ struct HomeView: View {
             guard position > 0 || isCurrentlyPlaying else { return nil }
 
             guard let (disc, series) = Catalog.discourseLookup[discourseID] else { return nil }
+            // Deliberately use only the saved position/duration here. Reading
+            // player.currentTime/duration would invalidate the whole Home body
+            // every 0.5s during playback; ContinueListeningRow already reads
+            // the live values itself for the current track.
             return ContinueItem(
                 id: discourseID,
                 discourse: disc,
                 seriesInfo: series,
-                position: isCurrentlyPlaying ? player.currentTime : position,
-                savedDuration: isCurrentlyPlaying && player.duration > 0 ? player.duration : savedDuration
+                position: position,
+                savedDuration: savedDuration
             )
         }
         .prefix(8)
@@ -137,6 +141,9 @@ struct HomeView: View {
                     Text("Clear All")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        // Grow the hit area to 44pt without enlarging the text.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal)
@@ -176,6 +183,9 @@ struct HomeView: View {
                                     .padding(6)
                                     .background(Color.primary.opacity(0.08))
                                     .clipShape(Circle())
+                                    // 44pt hit area; the small circular glyph stays as-is.
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Remove from Recently Completed")
@@ -214,6 +224,9 @@ struct HomeView: View {
                     Text("Clear All")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        // Grow the hit area to 44pt without enlarging the text.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal)
@@ -300,8 +313,20 @@ struct SeriesThumbnailView: View {
     let name: String
     let size: CGFloat
 
+    /// FNV-1a over the name's UTF-8 bytes. Swift's String.hashValue is randomly
+    /// seeded per launch, which shuffled every gradient on each app start —
+    /// this keeps a series' colors stable across launches (and devices).
+    private static func stableHash(_ string: String) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return hash
+    }
+
     private var gradientColors: [Color] {
-        let hash = abs(name.hashValue)
+        let hash = Self.stableHash(name)
         let hue1 = Double(hash % 360) / 360.0
         let hue2 = Double((hash / 360) % 360) / 360.0
         return [
@@ -406,6 +431,9 @@ private struct ContinueListeningRow: View {
                         .padding(6)
                         .background(Color.primary.opacity(0.08))
                         .clipShape(Circle())
+                        // 44pt hit area; the small circular glyph stays as-is.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove from Continue Listening")
