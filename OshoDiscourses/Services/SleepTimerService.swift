@@ -47,15 +47,27 @@ final class SleepTimerService {
     func start(minutes: Int) {
         cancel()
         mode = .countdown
-        remainingTime = TimeInterval(minutes * 60)
+        let duration = TimeInterval(minutes * 60)
+        remainingTime = duration
+        // Count against an absolute deadline rather than decrementing per tick:
+        // Task.sleep guarantees *at least* the interval, so 1-per-tick drifts
+        // over a long timer, and a suspended app would silently pause the
+        // countdown entirely. Deriving remaining from the deadline stays
+        // correct across drift and suspension alike.
+        let deadline = Date().addingTimeInterval(duration)
         timerTask = Task { [weak self] in
-            while let self, self.remainingTime > 0 {
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                self.remainingTime = max(self.remainingTime - 1, 0)
+            while !Task.isCancelled {
+                let remaining = deadline.timeIntervalSinceNow
+                guard let self else { return }
+                if remaining <= 0 {
+                    self.fire()
+                    return
+                }
+                self.remainingTime = remaining
+                // Wake at least once a second for the label; sooner when the
+                // deadline is closer so expiry doesn't overshoot.
+                try? await Task.sleep(for: .seconds(min(1, remaining)))
             }
-            guard let self, !Task.isCancelled else { return }
-            self.fire()
         }
     }
 

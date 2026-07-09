@@ -108,8 +108,11 @@ final class AudioPlayerService {
     // Audio-session lifecycle observers. iOS tears the session down on calls,
     // Siri, alarms, and headphone changes; without these we never reattach and
     // the Now Playing controls (Control Center, Lock Screen, AirPods) go dead.
+    // The service lives for the app's lifetime (a single instance injected via
+    // .environment), so these tokens are intentionally never removed.
     private var interruptionObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
+    private var mediaResetObserver: NSObjectProtocol?
     private var wasPlayingBeforeInterruption = false
 
     // MARK: - Init
@@ -145,7 +148,15 @@ final class AudioPlayerService {
     }
 
     func togglePlayPause() {
-        guard let player else { return }
+        guard let player else {
+            // No player but a current track means the player was torn down
+            // under us (media services reset while paused). Rebuild at the
+            // saved position instead of silently ignoring the tap.
+            if currentTrackId != nil, queue.indices.contains(currentIndex) {
+                loadAndPlay(item: queue[currentIndex])
+            }
+            return
+        }
         if isPlaying {
             player.pause()
             isPlaying = false
@@ -315,6 +326,12 @@ final class AudioPlayerService {
     }
 
     private func finishCurrentTrack() {
+        // Idempotency: a skipForward that lands .finish and the item's natural
+        // DidPlayToEndTime can both call this for the same instant. The first
+        // call either advances (new track id) or clears currentTrackId; a stray
+        // second call for a track that's no longer current must not finish the
+        // *next* track (double-skip) or re-fire smart delete / sleep timer.
+        guard currentTrackId != nil else { return }
         player?.pause()
         let completedTrackId = currentTrackId
         markCurrentAsCompleted()
@@ -445,12 +462,29 @@ final class AudioPlayerService {
         updateNowPlayingInfo()
     }
 
+    private var volumeMixRebuildTask: Task<Void, Never>?
+
     func setVolume(_ vol: Float) {
         let clamped = max(0.0, min(vol, 2.0))
+        let crossedBoostBoundary = (volume > 1.0) != (clamped > 1.0)
         volume = clamped
         player?.volume = min(clamped, 1.0)
-        if let currentItem = player?.currentItem {
+        guard let currentItem = player?.currentItem else { return }
+        // Volume ≤ 1.0 is handled entirely by player.volume; the audio mix only
+        // carries the boost above 1.0 (and the denoise tap). Rebuilding the mix
+        // creates a fresh MTAudioProcessingTap, so during a slider drag we
+        // rebuild once when crossing the 1.0 boundary and otherwise debounce —
+        // per-tick rebuilds thrash tap prepare/finalize while audio renders.
+        if crossedBoostBoundary {
+            volumeMixRebuildTask?.cancel()
             applyAudioMix(to: currentItem)
+        } else if clamped > 1.0 {
+            volumeMixRebuildTask?.cancel()
+            volumeMixRebuildTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled, let self, let item = self.player?.currentItem else { return }
+                self.applyAudioMix(to: item)
+            }
         }
     }
 
@@ -466,6 +500,10 @@ final class AudioPlayerService {
         pendingSeekIssuedAt = nil
         removeTimeObserver()
         removeEndObserver()
+        // Kill the status observation too: a still-loading item's readyToPlay
+        // would otherwise fire after stop and resurrect isPlaying/Now Playing.
+        statusObservation?.invalidate()
+        statusObservation = nil
         player = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -508,11 +546,23 @@ final class AudioPlayerService {
         // Observe when the item is ready to play
         statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
-                guard let self, item.status == .readyToPlay else { return }
+                guard let self else { return }
+                // A corrupt/missing local file fails silently otherwise — the UI
+                // sits at 0:00 with stale Now Playing. Surface a clean stopped
+                // state; the track stays current so the user can retry.
+                if item.status == .failed {
+                    print("[Player] item failed to load: \(String(describing: item.error))")
+                    self.isPlaying = false
+                    self.updateNowPlayingInfo()
+                    return
+                }
+                // `trackId` also guards against a late readyToPlay arriving after
+                // stop(): with no current track there's nothing to start.
+                guard item.status == .readyToPlay, let trackId = self.currentTrackId else { return }
                 self.duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
 
                 // Resume from saved position if available
-                let savedPosition = self.playbackStateService?.getPosition(discourseId: self.currentTrackId ?? "")
+                let savedPosition = self.playbackStateService?.getPosition(discourseId: trackId)
                 if let saved = savedPosition, saved > 0, saved < self.duration - 5 {
                     self.seek(to: saved)
                     self.currentTime = saved
@@ -527,7 +577,7 @@ final class AudioPlayerService {
                 self.setupTimeObserver()
                 self.observePlayerEnd()
                 self.updateNowPlayingInfo()
-                self.playbackStateService?.recordPlay(discourseId: self.currentTrackId ?? "")
+                self.playbackStateService?.recordPlay(discourseId: trackId)
             }
         }
     }
@@ -551,6 +601,7 @@ final class AudioPlayerService {
         }
         observeInterruptions()
         observeRouteChanges()
+        observeMediaServicesReset()
     }
 
     /// Activates the audio session. Called right before playback and whenever we
@@ -649,6 +700,49 @@ final class AudioPlayerService {
         }
     }
 
+    private func observeMediaServicesReset() {
+        mediaResetObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleMediaServicesReset()
+            }
+        }
+    }
+
+    /// mediaserverd (the system audio daemon) crashed: the session category,
+    /// the AVPlayer, and any audio tap are all invalid now, and playback plus
+    /// Now Playing controls stay dead until relaunch. Apple's guidance is to
+    /// reconfigure the session and rebuild every audio object from scratch.
+    private func handleMediaServicesReset() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .spokenAudio, options: [])
+        try? session.setPreferredSampleRate(48000)
+        noiseProcessor.reset()
+
+        guard currentTrackId != nil, queue.indices.contains(currentIndex) else {
+            player = nil
+            return
+        }
+        if isPlaying {
+            // Rebuild and resume where we were. loadAndPlay saves the outgoing
+            // position first, then its resume path seeks back to it.
+            loadAndPlay(item: queue[currentIndex])
+        } else {
+            // Paused: don't blast audio unprompted. Drop the dead player but
+            // keep track/position state; togglePlayPause rebuilds on demand.
+            removeTimeObserver()
+            removeEndObserver()
+            statusObservation?.invalidate()
+            statusObservation = nil
+            pendingSeekTarget = nil
+            pendingSeekIssuedAt = nil
+            player = nil
+        }
+    }
+
     private func handleRouteChange(reasonValue: UInt?) {
         guard let reasonValue,
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
@@ -679,26 +773,36 @@ final class AudioPlayerService {
     private func setupRemoteCommands() {
         let commandCenter = MPRemoteCommandCenter.shared()
 
+        // Handler discipline: MPRemoteCommandCenter does not guarantee which
+        // thread delivers events, so the closures must not read MainActor state
+        // (player, isPlaying, hasNext) directly — all state access happens
+        // inside the Task hop. The cost is returning .success optimistically;
+        // a no-op on a dead player is harmless, while an off-actor read is a
+        // data race the compiler can't see (the closure is formed in a
+        // MainActor context, so captures aren't checked).
+
         // AirPods and most Bluetooth/wired headsets send a single TOGGLE command,
         // not separate play/pause. Handling this is what makes the AirPods pinch /
         // headset button work reliably.
         commandCenter.togglePlayPauseCommand.isEnabled = true
         commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
-            guard let self, self.player != nil else { return .commandFailed }
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.togglePlayPause()
             }
             return .success
         }
 
-        // Explicit play. Guard only on having a player — never on isPlaying, which
-        // can be stale after an interruption and would wrongly report failure,
-        // making the control look dead.
+        // Explicit play. Never guard on isPlaying at dispatch time — it can be
+        // stale after an interruption and would wrongly report failure, making
+        // the control look dead. The player is re-read inside the hop so a
+        // track change between dispatch and execution can't resume a replaced
+        // (zombie) player instance.
         commandCenter.playCommand.isEnabled = true
         commandCenter.playCommand.addTarget { [weak self] _ in
-            guard let self, let player = self.player else { return .commandFailed }
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
-                guard let self, !self.isPlaying else { return }
+                guard let self, !self.isPlaying, let player = self.player else { return }
                 self.activateSession()
                 player.play()
                 player.rate = self.playbackRate
@@ -710,9 +814,9 @@ final class AudioPlayerService {
 
         commandCenter.pauseCommand.isEnabled = true
         commandCenter.pauseCommand.addTarget { [weak self] _ in
-            guard let self, let player = self.player else { return .commandFailed }
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
-                guard let self, self.isPlaying else { return }
+                guard let self, self.isPlaying, let player = self.player else { return }
                 player.pause()
                 self.isPlaying = false
                 self.updateNowPlayingInfo()
@@ -722,7 +826,7 @@ final class AudioPlayerService {
 
         commandCenter.skipForwardCommand.preferredIntervals = [30]
         commandCenter.skipForwardCommand.addTarget { [weak self] _ in
-            guard let self, self.player != nil else { return .commandFailed }
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.skipForward()
             }
@@ -731,7 +835,7 @@ final class AudioPlayerService {
 
         commandCenter.skipBackwardCommand.preferredIntervals = [15]
         commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
-            guard let self, self.player != nil else { return .commandFailed }
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.skipBackward()
             }
@@ -739,18 +843,18 @@ final class AudioPlayerService {
         }
 
         commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let self, self.player != nil else { return .commandFailed }
-            guard let event = event as? MPChangePlaybackPositionCommandEvent else {
+            guard self != nil, let event = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
+            let position = event.positionTime
             Task { @MainActor [weak self] in
-                self?.seek(to: event.positionTime)
+                self?.seek(to: position)
             }
             return .success
         }
 
         commandCenter.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self, self.hasNext else { return .noActionableNowPlayingItem }
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.skipToNext()
             }
@@ -758,6 +862,7 @@ final class AudioPlayerService {
         }
 
         commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+            guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
                 self?.skipToPrevious()
             }
@@ -837,13 +942,20 @@ final class AudioPlayerService {
 
     private func observePlayerEnd() {
         removeEndObserver()
+        // Identity of the item we're observing (ObjectIdentifier is Sendable;
+        // AVPlayerItem isn't, so it can't cross into the Task directly). If a
+        // skip/finish replaces the item between notification delivery and Task
+        // execution, the stale end event must not finish the *new* track.
+        let observedItemID = (player?.currentItem).map(ObjectIdentifier.init)
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player?.currentItem,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self,
+                      let observedItemID,
+                      (self.player?.currentItem).map(ObjectIdentifier.init) == observedItemID else { return }
                 self.finishCurrentTrack()
             }
         }

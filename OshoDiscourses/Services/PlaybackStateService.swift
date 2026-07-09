@@ -38,14 +38,6 @@ final class PlaybackStateService {
         startAutoSave()
     }
 
-    /// Stop auto-saving (call when playback stops or view disappears).
-    func detach() {
-        autoSaveTask?.cancel()
-        autoSaveTask = nil
-        // Save one final time before detaching
-        saveCurrentPosition()
-    }
-
     // MARK: - Public API
 
     func savePosition(discourseId: String, position: TimeInterval, duration: TimeInterval = 0) {
@@ -209,20 +201,6 @@ final class PlaybackStateService {
         return Array(result.prefix(cap))
     }
 
-    /// Returns all saved discourse IDs with their positions.
-    func allSavedPositions() -> [String: TimeInterval] {
-        let allKeys = defaults.dictionaryRepresentation().keys
-        var result = [String: TimeInterval]()
-        for key in allKeys where key.hasPrefix(keyPrefix) {
-            let id = String(key.dropFirst(keyPrefix.count))
-            let position = defaults.double(forKey: key)
-            if position > 0 {
-                result[id] = position
-            }
-        }
-        return result
-    }
-
     // MARK: - Private
 
     private func saveCurrentPosition() {
@@ -240,8 +218,7 @@ final class PlaybackStateService {
         }
         if player.isPlaying {
             let delta = player.currentTime - lastRecordedTime
-            if wasPlaying && delta > 0 && delta <= 15 {
-                // Only record continuous listening; delta > 15s indicates a seek
+            if wasPlaying && Self.isContinuousListening(delta: delta, rate: player.playbackRate) {
                 stats.recordListeningTime(delta)
             }
             lastRecordedTime = player.currentTime
@@ -251,6 +228,16 @@ final class PlaybackStateService {
         }
         stats.save()
         onProgressSaved?()
+    }
+
+    /// Whether the media-position delta between two ~10s auto-save ticks is
+    /// continuous listening (record it) or a seek (discard it). A 10s wall-time
+    /// tick covers up to 10 × rate seconds of media, so the old fixed 15s cutoff
+    /// silently discarded ALL listening at 1.5x+ speed. Threshold: one tick of
+    /// media time at the current rate, plus 5s of tick jitter. Rates below 1x
+    /// keep the 1x threshold — a slow tick never overshoots it.
+    nonisolated static func isContinuousListening(delta: TimeInterval, rate: Float) -> Bool {
+        delta > 0 && delta <= 10 * TimeInterval(max(rate, 1.0)) + 5
     }
 
     private func startAutoSave() {
