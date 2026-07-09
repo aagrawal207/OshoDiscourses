@@ -63,7 +63,7 @@ struct DownloadsView: View {
             }
             .listStyle(.insetGrouped)
             .environment(\.editMode, $editMode)
-            .navigationTitle("My Activity")
+            .navigationTitle("Downloads")
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
@@ -135,6 +135,7 @@ struct DownloadsView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel("More options")
                 }
             }
         }
@@ -408,6 +409,7 @@ private struct DownloadedSeriesHeader: View {
                         .padding(.vertical, 4)
                         .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Series options")
             }
         }
         .padding(.vertical, 4)
@@ -463,6 +465,7 @@ private struct DownloadedDiscourseRow: View {
                         .foregroundStyle(Color.accent)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isCurrentlyPlaying && player.isPlaying ? "Pause" : "Play")
             }
         }
         .contentShape(Rectangle())
@@ -542,6 +545,8 @@ private struct RedownloadRow: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Cancel download")
+                .accessibilityValue(downloads.isQueued(discourse.id) ? "Queued" : "\(Int(downloads.progress(for: discourse.id) * 100)) percent")
             } else {
                 Button {
                     Task { _ = try? await downloads.download(discourse) }
@@ -609,6 +614,8 @@ private struct InProgressRow: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Cancel download")
+            .accessibilityValue(isQueued ? "Queued" : "\(Int(progress * 100)) percent")
         }
         .contentShape(Rectangle())
     }

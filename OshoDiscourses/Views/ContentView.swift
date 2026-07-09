@@ -23,7 +23,7 @@ struct ContentView: View {
 
                 DownloadsView()
                     .tabItem {
-                        Label("My Activity", systemImage: "person.crop.circle")
+                        Label("Downloads", systemImage: "arrow.down.circle")
                     }
                     .tag(2)
 

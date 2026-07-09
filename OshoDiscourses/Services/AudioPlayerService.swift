@@ -83,6 +83,18 @@ final class AudioPlayerService {
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
 
+    // In-flight seek tracking. Seeks are async and zero-tolerance (they can take
+    // a moment to land), while the periodic observer fires every 0.5s. Without
+    // this, the observer overwrites `currentTime` with the player's *pre-seek*
+    // clock mid-seek, so a rapid burst of skip taps (e.g. from the lock screen)
+    // all read the same stale position and never accumulate — the skip lands
+    // well short of where it should. `pendingSeekTarget` holds where we're
+    // seeking *to*; skips accumulate from it, and the observer defers to it.
+    // `seekGeneration` makes the completion idempotent: only the most recent
+    // seek clears the pending target, so a superseded seek can't wipe it early.
+    private var pendingSeekTarget: TimeInterval?
+    private var seekGeneration = 0
+
     // Audio-session lifecycle observers. iOS tears the session down on calls,
     // Siri, alarms, and headphone changes; without these we never reattach and
     // the Now Playing controls (Control Center, Lock Screen, AirPods) go dead.
@@ -141,10 +153,23 @@ final class AudioPlayerService {
     func seek(to time: TimeInterval) {
         guard let player else { return }
         currentTime = time
+        // Record where we're headed so skips accumulate from the target (not the
+        // stale player clock) and the periodic observer doesn't snap us back
+        // while the seek is in flight.
+        pendingSeekTarget = time
+        seekGeneration += 1
+        let generation = seekGeneration
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor in
-                self?.updateNowPlayingInfo()
+                guard let self else { return }
+                // Only the most recent seek clears the pending target — a burst
+                // of taps issues several seeks, and a stale completion must not
+                // release the guard before the final one lands.
+                if generation == self.seekGeneration {
+                    self.pendingSeekTarget = nil
+                }
+                self.updateNowPlayingInfo()
             }
         }
     }
@@ -169,23 +194,64 @@ final class AudioPlayerService {
         previousPosition = nil
     }
 
+    /// The position a skip acts from. While a seek is in flight this is the
+    /// seek's target (not the player's lagging clock), so rapid taps accumulate:
+    /// two +30s taps advance 60s, not 30s.
+    private var skipAnchor: TimeInterval { pendingSeekTarget ?? currentTime }
+
+    /// What a forward skip should do. Pure so the two things that actually caused
+    /// bugs — accumulating from the right anchor and NOT finishing a track whose
+    /// duration is still unknown — are unit-testable without a player. (The
+    /// in-flight-seek *race* still needs an integration test; this only covers
+    /// the arithmetic and the duration==0 guard.)
+    enum SkipOutcome: Equatable {
+        case seek(TimeInterval)
+        case finish
+    }
+
+    nonisolated static func skipForwardOutcome(
+        anchor: TimeInterval,
+        seconds: TimeInterval,
+        duration: TimeInterval
+    ) -> SkipOutcome {
+        // duration <= 0 means "not known yet" — advance, never finish.
+        if duration > 0, anchor + seconds >= duration - 1 {
+            return .finish
+        }
+        return .seek(anchor + seconds)
+    }
+
+    nonisolated static func skipBackwardTarget(
+        anchor: TimeInterval,
+        seconds: TimeInterval
+    ) -> TimeInterval {
+        max(anchor - seconds, 0)
+    }
+
     func skipForward(_ seconds: TimeInterval = 30) {
-        let target = currentTime + seconds
-        if target >= duration - 1 {
+        switch Self.skipForwardOutcome(anchor: skipAnchor, seconds: seconds, duration: duration) {
+        case .finish:
             finishCurrentTrack()
-        } else {
+        case .seek(let target):
             seek(to: target)
         }
     }
 
     func skipBackward(_ seconds: TimeInterval = 15) {
-        let target = max(currentTime - seconds, 0)
-        seek(to: target)
+        seek(to: Self.skipBackwardTarget(anchor: skipAnchor, seconds: seconds))
     }
 
     func skipToNext() {
         guard hasNext else { return }
         currentIndex += 1
+        loadAndPlay(item: queue[currentIndex])
+    }
+
+    /// Jump directly to a queue entry (from the Up Next list). No-op if the index
+    /// is out of range or already playing.
+    func playQueueItem(at index: Int) {
+        guard queue.indices.contains(index), index != currentIndex else { return }
+        currentIndex = index
         loadAndPlay(item: queue[currentIndex])
     }
 
@@ -229,7 +295,9 @@ final class AudioPlayerService {
             loadAndPlay(item: next)
         } else {
             isPlaying = false
-            currentTime = duration
+            // Only snap to the end when we actually know it; duration is 0 until
+            // the item is ready, and blanking to 0:00 would misreport a finish.
+            if duration > 0 { currentTime = duration }
             updateNowPlayingInfo()
             currentTrackId = nil
             currentTitle = ""
@@ -349,6 +417,7 @@ final class AudioPlayerService {
         currentTrackId = nil
         currentTitle = ""
         currentSeries = ""
+        pendingSeekTarget = nil
         removeTimeObserver()
         removeEndObserver()
         player = nil
@@ -372,6 +441,9 @@ final class AudioPlayerService {
         currentSeries = item.series
         currentTime = 0
         duration = 0
+        // Drop any in-flight seek from the outgoing track so it can't block the
+        // new track's time observer.
+        pendingSeekTarget = nil
         didTriggerPreemptiveDownload = false
 
         let playerItem = AVPlayerItem(url: item.url)
@@ -679,6 +751,10 @@ final class AudioPlayerService {
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self, self.isPlaying else { return }
+                // Don't clobber currentTime while a seek is in flight — the
+                // player's clock still reads the pre-seek position and would
+                // snap us backward, breaking skip accumulation.
+                guard self.pendingSeekTarget == nil else { return }
                 let seconds = time.seconds
                 if seconds.isFinite {
                     self.currentTime = seconds

@@ -160,12 +160,27 @@ final class BookmarkService {
 
     private func save() {
         guard let data = try? JSONEncoder().encode(bookmarks) else { return }
-        try? data.write(to: fileURL)
+        // Atomic: write to a temp file then rename, so a crash mid-write can't
+        // leave a truncated bookmarks.json. Bookmarks are user-authored and can't
+        // be recomputed — a torn write here is permanent data loss. (listening_stats
+        // already writes atomically; this brings bookmarks in line.)
+        try? data.write(to: fileURL, options: .atomic)
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([Bookmark].self, from: data) else { return }
-        bookmarks = decoded
+        // Missing file = first launch, nothing to load. Only treat a genuine
+        // *decode* failure as corruption.
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+        do {
+            bookmarks = try JSONDecoder().decode([Bookmark].self, from: data)
+        } catch {
+            // The file exists but won't decode (truncated/corrupt). Preserve it as
+            // .bak instead of letting the next save() overwrite it empty, so the
+            // data can be recovered manually rather than silently lost forever.
+            let backupURL = fileURL.appendingPathExtension("bak")
+            try? FileManager.default.removeItem(at: backupURL)
+            try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+            print("[Bookmarks] failed to decode bookmarks.json; preserved as \(backupURL.lastPathComponent): \(error)")
+        }
     }
 }

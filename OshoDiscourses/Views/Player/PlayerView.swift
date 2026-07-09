@@ -7,6 +7,8 @@ struct PlayerView: View {
     @State private var dragTime: TimeInterval = 0
     @State private var showSpeedPicker = false
     @State private var showSleepTimer = false
+    @State private var showDenoisePicker = false
+    @State private var showQueue = false
     private var sleepTimer = SleepTimerService.shared
     @State private var showBookmarkSheet = false
     @State private var bookmarkTimestamp: TimeInterval = 0
@@ -25,6 +27,11 @@ struct PlayerView: View {
                 Capsule()
                     .fill(Color.secondary.opacity(0.5))
                     .frame(width: 36, height: 5)
+                    .padding(.top, 8)
+                    .accessibilityHidden(true)
+
+                // Top row: output route (AirPlay) + Up Next queue
+                topBar
                     .padding(.top, 8)
 
                 Spacer()
@@ -75,6 +82,10 @@ struct PlayerView: View {
             .background(Color(.systemBackground))
         }
         .presentationDragIndicator(.hidden)
+        .sheet(isPresented: $showQueue) {
+            QueueView()
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $showBookmarkSheet) {
             AddBookmarkSheet(
                 timestamp: bookmarkTimestamp,
@@ -116,6 +127,32 @@ struct PlayerView: View {
             .frame(width: 280, height: 280)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .white.opacity(0.08), radius: 30)
+            .accessibilityHidden(true)
+    }
+
+    // MARK: - Top Bar (AirPlay + Up Next)
+
+    private var topBar: some View {
+        HStack {
+            AirPlayRoutePicker(tintColor: UIColor(UserSettings.shared.effectiveAccentTheme.color))
+                .frame(width: 40, height: 40)
+                .accessibilityLabel("AirPlay and output device")
+
+            Spacer()
+
+            Button {
+                showQueue = true
+            } label: {
+                Image(systemName: "list.bullet")
+                    .font(.title3)
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, height: 40)
+            }
+            .accessibilityLabel("Up Next")
+            .accessibilityHint("Shows the playback queue")
+            .disabled(player.queue.count <= 1)
+            .opacity(player.queue.count <= 1 ? 0.35 : 1)
+        }
     }
 
     // MARK: - Track Info
@@ -182,6 +219,8 @@ struct PlayerView: View {
                 }
             )
             .tint(UserSettings.shared.effectiveAccentTheme.color)
+            .accessibilityLabel("Playback position")
+            .accessibilityValue("\(formatTime(displayTime)) of \(formatTime(player.duration))")
 
             HStack {
                 Text(formatTime(displayTime))
@@ -217,6 +256,7 @@ struct PlayerView: View {
                     .font(.title2)
             }
             .disabled(!player.hasPrevious && player.currentTime <= 3)
+            .accessibilityLabel("Previous")
 
             // Skip back
             Button {
@@ -225,6 +265,7 @@ struct PlayerView: View {
                 Image(systemName: "gobackward.15")
                     .font(.title2)
             }
+            .accessibilityLabel("Skip back 15 seconds")
 
             // Play/Pause
             Button {
@@ -233,6 +274,7 @@ struct PlayerView: View {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 64))
             }
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 
             // Skip forward
             Button {
@@ -241,6 +283,7 @@ struct PlayerView: View {
                 Image(systemName: "goforward.30")
                     .font(.title2)
             }
+            .accessibilityLabel("Skip forward 30 seconds")
 
             // Next
             Button {
@@ -250,6 +293,7 @@ struct PlayerView: View {
                     .font(.title2)
             }
             .disabled(!player.hasNext)
+            .accessibilityLabel("Next")
         }
         .foregroundStyle(.primary)
     }
@@ -268,32 +312,21 @@ struct PlayerView: View {
             .popover(isPresented: $showSpeedPicker) {
                 speedPickerContent
             }
+            .accessibilityLabel("Playback speed")
+            .accessibilityValue(formatSpeed(player.playbackRate))
 
             playerControlButton(
                 icon: player.isNoiseReductionEnabled ? "waveform.slash" : "waveform",
-                label: "Denoise",
+                label: player.isNoiseReductionEnabled ? player.denoiseStrength.label : "Denoise",
                 isActive: player.isNoiseReductionEnabled
             ) {
-                player.isNoiseReductionEnabled.toggle()
+                showDenoisePicker.toggle()
             }
-            .contextMenu {
-                Section("Denoise Strength") {
-                    ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
-                        Button {
-                            player.denoiseStrength = strength
-                            if !player.isNoiseReductionEnabled {
-                                player.isNoiseReductionEnabled = true
-                            }
-                        } label: {
-                            if player.denoiseStrength == strength {
-                                Label(strength.label, systemImage: "checkmark")
-                            } else {
-                                Text(strength.label)
-                            }
-                        }
-                    }
-                }
+            .popover(isPresented: $showDenoisePicker) {
+                denoisePickerContent
             }
+            .accessibilityLabel("Denoise")
+            .accessibilityValue(player.isNoiseReductionEnabled ? "On, \(player.denoiseStrength.label)" : "Off")
 
             playerControlButton(
                 icon: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.2",
@@ -302,6 +335,9 @@ struct PlayerView: View {
             ) {
                 player.setVolume(player.volume > 1.0 ? 1.0 : 1.5)
             }
+            .accessibilityLabel("Volume boost")
+            .accessibilityValue(player.volume > 1.0 ? "On" : "Off")
+            .accessibilityHint("Increases volume above the system maximum")
 
             playerControlButton(
                 icon: sleepTimer.isActive ? "moon.fill" : "moon",
@@ -313,6 +349,8 @@ struct PlayerView: View {
             .popover(isPresented: $showSleepTimer) {
                 sleepTimerContent
             }
+            .accessibilityLabel("Sleep timer")
+            .accessibilityValue(sleepTimer.isActive ? sleepTimer.statusLabel : "Off")
 
             playerControlButton(
                 icon: "bookmark",
@@ -322,6 +360,8 @@ struct PlayerView: View {
                 bookmarkTimestamp = player.currentTime
                 showBookmarkSheet = true
             }
+            .accessibilityLabel("Add bookmark")
+            .accessibilityHint("Saves the current position")
         }
     }
 
@@ -332,8 +372,9 @@ struct PlayerView: View {
                     .font(.system(size: 18))
                     .frame(height: 22)
                 Text(label)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -367,6 +408,57 @@ struct PlayerView: View {
             }
         }
         .frame(width: 160)
+        .padding(.vertical, 8)
+        .presentationCompactAdaptation(.popover)
+    }
+
+    // MARK: - Denoise Picker
+
+    private var denoisePickerContent: some View {
+        VStack(spacing: 4) {
+            // Off row — the toggle that used to be the whole control.
+            Button {
+                player.isNoiseReductionEnabled = false
+                showDenoisePicker = false
+            } label: {
+                HStack {
+                    Text("Off")
+                        .font(.body)
+                    Spacer()
+                    if !player.isNoiseReductionEnabled {
+                        Image(systemName: "checkmark")
+                            .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
+            ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
+                Button {
+                    player.denoiseStrength = strength
+                    player.isNoiseReductionEnabled = true
+                    showDenoisePicker = false
+                } label: {
+                    HStack {
+                        Text(strength.label)
+                            .font(.body)
+                        Spacer()
+                        if player.isNoiseReductionEnabled, player.denoiseStrength == strength {
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: 180)
         .padding(.vertical, 8)
         .presentationCompactAdaptation(.popover)
     }

@@ -221,6 +221,8 @@ struct LibraryView: View {
                     .foregroundStyle(.secondary)
                     .clipShape(Capsule())
                 }
+                .accessibilityLabel("Sort")
+                .accessibilityValue("\(sortField.rawValue), \(sortDirection == .ascending ? "ascending" : "descending")")
             }
             .padding(.horizontal)
             .padding(.top, 8)

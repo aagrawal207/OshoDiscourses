@@ -176,9 +176,12 @@ private struct BookmarkRow: View {
                         .foregroundStyle(Color.accent)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Play")
+                .accessibilityHint("Plays from the bookmarked moment")
             } else if downloads.isDownloading(bookmark.discourseID) {
                 ProgressView()
                     .frame(width: 28, height: 28)
+                    .accessibilityLabel("Downloading")
             } else {
                 Button {
                     redownload()
@@ -188,6 +191,7 @@ private struct BookmarkRow: View {
                         .foregroundStyle(Color.accent)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Download")
             }
         }
         .padding(.vertical, 4)

@@ -50,6 +50,7 @@ struct MiniPlayerView: View {
                         .foregroundStyle(Color.accent)
                         .frame(width: 44, height: 44)
                 }
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -62,5 +63,8 @@ struct MiniPlayerView: View {
         .onTapGesture {
             showFullPlayer = true
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens the full player")
     }
 }

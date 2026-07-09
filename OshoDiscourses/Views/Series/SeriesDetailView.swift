@@ -42,6 +42,7 @@ struct SeriesDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("More options")
             }
         }
     }
@@ -216,6 +217,7 @@ private struct DiscourseRowView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.green)
                         .offset(x: 10, y: -8)
+                        .accessibilityLabel("Completed")
                 }
             }
             .frame(width: 28, alignment: .center)
@@ -299,6 +301,8 @@ private struct DiscourseRowView: View {
                 )
                 .frame(width: 28, height: 28)
             }
+            .accessibilityLabel("Cancel download")
+            .accessibilityValue(downloads.isQueued(discourse.id) ? "Queued" : "\(Int(downloads.progress(for: discourse.id) * 100)) percent")
         } else if isFailed {
             Button {
                 downloads.activeDownloads.removeValue(forKey: discourse.id)
@@ -308,6 +312,7 @@ private struct DiscourseRowView: View {
                     .font(.title3)
                     .foregroundStyle(.red)
             }
+            .accessibilityLabel("Retry download")
         } else if isDownloaded {
             Button {
                 playDiscourse()
@@ -316,6 +321,7 @@ private struct DiscourseRowView: View {
                     .font(.title2)
                     .foregroundStyle(Color.accent)
             }
+            .accessibilityLabel(isCurrentlyPlaying ? "Pause" : "Play")
         } else {
             Button {
                 Task { _ = try? await downloads.download(discourse) }

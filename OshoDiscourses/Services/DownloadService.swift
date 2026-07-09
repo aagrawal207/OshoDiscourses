@@ -170,6 +170,11 @@ final class DownloadService {
                 try? FileManager.default.removeItem(at: localURL)
                 throw Self.saveError(from: error)
             }
+            // Exclude the new file and its series folder from backup individually —
+            // the flag isn't inherited from the root on iOS (see
+            // excludeDownloadsFromBackup).
+            setExcludedFromBackup(seriesDir)
+            setExcludedFromBackup(destination)
             downloadedIDs.insert(discourse.id)
             pathMap[discourse.id] = relativePath(for: discourse)
             saveManifest()
@@ -345,12 +350,17 @@ final class DownloadService {
         return docs.appendingPathComponent(rootFolderName)
     }
 
-    /// Marks the downloads folder as excluded from iCloud/iTunes backup. The
-    /// discourses are re-downloadable from oshoworld.com, so backing them up
-    /// would bloat the user's iCloud storage — and Apple rejects apps that back
-    /// up re-creatable bulk data (App Store guideline 5.1 / Data Storage).
-    /// The flag is inherited by files created inside the folder, so setting it on
-    /// the directory covers everything. Idempotent and cheap; safe to call often.
+    /// Marks the downloads folder — and everything already inside it — as excluded
+    /// from iCloud/iTunes backup. The discourses are re-downloadable from
+    /// oshoworld.com, so backing them up would bloat the user's iCloud storage —
+    /// and Apple rejects apps that back up re-creatable bulk data (App Store
+    /// guideline 5.1 / Data Storage).
+    ///
+    /// `isExcludedFromBackup` is per-URL on iOS; it is NOT inherited by files
+    /// created later inside an excluded directory. So we exclude the root here for
+    /// existing files (a one-time pass at launch that covers anyone upgrading from
+    /// a build that only flagged the root), and each new file + its series folder
+    /// get flagged individually right after they're written (see download(_:)).
     private func excludeDownloadsFromBackup() {
         let root = downloadsRootURL()
         // Create the folder if it doesn't exist yet so the flag has somewhere to
@@ -359,6 +369,22 @@ final class DownloadService {
             try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         }
         setExcludedFromBackup(root)
+        // One-time launch sweep over existing content. Cheap: setResourceValues is
+        // idempotent, and a fully-downloaded library is a few thousand files at
+        // most. Runs off the main actor so a large library doesn't hitch launch.
+        let rootPath = root.path
+        Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(at: URL(fileURLWithPath: rootPath), includingPropertiesForKeys: nil) else { return }
+            // allObjects snapshots the walk into an array — NSEnumerator's lazy
+            // iterator isn't usable from an async context.
+            for case let fileURL as URL in enumerator.allObjects {
+                var values = URLResourceValues()
+                values.isExcludedFromBackup = true
+                var mutableURL = fileURL
+                try? mutableURL.setResourceValues(values)
+            }
+        }
     }
 
     private func setExcludedFromBackup(_ url: URL) {

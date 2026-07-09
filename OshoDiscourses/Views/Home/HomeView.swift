@@ -178,6 +178,7 @@ struct HomeView: View {
                                     .clipShape(Circle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Remove from Recently Completed")
                         }
                         .padding(.vertical, 8)
                     }
@@ -395,6 +396,7 @@ private struct ContinueListeningRow: View {
                     .foregroundStyle(Color.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isCurrentlyPlaying ? "Pause" : "Play")
 
             if let onDismiss {
                 Button { onDismiss() } label: {
@@ -406,6 +408,7 @@ private struct ContinueListeningRow: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Remove from Continue Listening")
             }
         }
         .padding(.vertical, 8)
