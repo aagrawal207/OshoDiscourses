@@ -45,6 +45,37 @@ struct SyncMergeTests {
         #expect(merged.first?.createdAt ?? .distantPast >= merged.last?.createdAt ?? .distantFuture)
     }
 
+    // MARK: - Bookmark tombstones (deletes must stick, not resurrect)
+
+    @Test func deletedBookmarkIsFilteredFromMerge() {
+        // Device A deleted `a`; a stale snapshot from device B still carries it.
+        // The union must not resurrect it.
+        let a = Bookmark(discourseID: "d1", seriesName: "S", title: "A", timestamp: 10)
+        let b = Bookmark(discourseID: "d2", seriesName: "S", title: "B", timestamp: 20)
+        let merged = BookmarkService.mergeBookmarks(local: [b], incoming: [a, b], deleted: [a.id])
+        #expect(merged.map(\.id) == [b.id])
+    }
+
+    @Test func tombstoneRemovesLocalCopyToo() {
+        // Device B learns of A's delete via synced tombstones while still
+        // holding the bookmark locally — the merge must drop it.
+        let a = Bookmark(discourseID: "d1", seriesName: "S", title: "A", timestamp: 10)
+        let merged = BookmarkService.mergeBookmarks(local: [a], incoming: [], deleted: [a.id])
+        #expect(merged.isEmpty)
+    }
+
+    @Test func tombstoneMergeIsUnionAndIdempotent() {
+        let once = BookmarkService.mergeList(local: ["x", "y"], incoming: ["y", "z"], cap: 500)
+        #expect(Set(once) == ["x", "y", "z"])
+        let twice = BookmarkService.mergeList(local: once, incoming: ["y", "z"], cap: 500)
+        #expect(twice == once)
+    }
+
+    @Test func tombstoneCapTrimsOldestEntries() {
+        let merged = BookmarkService.mergeList(local: ["old1", "old2"], incoming: ["new"], cap: 2)
+        #expect(merged == ["old2", "new"])
+    }
+
     // MARK: - Daily stats (max per day)
 
     @Test func statsMergeAddsMissingDays() {

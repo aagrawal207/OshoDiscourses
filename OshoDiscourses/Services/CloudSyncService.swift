@@ -12,6 +12,10 @@ struct CloudSnapshot: Codable, Equatable {
     var completed: [String] = []
     var listenedCompleted: [String] = []
     var bookmarks: [Bookmark] = []
+    /// Tombstones for deleted bookmark ids (union-merged) so a delete on one
+    /// device sticks everywhere instead of resurrecting from a stale snapshot.
+    /// Optional so snapshots written by older app versions still decode.
+    var deletedBookmarkIDs: [String]? = nil
     /// Date string ("yyyy-MM-dd") → seconds listened that day. Merged by max per
     /// day so it converges idempotently (see ListeningStatsService.mergeSyncedStats).
     var dailyStats: [String: TimeInterval] = [:]
@@ -73,7 +77,10 @@ final class CloudSyncService {
             playbackState.mergeCloudSnapshot(snapshot)
             // Bookmarks and listening stats live in their own singletons; merge
             // them with the same convergent, write-order-independent rules.
-            BookmarkService.shared.mergeSyncedBookmarks(snapshot.bookmarks)
+            BookmarkService.shared.mergeSyncedBookmarks(
+                snapshot.bookmarks,
+                deletedIDs: snapshot.deletedBookmarkIDs ?? []
+            )
             ListeningStatsService.shared.mergeSyncedStats(snapshot.dailyStats)
             // Download history (monotonic union) so a reinstall/second device
             // knows what was previously downloaded.
@@ -87,6 +94,7 @@ final class CloudSyncService {
         guard let playbackState else { return }
         var snapshot = playbackState.exportCloudSnapshot()
         snapshot.bookmarks = BookmarkService.shared.bookmarks
+        snapshot.deletedBookmarkIDs = BookmarkService.shared.deletedBookmarkIDs
         snapshot.dailyStats = ListeningStatsService.shared.syncedDailyStats()
         snapshot.downloaded = downloadService?.syncedDownloadHistory() ?? []
         guard let data = try? JSONEncoder().encode(snapshot) else { return }

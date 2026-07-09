@@ -80,6 +80,16 @@ final class BookmarkService {
 
     private(set) var bookmarks: [Bookmark] = []
 
+    /// Tombstones for deleted bookmarks, so a delete sticks across devices and
+    /// relaunches instead of resurrecting from a stale cloud snapshot (union-
+    /// by-id alone can't distinguish "deleted here" from "added there").
+    /// Bookmark ids are UUIDs minted once at creation, so a tombstone can never
+    /// collide with a future add. Persisted in UserDefaults (tiny), synced via
+    /// the cloud snapshot (union-merged), capped to the newest entries.
+    private(set) var deletedBookmarkIDs: [String] = []
+    private let tombstonesKey = "deletedBookmarkIDs"
+    private static let maxTombstones = 500
+
     /// Called after the local bookmark set is persisted (add/remove) so iCloud
     /// sync can push. Set by the app on startup; nil keeps sync inert. Not fired
     /// by `mergeSyncedBookmarks` — that's already reconciling cloud data.
@@ -91,6 +101,7 @@ final class BookmarkService {
     }()
 
     private init() {
+        deletedBookmarkIDs = UserDefaults.standard.stringArray(forKey: tombstonesKey) ?? []
         load()
     }
 
@@ -119,8 +130,18 @@ final class BookmarkService {
 
     func remove(id: String) {
         bookmarks.removeAll { $0.id == id }
+        recordTombstone(id)
         save()
         onBookmarksChanged?()
+    }
+
+    private func recordTombstone(_ id: String) {
+        deletedBookmarkIDs.removeAll { $0 == id }
+        deletedBookmarkIDs.append(id)
+        if deletedBookmarkIDs.count > Self.maxTombstones {
+            deletedBookmarkIDs = Array(deletedBookmarkIDs.suffix(Self.maxTombstones))
+        }
+        UserDefaults.standard.set(deletedBookmarkIDs, forKey: tombstonesKey)
     }
 
     func bookmarks(for discourseID: String) -> [Bookmark] {
@@ -130,28 +151,45 @@ final class BookmarkService {
     // MARK: - iCloud Sync
 
     /// Merge bookmarks arriving from another device. Union by stable `id`, newest
-    /// first by `createdAt`, so adds on either device converge regardless of write
-    /// order. Returns true if the local set changed.
-    ///
-    /// Note: this syncs additions, not deletions — a bookmark deleted on one
-    /// device can reappear from another that still has it. Honoring deletes would
-    /// need tombstones; bookmarks are precious and few, so we err toward keeping.
+    /// first by `createdAt`, minus anything either side has deleted — so adds
+    /// converge regardless of write order, and deletes stick instead of
+    /// resurrecting from a device (or a stale cloud snapshot) that still has
+    /// the bookmark. Returns true if the local set changed.
     @discardableResult
-    func mergeSyncedBookmarks(_ incoming: [Bookmark]) -> Bool {
-        let merged = Self.mergeBookmarks(local: bookmarks, incoming: incoming)
+    func mergeSyncedBookmarks(_ incoming: [Bookmark], deletedIDs: [String] = []) -> Bool {
+        // Tombstones union-merge first (monotonic, order-independent).
+        let mergedTombstones = Self.mergeList(local: deletedBookmarkIDs, incoming: deletedIDs, cap: Self.maxTombstones)
+        if mergedTombstones != deletedBookmarkIDs {
+            deletedBookmarkIDs = mergedTombstones
+            UserDefaults.standard.set(deletedBookmarkIDs, forKey: tombstonesKey)
+        }
+        let merged = Self.mergeBookmarks(local: bookmarks, incoming: incoming, deleted: Set(deletedBookmarkIDs))
         guard merged != bookmarks else { return false }
         bookmarks = merged
         save()
         return true
     }
 
-    /// Pure union-by-id merge, sorted newest-first. Local entries win on id
-    /// collisions (they're identical anyway since id is a UUID minted at creation).
-    static func mergeBookmarks(local: [Bookmark], incoming: [Bookmark]) -> [Bookmark] {
+    /// Pure union-by-id merge, sorted newest-first, with deleted ids filtered
+    /// out. Local entries win on id collisions (they're identical anyway since
+    /// id is a UUID minted at creation).
+    static func mergeBookmarks(local: [Bookmark], incoming: [Bookmark], deleted: Set<String> = []) -> [Bookmark] {
         var byID: [String: Bookmark] = [:]
-        for b in incoming { byID[b.id] = b }
-        for b in local { byID[b.id] = b }   // local overrides on collision
+        for b in incoming where !deleted.contains(b.id) { byID[b.id] = b }
+        for b in local where !deleted.contains(b.id) { byID[b.id] = b }   // local overrides on collision
         return byID.values.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Ordered union of two id lists, deduped (keeping the later occurrence's
+    /// position stable enough for a cap that trims the *oldest* entries).
+    static func mergeList(local: [String], incoming: [String], cap: Int) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for id in local + incoming where !seen.contains(id) {
+            seen.insert(id)
+            result.append(id)
+        }
+        return Array(result.suffix(cap))
     }
 
     func bookmarks(forCategory category: BookmarkCategory) -> [Bookmark] {
