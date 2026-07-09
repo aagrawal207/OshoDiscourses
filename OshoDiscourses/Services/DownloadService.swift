@@ -55,8 +55,28 @@ final class DownloadService {
 
     /// Maps a raw file error to a short DownloadError so the UI never shows a
     /// long, truncatable Cocoa sentence ("… couldn't be moved to … because …").
-    private static func saveError(from error: Error) -> DownloadError {
-        (error as NSError).code == NSFileWriteOutOfSpaceError ? .diskFull : .saveFailed
+    static func saveError(from error: Error) -> DownloadError {
+        isOutOfSpace(error) ? .diskFull : .saveFailed
+    }
+
+    /// True if `error` — at any level of its underlying-error chain — means the
+    /// disk is full. The out-of-space condition surfaces differently depending
+    /// on which layer hits it first: Cocoa's NSFileWriteOutOfSpaceError from
+    /// FileManager moves, or POSIX ENOSPC buried under a URLError when the
+    /// URLSession task can't spool bytes to its temp file. Walking the chain
+    /// catches all of them so the user sees "storage full", not gibberish.
+    static func isOutOfSpace(_ error: Error) -> Bool {
+        var current: NSError? = error as NSError
+        while let nsError = current {
+            if nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileWriteOutOfSpaceError {
+                return true
+            }
+            if nsError.domain == NSPOSIXErrorDomain && nsError.code == Int(ENOSPC) {
+                return true
+            }
+            current = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
     }
 
     var activeDownloads: [String: DownloadProgress] = [:]
@@ -73,6 +93,13 @@ final class DownloadService {
     /// polled independently and whichever woke first when the slot freed would
     /// win — so 16,17,18,19 could start as 16,18,17,19.
     private var pendingQueue: [String] = []
+
+    /// One suspended continuation per queued id. `advanceQueue()` resumes only
+    /// the head-of-queue waiter when the transfer slot frees, so queued
+    /// downloads wake exactly when it's their turn instead of polling every
+    /// 200 ms. A cancel resumes the waiter throwing so its `download()` call
+    /// unwinds immediately.
+    private var queueWaiters: [String: CheckedContinuation<Void, Error>] = [:]
 
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
@@ -98,8 +125,12 @@ final class DownloadService {
 
     init() {
         loadManifest()
-        loadHistory()
+        // Migration must run before loadHistory: it can add ids recovered from
+        // the legacy flat downloads folder to `downloadedIDs`, and loadHistory
+        // seeds history from that set. The old order left migrated ids out of
+        // history for one full launch.
         migrateOldDownloads()
+        loadHistory()
         excludeDownloadsFromBackup()
     }
 
@@ -126,25 +157,56 @@ final class DownloadService {
         }
 
         // One transfer at a time, first-come-first-served. Join the tail of the
-        // queue and wait until we're at its head with no transfer active — so the
-        // running download keeps the server's full bandwidth and the rest start
-        // in request order (16 → 17 → 18 → 19). Show a queued state meanwhile so
-        // the row reads as "waiting", not "not started". Because this runs on
-        // @MainActor with no `await` between the exit check and claiming the slot,
-        // exactly one queued item advances at a time.
+        // queue and suspend until we're at its head with no transfer active — so
+        // the running download keeps the server's full bandwidth and the rest
+        // start in request order (16 → 17 → 18 → 19). Show a queued state
+        // meanwhile so the row reads as "waiting", not "not started". Everything
+        // here runs on @MainActor and the continuation body executes before the
+        // suspension (SE-0420 isolation inheritance), so nothing can interleave
+        // between the eligibility check and registering the waiter — exactly one
+        // queued item advances at a time.
         activeDownloads[discourse.id] = DownloadProgress(status: .queued)
         pendingQueue.append(discourse.id)
-        while pendingQueue.first != discourse.id || isAnyTransferActive(excluding: discourse.id) {
-            try await Task.sleep(for: .milliseconds(200))
-            // Bail if this download was cancelled while waiting in the queue.
-            if activeDownloads[discourse.id] == nil {
+        if pendingQueue.first != discourse.id || isAnyTransferActive(excluding: discourse.id) {
+            do {
+                try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        queueWaiters[discourse.id] = continuation
+                        // Belt-and-braces: if the slot freed in the instant
+                        // before this waiter registered, the nudge already
+                        // happened — re-run it now so we can't sleep forever.
+                        advanceQueue()
+                    }
+                } onCancel: {
+                    // Structured cancellation of the owning Task (distinct from
+                    // cancelDownload). Runs off-actor, so hop back before
+                    // touching state.
+                    Task { @MainActor [weak self] in self?.failQueueWaiter(discourse.id) }
+                }
+            } catch {
+                // Cancelled while waiting — leave no trace, and nudge the queue
+                // in case we were the head blocking the next item.
                 pendingQueue.removeAll { $0 == discourse.id }
+                activeDownloads.removeValue(forKey: discourse.id)
+                advanceQueue()
+                throw CancellationError()
+            }
+            // Resumed normally, but cancelDownload may have run between the
+            // resume being scheduled and this line executing — bail like the
+            // old poll's activeDownloads check did.
+            if activeDownloads[discourse.id] == nil || Task.isCancelled {
+                pendingQueue.removeAll { $0 == discourse.id }
+                activeDownloads.removeValue(forKey: discourse.id)
+                advanceQueue()
                 throw CancellationError()
             }
         }
 
         pendingQueue.removeAll { $0 == discourse.id }
         activeDownloads[discourse.id] = DownloadProgress(status: .downloading)
+        // However this download ends — success, failure, or cancellation — the
+        // transfer slot frees, so wake whoever is next in line.
+        defer { advanceQueue() }
 
         do {
             let url = try encodedURL(from: discourse.audioURL)
@@ -153,6 +215,16 @@ final class DownloadService {
             let seriesDir = destination.deletingLastPathComponent()
 
             let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
+
+            // Cancel race: cancelDownload clears our activeDownloads row
+            // synchronously, but if the transfer had already finished, the
+            // URLSession cancel is a no-op and we land here holding a complete
+            // file. Honor the cancel — discard the bytes instead of committing
+            // a download the listener asked to stop.
+            if activeDownloads[discourse.id] == nil || Task.isCancelled {
+                try? FileManager.default.removeItem(at: localURL)
+                throw CancellationError()
+            }
 
             // Filesystem steps throw long Cocoa sentences; map them to short
             // messages so the UI row shows a clean reason instead of a truncated
@@ -183,9 +255,28 @@ final class DownloadService {
             activeDownloads[discourse.id]?.progress = 1
             return destination
         } catch {
-            activeDownloads[discourse.id]?.status = .failed(error.localizedDescription)
+            // Cancellation isn't a failure the row should display — drop the
+            // entry entirely (matching cancelDownload) instead of showing
+            // "operation cancelled" as an error the user has to dismiss.
+            if error is CancellationError {
+                activeDownloads.removeValue(forKey: discourse.id)
+            } else {
+                activeDownloads[discourse.id]?.status = .failed(error.localizedDescription)
+            }
             throw error
         }
+    }
+
+    /// Fire-and-forget download for UI call sites. Owns the Task, clears a
+    /// previous failed state so retry works, and swallows the error — the row
+    /// UI reads failure state from `activeDownloads`, so throwing to the view
+    /// adds nothing. Replaces the `Task { _ = try? await ... }` pattern that
+    /// was copy-pasted across six views.
+    func startDownload(_ discourse: CatalogDiscourse) {
+        if case .failed = activeDownloads[discourse.id]?.status {
+            activeDownloads[discourse.id] = nil
+        }
+        Task { _ = try? await download(discourse) }
     }
 
     func deleteDownload(discourseID: String) throws {
@@ -269,6 +360,27 @@ final class DownloadService {
         }
     }
 
+    /// Wake the next queued download if the transfer slot is free. Resumes at
+    /// most the head-of-queue waiter, keeping order strictly FIFO: the resumed
+    /// task claims the slot by flipping to `.downloading` before any later
+    /// waiter can be resumed. Idempotent — a head already resumed (but not yet
+    /// running) has no waiter registered, so a second call is a no-op rather
+    /// than a double-start.
+    private func advanceQueue() {
+        guard !isAnyTransferActive(excluding: "") else { return }
+        guard let head = pendingQueue.first,
+              let continuation = queueWaiters.removeValue(forKey: head) else { return }
+        continuation.resume()
+    }
+
+    /// Unwind a queued download's suspended `download()` call with a
+    /// CancellationError. Safe to call for ids with no waiter (already resumed,
+    /// or never queued) — the dictionary removal doubles as the resume-once guard.
+    private func failQueueWaiter(_ id: String) {
+        guard let continuation = queueWaiters.removeValue(forKey: id) else { return }
+        continuation.resume(throwing: CancellationError())
+    }
+
     func cancelDownload(discourseID: String) {
         activeTasks[discourseID]?.cancel()
         activeTasks.removeValue(forKey: discourseID)
@@ -276,6 +388,13 @@ final class DownloadService {
         progressObservations.removeValue(forKey: discourseID)
         pendingQueue.removeAll { $0 == discourseID }
         activeDownloads.removeValue(forKey: discourseID)
+        // A queued download is parked on a continuation, not a network task —
+        // resume it throwing so its download() call unwinds now instead of
+        // waiting for its turn only to bail.
+        failQueueWaiter(discourseID)
+        // Removing the head of the queue (or the active transfer) may free the
+        // slot for whoever is next.
+        advanceQueue()
     }
 
     func progress(for discourseID: String) -> Double {
@@ -416,7 +535,14 @@ final class DownloadService {
         guard let data = try? JSONEncoder().encode(pathMap) else { return }
         let dir = manifestURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? data.write(to: manifestURL)
+        do {
+            // .atomic writes to a temp file then renames, so a crash or full
+            // disk mid-write can never leave a truncated manifest behind — a
+            // corrupt manifest would silently orphan the whole library.
+            try data.write(to: manifestURL, options: .atomic)
+        } catch {
+            print("[Downloads] failed to save manifest: \(error)")
+        }
     }
 
     private func loadManifest() {
@@ -484,7 +610,13 @@ final class DownloadService {
         guard let data = try? JSONEncoder().encode(Array(downloadHistory)) else { return }
         let dir = historyURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? data.write(to: historyURL)
+        do {
+            // .atomic for the same reason as saveManifest: a torn write would
+            // lose the ever-downloaded history until the next iCloud merge.
+            try data.write(to: historyURL, options: .atomic)
+        } catch {
+            print("[Downloads] failed to save history: \(error)")
+        }
     }
 
     private func loadHistory() {
@@ -494,8 +626,9 @@ final class DownloadService {
         }
         // Anything already on disk is by definition part of the history — seed it
         // so existing users' current downloads enter history on first launch of
-        // this version (loadManifest runs before loadHistory). Persist the seed so
-        // a later delete-then-restart can't lose an id that was never written.
+        // this version (loadManifest and migrateOldDownloads both run before
+        // loadHistory, so migrated legacy files are seeded too). Persist the seed
+        // so a later delete-then-restart can't lose an id that was never written.
         let before = downloadHistory.count
         downloadHistory.formUnion(downloadedIDs)
         if downloadHistory.count != before { saveHistory() }
@@ -584,13 +717,24 @@ final class DownloadService {
                 Task { @MainActor [weak self] in self?.activeTasks[discourseID]?.cancel() }
             }
         } catch let error as URLError {
-            // Translate the two transport failures the listener can actually act
-            // on, plus explicit cancellation. Everything else keeps its description.
+            // Translate the transport failures the listener can actually act
+            // on. Everything else keeps its description.
             switch error.code {
             case .dataNotAllowed: throw DownloadError.wifiOnly   // cellular gate blocked it
             case .notConnectedToInternet, .networkConnectionLost: throw DownloadError.offline
-            default: throw error
+            // The session spools to a temp file as bytes arrive, so a full disk
+            // shows up here as a write failure, not later at the move step.
+            case .cannotWriteToFile: throw DownloadError.diskFull
+            default:
+                if Self.isOutOfSpace(error) { throw DownloadError.diskFull }
+                throw error
             }
+        } catch {
+            // The move-to-stable step inside the completion handler throws
+            // Cocoa errors (not URLError) — map out-of-space there too so the
+            // row shows "Not enough storage" instead of a filesystem sentence.
+            if Self.isOutOfSpace(error) { throw DownloadError.diskFull }
+            throw error
         }
 
         // Validate response
