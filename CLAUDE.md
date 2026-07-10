@@ -41,7 +41,7 @@ OshoDiscourses/
 │   └── Settings/ListeningStatsView.swift # Listening stats dashboard
 ├── Services/
 │   ├── AudioPlayerService.swift        # AVPlayer + lock screen controls + audio-session interruption/route recovery
-│   ├── DownloadService.swift           # URLSession download task with progress (filesystem-tracked); excludes downloads from iCloud backup
+│   ├── DownloadService.swift           # Background URLSession downloads (survive app switch/lock/process death); excludes downloads from iCloud backup
 │   ├── PlaybackStateService.swift      # Auto-saves position per discourse every 10s; owns cloud merge logic
 │   ├── CloudSyncService.swift          # Silent NSUbiquitousKeyValueStore sync of progress + bookmarks + daily stats
 │   ├── SleepTimerService.swift         # Countdown + end-of-discourse sleep modes
@@ -96,7 +96,7 @@ OshoDiscoursesTests/
 - [x] Browse 261 series with search + language filters
 - [x] Curated sections (Popular/Beginner for English and Hindi)
 - [x] Series detail with hero header and discourse list
-- [x] Download with progress tracking (URLSession async bytes)
+- [x] Download with progress tracking (background URLSession — continues when app is backgrounded/locked/killed)
 - [x] Audio playback (AVPlayer with queue management)
 - [x] Background audio + lock screen / Control Center / AirPods controls (MPRemoteCommandCenter, with interruption + route-change recovery)
 - [x] Seek slider, playback speed (0.5x–2x, persisted across launches), volume boost

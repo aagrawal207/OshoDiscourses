@@ -1,7 +1,27 @@
 import SwiftUI
 
+/// Minimal app delegate whose only job is the background-download handoff:
+/// when a transfer finishes while the app isn't running, iOS relaunches the
+/// app in the background and hands us a completion handler here. We must hold
+/// it until the recreated URLSession has delivered all its queued events
+/// (BackgroundDownloadDelegate.urlSessionDidFinishEvents calls it), otherwise
+/// iOS penalizes the app's future background time.
+@MainActor
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    static var backgroundSessionCompletionHandler: (() -> Void)?
+
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        Self.backgroundSessionCompletionHandler = completionHandler
+    }
+}
+
 @main
 struct OshoDiscoursesApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var audioPlayer = AudioPlayerService()
     @State private var downloadService = DownloadService()
     @State private var playbackState = PlaybackStateService()

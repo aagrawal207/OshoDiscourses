@@ -55,7 +55,8 @@ final class DownloadService {
 
     /// Maps a raw file error to a short DownloadError so the UI never shows a
     /// long, truncatable Cocoa sentence ("… couldn't be moved to … because …").
-    static func saveError(from error: Error) -> DownloadError {
+    /// nonisolated: pure, and the background session's delegate queue needs it.
+    nonisolated static func saveError(from error: Error) -> DownloadError {
         isOutOfSpace(error) ? .diskFull : .saveFailed
     }
 
@@ -65,7 +66,7 @@ final class DownloadService {
     /// FileManager moves, or POSIX ENOSPC buried under a URLError when the
     /// URLSession task can't spool bytes to its temp file. Walking the chain
     /// catches all of them so the user sees "storage full", not gibberish.
-    static func isOutOfSpace(_ error: Error) -> Bool {
+    nonisolated static func isOutOfSpace(_ error: Error) -> Bool {
         var current: NSError? = error as NSError
         while let nsError = current {
             if nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileWriteOutOfSpaceError {
@@ -82,10 +83,36 @@ final class DownloadService {
     var activeDownloads: [String: DownloadProgress] = [:]
     private(set) var downloadedIDs: Set<String> = []
     private var activeTasks: [String: URLSessionDownloadTask] = [:]
-    /// KVO handles for each in-flight task's `.progress`. Held here (not as a
-    /// local) so the observation outlives the continuation closure that sets it
-    /// up and keeps firing for the life of the download.
-    private var progressObservations: [String: NSKeyValueObservation] = [:]
+
+    /// One suspended continuation per in-flight transfer, resumed by the
+    /// background session's delegate callbacks (staged file URL on success,
+    /// error on failure). Replaces the completion-handler task: background
+    /// sessions only speak delegate.
+    private var transferContinuations: [String: CheckedContinuation<URL, Error>] = [:]
+
+    /// The background session and its delegate. A background configuration
+    /// hands transfers to the system's download daemon, so they keep going
+    /// when the listener switches apps or locks the phone — with
+    /// URLSession.shared the process suspended and the transfer died unless
+    /// you stayed on the screen. `sessionSendsLaunchEvents` additionally
+    /// relaunches the app to commit a file that finished after iOS killed us.
+    private let sessionDelegate = BackgroundDownloadDelegate()
+    // @ObservationIgnored: @Observable can't macro-transform a lazy stored
+    // property, and session plumbing isn't UI state anyway.
+    @ObservationIgnored private lazy var backgroundSession: URLSession = {
+        let config = URLSessionConfiguration.background(
+            withIdentifier: "com.agraabhi.oshodiscourses.background-downloads"
+        )
+        config.sessionSendsLaunchEvents = true
+        // Start immediately — discretionary would let the system defer queued
+        // talks for hours waiting for power + Wi-Fi.
+        config.isDiscretionary = false
+        // Overall per-transfer budget (default is 7 days). A 30 MB talk on a
+        // slow connection is minutes; give it hours, not days, so a stuck
+        // transfer eventually surfaces as a failure instead of a zombie row.
+        config.timeoutIntervalForResource = 6 * 60 * 60
+        return URLSession(configuration: config, delegate: sessionDelegate, delegateQueue: nil)
+    }()
 
     /// IDs waiting their turn, in the order they were requested. Downloads start
     /// strictly front-to-back: a waiting item proceeds only when it's at the head
@@ -132,6 +159,66 @@ final class DownloadService {
         migrateOldDownloads()
         loadHistory()
         excludeDownloadsFromBackup()
+        wireSessionDelegate()
+        // Touch the lazy session now: recreating a session with the same
+        // identifier is what reattaches us to transfers that survived a
+        // suspension — and, after a background relaunch, what makes the
+        // pending didFinishDownloadingTo events flow so finished files get
+        // committed instead of discarded.
+        _ = backgroundSession
+    }
+
+    /// Bridge the delegate's serial-queue callbacks onto the main actor.
+    private func wireSessionDelegate() {
+        sessionDelegate.onProgress = { [weak self] id, fraction in
+            Task { @MainActor [weak self] in
+                self?.activeDownloads[id]?.progress = fraction
+            }
+        }
+        sessionDelegate.onFinished = { [weak self] id, stagedURL in
+            Task { @MainActor [weak self] in
+                self?.transferFinished(id: id, stagedURL: stagedURL)
+            }
+        }
+        sessionDelegate.onFailed = { [weak self] id, error in
+            Task { @MainActor [weak self] in
+                self?.transferFailed(id: id, error: error)
+            }
+        }
+    }
+
+    /// A transfer produced a staged file. Normally a `download()` call is
+    /// suspended waiting for it; after a background relaunch there is no
+    /// waiting call (the process that awaited died), so commit directly.
+    private func transferFinished(id: String, stagedURL: URL) {
+        if let continuation = transferContinuations.removeValue(forKey: id) {
+            continuation.resume(returning: stagedURL)
+            return
+        }
+        guard let lookup = Catalog.discourseLookup[id] else {
+            try? FileManager.default.removeItem(at: stagedURL)
+            return
+        }
+        do {
+            _ = try commitDownload(lookup.discourse, from: stagedURL)
+            activeDownloads[id] = DownloadProgress(progress: 1, status: .complete)
+        } catch {
+            activeDownloads[id] = DownloadProgress(status: .failed(error.localizedDescription))
+        }
+    }
+
+    private func transferFailed(id: String, error: Error) {
+        if let continuation = transferContinuations.removeValue(forKey: id) {
+            continuation.resume(throwing: error)
+            return
+        }
+        // Relaunch path with no awaiting call: reflect the outcome in the row
+        // if one exists. A cancel isn't a failure to display.
+        if (error as? URLError)?.code == .cancelled || error is CancellationError {
+            activeDownloads.removeValue(forKey: id)
+        } else {
+            activeDownloads[id]?.status = .failed(error.localizedDescription)
+        }
     }
 
     // MARK: - Public
@@ -211,9 +298,6 @@ final class DownloadService {
         do {
             let url = try encodedURL(from: discourse.audioURL)
 
-            // Ensure series folder exists
-            let seriesDir = destination.deletingLastPathComponent()
-
             let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
 
             // Cancel race: cancelDownload clears our activeDownloads row
@@ -226,34 +310,13 @@ final class DownloadService {
                 throw CancellationError()
             }
 
-            // Filesystem steps throw long Cocoa sentences; map them to short
-            // messages so the UI row shows a clean reason instead of a truncated
-            // "…couldn't be moved to…because…". moveItem also refuses to
-            // overwrite, so clear any stray file at the destination first (a
-            // duplicate request that slipped past the guard above, or a leftover
-            // from an interrupted move) — the fresh download is authoritative.
-            do {
-                try FileManager.default.createDirectory(at: seriesDir, withIntermediateDirectories: true)
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    try? FileManager.default.removeItem(at: destination)
-                }
-                try FileManager.default.moveItem(at: localURL, to: destination)
-            } catch {
-                try? FileManager.default.removeItem(at: localURL)
-                throw Self.saveError(from: error)
-            }
-            // Exclude the new file and its series folder from backup individually —
-            // the flag isn't inherited from the root on iOS (see
-            // excludeDownloadsFromBackup).
-            setExcludedFromBackup(seriesDir)
-            setExcludedFromBackup(destination)
-            downloadedIDs.insert(discourse.id)
-            pathMap[discourse.id] = relativePath(for: discourse)
-            saveManifest()
-            recordDownloaded(discourse.id)
+            // Filesystem steps throw long Cocoa sentences; commitDownload maps
+            // them to short messages so the UI row shows a clean reason instead
+            // of a truncated "…couldn't be moved to…because…".
+            let savedURL = try commitDownload(discourse, from: localURL)
             activeDownloads[discourse.id]?.status = .complete
             activeDownloads[discourse.id]?.progress = 1
-            return destination
+            return savedURL
         } catch {
             // Cancellation isn't a failure the row should display — drop the
             // entry entirely (matching cancelDownload) instead of showing
@@ -265,6 +328,36 @@ final class DownloadService {
             }
             throw error
         }
+    }
+
+    /// Move a finished transfer's staged file into the library and record it.
+    /// Shared by the normal `download()` path and the background-relaunch path
+    /// (file finished after iOS killed the process). moveItem refuses to
+    /// overwrite, so any stray file at the destination is cleared first — the
+    /// fresh download is authoritative.
+    private func commitDownload(_ discourse: CatalogDiscourse, from stagedURL: URL) throws -> URL {
+        let destination = fileURL(for: discourse)
+        let seriesDir = destination.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(at: seriesDir, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try? FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: stagedURL, to: destination)
+        } catch {
+            try? FileManager.default.removeItem(at: stagedURL)
+            throw Self.saveError(from: error)
+        }
+        // Exclude the new file and its series folder from backup individually —
+        // the flag isn't inherited from the root on iOS (see
+        // excludeDownloadsFromBackup).
+        setExcludedFromBackup(seriesDir)
+        setExcludedFromBackup(destination)
+        downloadedIDs.insert(discourse.id)
+        pathMap[discourse.id] = relativePath(for: discourse)
+        saveManifest()
+        recordDownloaded(discourse.id)
+        return destination
     }
 
     /// Fire-and-forget download for UI call sites. Owns the Task, clears a
@@ -382,10 +475,11 @@ final class DownloadService {
     }
 
     func cancelDownload(discourseID: String) {
+        // Cancelling the URLSession task makes the delegate deliver
+        // didCompleteWithError(.cancelled), which resumes the transfer
+        // continuation throwing — the awaiting download() call unwinds from there.
         activeTasks[discourseID]?.cancel()
         activeTasks.removeValue(forKey: discourseID)
-        progressObservations[discourseID]?.invalidate()
-        progressObservations.removeValue(forKey: discourseID)
         pendingQueue.removeAll { $0 == discourseID }
         activeDownloads.removeValue(forKey: discourseID)
         // A queued download is parked on a continuation, not a network task —
@@ -664,53 +758,32 @@ final class DownloadService {
     private func downloadWithProgress(url: URL, discourseID: String) async throws -> URL {
         var request = URLRequest(url: url)
         request.timeoutInterval = 120
-        // Per-request cellular gate (URLSession.shared's config is immutable).
-        // The toggle lives in Settings → Player & Downloads and defaults off.
+        // Per-request cellular gate. The toggle lives in Settings → Player &
+        // Downloads and defaults off. Note the background-session semantics:
+        // on cellular with the gate closed, the system *waits* for Wi-Fi
+        // rather than failing fast (bounded by timeoutIntervalForResource).
         request.allowsCellularAccess = UserSettings.shared.allowCellularDownloads
 
         // Whether the transfer completes, throws, or is cancelled, drop the
-        // task + observation handles for this id so nothing leaks.
-        defer {
-            progressObservations[discourseID]?.invalidate()
-            progressObservations.removeValue(forKey: discourseID)
-            activeTasks.removeValue(forKey: discourseID)
-        }
+        // task handle for this id so nothing leaks.
+        defer { activeTasks.removeValue(forKey: discourseID) }
 
-        // Run the transfer on a task we create AND resume ourselves. The old code
-        // observed `.progress` on this task but downloaded through the separate,
-        // hidden task inside `URLSession.download(for:)` — so the bar sat at 0 the
-        // whole time and cancelling this idle task never stopped the real one.
-        // Bridging the delegate-style task into async/await via a continuation
-        // fixes both: real byte-level progress, and a cancel that actually bites.
-        let tempURL: URL
-        let response: URLResponse
+        // The transfer runs on the background session so it survives app
+        // switches, the lock screen, and even process death (see
+        // BackgroundDownloadDelegate). The delegate resumes this continuation
+        // with the staged file (already moved out of the system temp location)
+        // or the transport error; response validation (404 / HTML-not-audio)
+        // also happens in the delegate, before staging.
         do {
-            (tempURL, response) = try await withTaskCancellationHandler {
+            return try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { continuation in
-                    let task = URLSession.shared.downloadTask(with: request) { location, response, error in
-                        if let error {
-                            continuation.resume(throwing: error)
-                        } else if let location, let response {
-                            // The completion-handler temp file is deleted the moment
-                            // this closure returns, so move it somewhere stable now.
-                            let stable = FileManager.default.temporaryDirectory
-                                .appendingPathComponent(UUID().uuidString + ".mp3")
-                            do {
-                                try FileManager.default.moveItem(at: location, to: stable)
-                                continuation.resume(returning: (stable, response))
-                            } catch {
-                                continuation.resume(throwing: error)
-                            }
-                        } else {
-                            continuation.resume(throwing: URLError(.unknown))
-                        }
-                    }
+                    transferContinuations[discourseID] = continuation
+                    let task = backgroundSession.downloadTask(with: request)
+                    // taskDescription is the one field that survives process
+                    // death with the task — it's how a relaunch knows which
+                    // discourse a finished file belongs to.
+                    task.taskDescription = discourseID
                     activeTasks[discourseID] = task
-                    progressObservations[discourseID] = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
-                        Task { @MainActor [weak self] in
-                            self?.activeDownloads[discourseID]?.progress = progress.fractionCompleted
-                        }
-                    }
                     task.resume()
                 }
             } onCancel: {
@@ -720,6 +793,10 @@ final class DownloadService {
             // Translate the transport failures the listener can actually act
             // on. Everything else keeps its description.
             switch error.code {
+            // Task.cancel() surfaces as URLError.cancelled, not Swift's
+            // CancellationError — normalize so callers treat both alike
+            // (drop the row, don't show "cancelled" as a failure).
+            case .cancelled: throw CancellationError()
             case .dataNotAllowed: throw DownloadError.wifiOnly   // cellular gate blocked it
             case .notConnectedToInternet, .networkConnectionLost: throw DownloadError.offline
             // The session spools to a temp file as bytes arrive, so a full disk
@@ -729,31 +806,6 @@ final class DownloadService {
                 if Self.isOutOfSpace(error) { throw DownloadError.diskFull }
                 throw error
             }
-        } catch {
-            // The move-to-stable step inside the completion handler throws
-            // Cocoa errors (not URLError) — map out-of-space there too so the
-            // row shows "Not enough storage" instead of a filesystem sentence.
-            if Self.isOutOfSpace(error) { throw DownloadError.diskFull }
-            throw error
         }
-
-        // Validate response
-        if let httpResponse = response as? HTTPURLResponse {
-            guard (200...299).contains(httpResponse.statusCode) else {
-                try? FileManager.default.removeItem(at: tempURL)
-                throw httpResponse.statusCode == 404
-                    ? DownloadError.notFound
-                    : DownloadError.serverError(httpResponse.statusCode)
-            }
-            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
-            if contentType.contains("text/html") {
-                try? FileManager.default.removeItem(at: tempURL)
-                throw DownloadError.notAudio
-            }
-        }
-
-        // tempURL is already at a stable location (moved inside the completion
-        // handler above), so the caller can move it straight to its destination.
-        return tempURL
     }
 }
