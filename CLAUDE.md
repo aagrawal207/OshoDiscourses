@@ -71,6 +71,14 @@ OshoDiscoursesTests/
 - 261 series (155 English, 106 Hindi)
 - 4,361 total discourses
 - Source: oshoworld.com (3 URL patterns: underscore, slug, OSHO-prefix)
+- Archive.org mirror: `Resources/ArchiveCatalog.json` maps ~90% of discourses
+  (3,946 across 238 series) to the archive item
+  `osho-audio-discourses-collection` — ~12x faster downloads. Downloads try
+  archive first, fall back to oshoworld (see `DownloadService.downloadSources`).
+  Mirror also provides per-series cover art (first track's extracted PNG),
+  shown in thumbnails via `ArchiveCatalog.coverURL`. Mapping generated offline
+  from the archive metadata API; regenerate by re-running the matcher against
+  a fresh `archive.org/metadata/osho-audio-discourses-collection` dump.
 - Curated lists: Popular English/Hindi, Beginner English/Hindi
 - All in `Resources/Catalog.swift` — `Catalog.allSeries`, `Catalog.allDiscourses()`
 
@@ -157,5 +165,5 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-07-09 (117 tests passing)
+- Build succeeds as of 2026-07-09 (125 tests passing)
 - Dynamic Island / Live Activity was removed (was a Live Activity hosted by a now-deleted widget extension); standard lock-screen/Control-Center controls stay via MediaPlayer

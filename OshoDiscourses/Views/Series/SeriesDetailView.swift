@@ -49,7 +49,7 @@ struct SeriesDetailView: View {
 
     private var headerSection: some View {
         VStack(spacing: 16) {
-            SeriesThumbnailView(name: seriesInfo.name, size: 120)
+            SeriesThumbnailView(name: seriesInfo.name, size: 120, seriesID: seriesInfo.id)
                 .shadow(color: .primary.opacity(0.1), radius: 20)
 
             VStack(spacing: 6) {

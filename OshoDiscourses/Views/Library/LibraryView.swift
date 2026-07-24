@@ -240,7 +240,7 @@ private struct SeriesRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            SeriesThumbnailView(name: series.name, size: 48)
+            SeriesThumbnailView(name: series.name, size: 48, seriesID: series.id)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(series.name)

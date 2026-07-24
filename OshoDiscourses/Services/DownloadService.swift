@@ -296,9 +296,26 @@ final class DownloadService {
         defer { advanceQueue() }
 
         do {
-            let url = try encodedURL(from: discourse.audioURL)
+            // Prefer the Archive.org mirror (~12x faster than oshoworld.com in
+            // measurement); fall back to oshoworld for the ~10% of discourses
+            // not mirrored, or if the archive attempt fails server-side.
+            let sources = downloadSources(for: discourse)
+            guard !sources.isEmpty else { throw URLError(.badURL) }
 
-            let localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
+            var localURL: URL?
+            for (index, url) in sources.enumerated() {
+                do {
+                    localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
+                    break
+                } catch {
+                    let isLast = index == sources.count - 1
+                    guard !isLast, Self.shouldTryNextSource(after: error) else { throw error }
+                    // Retrying from another host: rewind the progress ring so it
+                    // doesn't sit at a stale percentage from the failed attempt.
+                    activeDownloads[discourse.id]?.progress = 0
+                }
+            }
+            guard let localURL else { throw URLError(.unknown) }
 
             // Cancel race: cancelDownload clears our activeDownloads row
             // synchronously, but if the transfer had already finished, the
@@ -747,6 +764,35 @@ final class DownloadService {
     }
 
     // MARK: - Networking
+
+    /// Download URLs to try, in order: the Archive.org mirror first (when the
+    /// discourse is mapped there), then the original oshoworld.com URL.
+    private func downloadSources(for discourse: CatalogDiscourse) -> [URL] {
+        var urls: [URL] = []
+        if let archive = ArchiveCatalog.audioURL(for: discourse) {
+            urls.append(archive)
+        }
+        if let osho = try? encodedURL(from: discourse.audioURL) {
+            urls.append(osho)
+        }
+        return urls
+    }
+
+    /// Whether a failure from one source justifies trying the next one.
+    /// Server-side problems (missing file, error status, HTML instead of
+    /// audio) and transport flakiness are worth a retry from the other host;
+    /// conditions local to the device (no internet, cellular gate, full disk)
+    /// or an explicit cancel would fail identically and must surface as-is.
+    nonisolated static func shouldTryNextSource(after error: Error) -> Bool {
+        if error is CancellationError { return false }
+        if let dl = error as? DownloadError {
+            switch dl {
+            case .notFound, .serverError, .notAudio: return true
+            case .wifiOnly, .offline, .diskFull, .saveFailed: return false
+            }
+        }
+        return true  // timeouts, connection resets, and other transport errors
+    }
 
     private func encodedURL(from rawURL: String) throws -> URL {
         guard let url = URL(string: rawURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawURL) else {

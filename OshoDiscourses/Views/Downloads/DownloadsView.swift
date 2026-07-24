@@ -379,7 +379,7 @@ private struct DownloadedSeriesHeader: View {
         HStack(spacing: 10) {
             NavigationLink(value: seriesInfo) {
                 HStack(spacing: 10) {
-                    SeriesThumbnailView(name: seriesInfo.name, size: 32)
+                    SeriesThumbnailView(name: seriesInfo.name, size: 32, seriesID: seriesInfo.id)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(seriesInfo.name)

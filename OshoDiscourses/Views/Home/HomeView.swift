@@ -152,7 +152,7 @@ struct HomeView: View {
                 ForEach(recentlyCompleted) { item in
                     NavigationLink(value: item.seriesInfo) {
                         HStack(spacing: 12) {
-                            SeriesThumbnailView(name: item.seriesInfo.name, size: 48)
+                            SeriesThumbnailView(name: item.seriesInfo.name, size: 48, seriesID: item.seriesInfo.id)
 
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.discourse.displayTitle)
@@ -286,7 +286,7 @@ private struct SeriesCardView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            SeriesThumbnailView(name: series.name, size: 36)
+            SeriesThumbnailView(name: series.name, size: 36, seriesID: series.id)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(series.name)
@@ -312,6 +312,11 @@ private struct SeriesCardView: View {
 struct SeriesThumbnailView: View {
     let name: String
     let size: CGFloat
+    /// Series id for Archive.org cover art lookup. Optional: nil (or an
+    /// unmapped id) keeps the gradient+initials look. The gradient always
+    /// renders first, so rows are instant and the cover just fades in on top
+    /// when the (URLCache-cached) fetch lands.
+    var seriesID: String? = nil
 
     /// FNV-1a over the name's UTF-8 bytes. Swift's String.hashValue is randomly
     /// seeded per launch, which shuffled every gradient on each app start —
@@ -339,6 +344,10 @@ struct SeriesThumbnailView: View {
         String(name.prefix(2)).uppercased()
     }
 
+    private var coverURL: URL? {
+        seriesID.flatMap { ArchiveCatalog.coverURL(forSeriesID: $0) }
+    }
+
     var body: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(
@@ -353,6 +362,20 @@ struct SeriesThumbnailView: View {
                 Text(initials)
                     .font(.system(size: size * 0.3, weight: .bold))
                     .foregroundStyle(.primary)
+            }
+            .overlay {
+                if let coverURL {
+                    AsyncImage(url: coverURL) { phase in
+                        if case .success(let image) = phase {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: size, height: size)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .transition(.opacity)
+                        }
+                    }
+                }
             }
     }
 }
@@ -386,7 +409,7 @@ private struct ContinueListeningRow: View {
                 playItem()
             } label: {
                 HStack(spacing: 12) {
-                    SeriesThumbnailView(name: item.seriesInfo.name, size: 48)
+                    SeriesThumbnailView(name: item.seriesInfo.name, size: 48, seriesID: item.seriesInfo.id)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.discourse.displayTitle)
