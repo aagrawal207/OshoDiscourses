@@ -313,10 +313,21 @@ struct SeriesThumbnailView: View {
     let name: String
     let size: CGFloat
     /// Series id for Archive.org cover art lookup. Optional: nil (or an
-    /// unmapped id) keeps the gradient+initials look. The gradient always
-    /// renders first, so rows are instant and the cover just fades in on top
-    /// when the (URLCache-cached) fetch lands.
+    /// unmapped id) keeps the gradient+initials look. Covers load through
+    /// CoverArtLoader (memory + disk cached, downsampled) — a cached cover
+    /// paints on the row's first frame with no placeholder flash.
     var seriesID: String? = nil
+
+    /// Seeded synchronously from the memory cache so a recycled lazy row
+    /// renders its cover immediately instead of flashing initials first.
+    @State private var cover: UIImage?
+
+    init(name: String, size: CGFloat, seriesID: String? = nil) {
+        self.name = name
+        self.size = size
+        self.seriesID = seriesID
+        _cover = State(initialValue: seriesID.flatMap { CoverArtLoader.cachedImage(for: $0) })
+    }
 
     /// FNV-1a over the name's UTF-8 bytes. Swift's String.hashValue is randomly
     /// seeded per launch, which shuffled every gradient on each app start —
@@ -344,10 +355,6 @@ struct SeriesThumbnailView: View {
         String(name.prefix(2)).uppercased()
     }
 
-    private var coverURL: URL? {
-        seriesID.flatMap { ArchiveCatalog.coverURL(forSeriesID: $0) }
-    }
-
     var body: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(
@@ -359,23 +366,36 @@ struct SeriesThumbnailView: View {
             )
             .frame(width: size, height: size)
             .overlay {
-                Text(initials)
-                    .font(.system(size: size * 0.3, weight: .bold))
-                    .foregroundStyle(.primary)
-            }
-            .overlay {
-                if let coverURL {
-                    AsyncImage(url: coverURL) { phase in
-                        if case .success(let image) = phase {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: size, height: size)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .transition(.opacity)
-                        }
-                    }
+                // The archive "cover" is a waveform PNG: black strokes on a
+                // TRANSPARENT background, so whatever is underneath shows
+                // through. The initials must therefore only exist while
+                // there's no artwork — in light mode .primary initials are
+                // black, and black letters bleeding through a black waveform
+                // was an unreadable smudge (dark mode masked it: white
+                // letters read as backlight). Waveform-over-gradient renders
+                // identically in both modes.
+                if let cover {
+                    Image(uiImage: cover)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        // The 4:1 waveform lays out wider than the frame;
+                        // clipShape clips drawing but NOT hit-testing — keep
+                        // the overflow from swallowing taps near the row.
+                        .allowsHitTesting(false)
+                } else {
+                    Text(initials)
+                        .font(.system(size: size * 0.3, weight: .bold))
+                        .foregroundStyle(.primary)
                 }
+            }
+            // Purely decorative (waveform art or initials); the row's text
+            // carries the series name for VoiceOver.
+            .accessibilityHidden(true)
+            .task(id: seriesID) {
+                guard cover == nil, let seriesID else { return }
+                cover = await CoverArtLoader.image(for: seriesID)
             }
     }
 }

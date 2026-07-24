@@ -47,6 +47,10 @@ struct OshoDiscoursesApp: App {
                     }
                 }
                 .onAppear {
+                    // Prewarm the ~190KB ArchiveCatalog JSON decode off the
+                    // main thread so the first thumbnail render doesn't pay it
+                    // (static let init is thread-safe; first toucher decodes).
+                    Task.detached(priority: .utility) { _ = ArchiveCatalog.mappedSeriesCount }
                     playbackState.attach(to: audioPlayer)
                     audioPlayer.playbackStateService = playbackState
                     audioPlayer.downloadService = downloadService

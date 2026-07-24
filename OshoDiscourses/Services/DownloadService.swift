@@ -159,30 +159,71 @@ final class DownloadService {
         migrateOldDownloads()
         loadHistory()
         excludeDownloadsFromBackup()
-        wireSessionDelegate()
+        consumeSessionEvents()
         // Touch the lazy session now: recreating a session with the same
         // identifier is what reattaches us to transfers that survived a
         // suspension — and, after a background relaunch, what makes the
         // pending didFinishDownloadingTo events flow so finished files get
         // committed instead of discarded.
         _ = backgroundSession
+        adoptOrphanedTasks()
     }
 
-    /// Bridge the delegate's serial-queue callbacks onto the main actor.
-    private func wireSessionDelegate() {
-        sessionDelegate.onProgress = { [weak self] id, fraction in
-            Task { @MainActor [weak self] in
-                self?.activeDownloads[id]?.progress = fraction
+    /// Consume the delegate's event stream in arrival order. FIFO matters:
+    /// after a background relaunch, the finished-file events must be committed
+    /// before `.backgroundEventsDrained` hands control back to iOS — with
+    /// independent per-event hops, losing that race let the system re-suspend
+    /// the app before the commit ran, stranding the downloaded file in tmp.
+    private func consumeSessionEvents() {
+        let stream = sessionDelegate.events
+        Task { @MainActor [weak self] in
+            for await event in stream {
+                guard let self else { return }
+                switch event {
+                case .progress(let id, let fraction):
+                    // Only a transferring row may move — a late report from a
+                    // failed first attempt must not overwrite the retry's
+                    // reset-to-zero, and a completed row must never regress.
+                    if case .downloading = self.activeDownloads[id]?.status {
+                        self.activeDownloads[id]?.progress = fraction
+                    }
+                case .finished(let id, let stagedURL):
+                    self.transferFinished(id: id, stagedURL: stagedURL)
+                case .failed(let id, let error):
+                    self.transferFailed(id: id, error: error)
+                case .backgroundEventsDrained:
+                    AppDelegate.backgroundSessionCompletionHandler?()
+                    AppDelegate.backgroundSessionCompletionHandler = nil
+                }
             }
         }
-        sessionDelegate.onFinished = { [weak self] id, stagedURL in
+    }
+
+    /// Reattach to transfers that survived a process kill. Recreating the
+    /// session resumes them in nsurlsessiond, but our in-memory bookkeeping
+    /// (`activeTasks`/`activeDownloads`) starts empty — without adoption the
+    /// UI shows nothing in flight, the user re-taps download, and the orphan's
+    /// completion collides with the new attempt's continuation under the same
+    /// discourse-id key (resuming it with the orphan's file while the new task
+    /// becomes an uncancellable zombie).
+    private func adoptOrphanedTasks() {
+        backgroundSession.getAllTasks { [weak self] tasks in
+            // getAllTasks calls back on the session's delegate queue.
+            let downloads = tasks.compactMap { $0 as? URLSessionDownloadTask }
             Task { @MainActor [weak self] in
-                self?.transferFinished(id: id, stagedURL: stagedURL)
-            }
-        }
-        sessionDelegate.onFailed = { [weak self] id, error in
-            Task { @MainActor [weak self] in
-                self?.transferFailed(id: id, error: error)
+                guard let self else { return }
+                for task in downloads {
+                    guard let id = task.taskDescription,
+                          task.state == .running || task.state == .suspended else { continue }
+                    // A row already tracked (e.g. download() re-queued before
+                    // adoption ran) keeps its state; otherwise adopt.
+                    if self.activeTasks[id] == nil {
+                        self.activeTasks[id] = task
+                        if self.activeDownloads[id] == nil {
+                            self.activeDownloads[id] = DownloadProgress(status: .downloading)
+                        }
+                    }
+                }
             }
         }
     }
@@ -199,12 +240,20 @@ final class DownloadService {
             try? FileManager.default.removeItem(at: stagedURL)
             return
         }
+        // Adopted/relaunched transfer with no awaiting call: honor a cancel
+        // that happened meanwhile (no activeDownloads row) by discarding.
+        guard activeDownloads[id] != nil else {
+            try? FileManager.default.removeItem(at: stagedURL)
+            activeTasks.removeValue(forKey: id)
+            return
+        }
         do {
             _ = try commitDownload(lookup.discourse, from: stagedURL)
             activeDownloads[id] = DownloadProgress(progress: 1, status: .complete)
         } catch {
             activeDownloads[id] = DownloadProgress(status: .failed(error.localizedDescription))
         }
+        activeTasks.removeValue(forKey: id)
     }
 
     private func transferFailed(id: String, error: Error) {
@@ -212,8 +261,9 @@ final class DownloadService {
             continuation.resume(throwing: error)
             return
         }
-        // Relaunch path with no awaiting call: reflect the outcome in the row
-        // if one exists. A cancel isn't a failure to display.
+        // Adopted/relaunch path with no awaiting call: reflect the outcome in
+        // the row if one exists. A cancel isn't a failure to display.
+        activeTasks.removeValue(forKey: id)
         if (error as? URLError)?.code == .cancelled || error is CancellationError {
             activeDownloads.removeValue(forKey: id)
         } else {
@@ -241,6 +291,12 @@ final class DownloadService {
             case .downloading, .queued: return destination
             default: break
             }
+        }
+        // Likewise for an adopted orphan transfer (survived a process kill and
+        // was re-attached by adoptOrphanedTasks): a second session task under
+        // the same id would collide with its completion event.
+        if activeTasks[discourse.id] != nil {
+            return destination
         }
 
         // One transfer at a time, first-come-first-served. Join the tail of the
@@ -290,6 +346,17 @@ final class DownloadService {
         }
 
         pendingQueue.removeAll { $0 == discourse.id }
+        // The file may have appeared while we waited in the queue (an adopted
+        // background transfer committed it, or a Download All overlap) — don't
+        // re-download identical bytes.
+        if FileManager.default.fileExists(atPath: destination.path) {
+            downloadedIDs.insert(discourse.id)
+            pathMap[discourse.id] = relativePath(for: discourse)
+            saveManifest()
+            recordDownloaded(discourse.id)
+            activeDownloads[discourse.id] = DownloadProgress(progress: 1, status: .complete)
+            return destination
+        }
         activeDownloads[discourse.id] = DownloadProgress(status: .downloading)
         // However this download ends — success, failure, or cancellation — the
         // transfer slot frees, so wake whoever is next in line.
@@ -304,6 +371,14 @@ final class DownloadService {
 
             var localURL: URL?
             for (index, url) in sources.enumerated() {
+                // A cancel can land in the gap between one attempt failing and
+                // the next starting (its continuation resumes in an earlier
+                // MainActor job than our catch block). Starting the fallback
+                // anyway would run an invisible, unstoppable transfer alongside
+                // whatever download the freed slot just woke.
+                if activeDownloads[discourse.id] == nil || Task.isCancelled {
+                    throw CancellationError()
+                }
                 do {
                     localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
                     break

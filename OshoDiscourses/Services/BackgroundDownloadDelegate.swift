@@ -12,23 +12,43 @@ import Foundation
 ///
 /// Threading model: the session is created with `delegateQueue: nil`, so all
 /// callbacks arrive on one serial OperationQueue — the mutable throttle state
-/// below is only ever touched there (hence `@unchecked Sendable`). Anything
-/// that needs service state hops to the MainActor through the injected
-/// callbacks; the one thing that MUST happen synchronously on the delegate
-/// queue is moving the finished file, because iOS deletes the temp location
-/// the moment `didFinishDownloadingTo` returns.
+/// below is only ever touched there (hence `@unchecked Sendable`). The one
+/// thing that MUST happen synchronously on the delegate queue is moving the
+/// finished file, because iOS deletes the temp location the moment
+/// `didFinishDownloadingTo` returns. Everything else flows to DownloadService
+/// through a single AsyncStream.
 final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
 
-    /// Callbacks into DownloadService, wired once at service init. Each hops to
-    /// the MainActor internally. Keyed by discourse id (carried across process
-    /// death in `taskDescription` — the only task field that survives relaunch).
-    var onProgress: (@Sendable (_ discourseID: String, _ fraction: Double) -> Void)?
-    var onFinished: (@Sendable (_ discourseID: String, _ stagedURL: URL) -> Void)?
-    var onFailed: (@Sendable (_ discourseID: String, _ error: Error) -> Void)?
+    /// Everything the delegate observes, in exact arrival order.
+    ///
+    /// One FIFO AsyncStream (consumed by DownloadService on the MainActor)
+    /// instead of independent `Task { @MainActor }` hops per callback: with
+    /// independent hops, the relative order of "commit this finished file"
+    /// and "all background events drained, tell iOS we're done" was only
+    /// best-effort — losing that race after a background relaunch would let
+    /// iOS re-suspend (and later kill) the app before the commit ran,
+    /// stranding a fully-downloaded file in tmp. A stream makes the ordering
+    /// deterministic: commits are handled before the drain event.
+    enum Event: Sendable {
+        case progress(discourseID: String, fraction: Double)
+        case finished(discourseID: String, stagedURL: URL)
+        case failed(discourseID: String, error: any Error)
+        /// All queued events after a background relaunch have been delivered;
+        /// the app-provided completion handler may now be called.
+        case backgroundEventsDrained
+    }
+
+    let events: AsyncStream<Event>
+    private let continuation: AsyncStream<Event>.Continuation
 
     /// Progress throttle: URLSession fires didWriteData very frequently, and
-    /// every report spawns a MainActor hop. Only forward whole-percent changes.
+    /// every event costs a MainActor hop. Only forward whole-percent changes.
     private var lastReportedFraction: [Int: Double] = [:]
+
+    override init() {
+        (events, continuation) = AsyncStream.makeStream(of: Event.self)
+        super.init()
+    }
 
     // MARK: - URLSessionDownloadDelegate
 
@@ -45,7 +65,7 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         let last = lastReportedFraction[downloadTask.taskIdentifier] ?? 0
         guard fraction - last >= 0.01 || fraction >= 1 else { return }
         lastReportedFraction[downloadTask.taskIdentifier] = fraction
-        onProgress?(discourseID, fraction)
+        continuation.yield(.progress(discourseID: discourseID, fraction: fraction))
     }
 
     func urlSession(
@@ -60,14 +80,14 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         // error pages and 404s that must not be saved as "audio".
         if let http = downloadTask.response as? HTTPURLResponse {
             guard (200...299).contains(http.statusCode) else {
-                onFailed?(discourseID, http.statusCode == 404
+                continuation.yield(.failed(discourseID: discourseID, error: http.statusCode == 404
                     ? DownloadService.DownloadError.notFound
-                    : DownloadService.DownloadError.serverError(http.statusCode))
+                    : DownloadService.DownloadError.serverError(http.statusCode)))
                 return
             }
             let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
             if contentType.contains("text/html") {
-                onFailed?(discourseID, DownloadService.DownloadError.notAudio)
+                continuation.yield(.failed(discourseID: discourseID, error: DownloadService.DownloadError.notAudio))
                 return
             }
         }
@@ -79,10 +99,10 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         do {
             try FileManager.default.moveItem(at: location, to: staged)
         } catch {
-            onFailed?(discourseID, DownloadService.saveError(from: error))
+            continuation.yield(.failed(discourseID: discourseID, error: DownloadService.saveError(from: error)))
             return
         }
-        onFinished?(discourseID, staged)
+        continuation.yield(.finished(discourseID: discourseID, stagedURL: staged))
     }
 
     func urlSession(
@@ -94,19 +114,14 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         // Success is reported by didFinishDownloadingTo; this callback only
         // matters for transport-level failure (didFinish never fires then).
         guard let error, let discourseID = task.taskDescription else { return }
-        onFailed?(discourseID, error)
+        continuation.yield(.failed(discourseID: discourseID, error: error))
     }
 
-    // MARK: - Background relaunch handoff
-
-    /// Fires after iOS relaunched the app to deliver queued download events and
-    /// they've all been processed. Calling the stored completion handler tells
-    /// the system we're done, so it can snapshot the app and suspend it again.
-    /// Apple requires this to be called on the main thread.
+    /// Fires after iOS relaunched the app to deliver queued download events
+    /// and they've all been delivered. Because this yields into the same FIFO
+    /// stream as the finished-file events above, DownloadService is guaranteed
+    /// to commit those files before it calls the stored completion handler.
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        Task { @MainActor in
-            AppDelegate.backgroundSessionCompletionHandler?()
-            AppDelegate.backgroundSessionCompletionHandler = nil
-        }
+        continuation.yield(.backgroundEventsDrained)
     }
 }
