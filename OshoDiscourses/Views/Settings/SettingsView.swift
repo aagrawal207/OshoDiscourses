@@ -11,6 +11,7 @@ struct SettingsView: View {
                 playerSection
                 noiseReductionSection
                 appearanceSection
+                moreAppsSection
                 aboutSection
             }
             // Use the Form's native grouped background so sections render as
@@ -134,6 +135,67 @@ struct SettingsView: View {
             if settings.dailyAccentShuffle {
                 Text("The accent color changes to a new one each day.")
             }
+        }
+        .listRowBackground(Color(.secondarySystemGroupedBackground))
+    }
+
+    // MARK: - More Apps
+
+    /// Other apps by the same developer. Icons are bundled (downscaled from
+    /// each app's own asset catalog) so the rows render instantly offline;
+    /// links open the App Store product pages.
+    private struct DeveloperApp: Identifiable {
+        let name: String
+        let subtitle: String
+        let iconAsset: String
+        let storeURL: URL
+        var id: String { name }
+    }
+
+    private static let developerApps: [DeveloperApp] = [
+        DeveloperApp(
+            name: "Bruce",
+            subtitle: "Workout tracker",
+            iconAsset: "BruceIcon",
+            storeURL: URL(string: "https://apps.apple.com/app/bruce-workout-tracker/id6770409619")!
+        ),
+        DeveloperApp(
+            name: "Drop",
+            subtitle: "The falling ball",
+            iconAsset: "DropIcon",
+            storeURL: URL(string: "https://apps.apple.com/app/drop-the-falling-ball/id6789235254")!
+        ),
+    ]
+
+    private var moreAppsSection: some View {
+        Section {
+            ForEach(Self.developerApps) { app in
+                Link(destination: app.storeURL) {
+                    HStack(spacing: 12) {
+                        Image(app.iconAsset)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 40, height: 40)
+                            // App Store icon curvature ≈ 22.4% of the side.
+                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(app.name)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                            Text(app.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        } header: {
+            Text("More from the Developer")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
