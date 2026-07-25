@@ -30,9 +30,13 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
     /// stranding a fully-downloaded file in tmp. A stream makes the ordering
     /// deterministic: commits are handled before the drain event.
     enum Event: Sendable {
-        case progress(discourseID: String, fraction: Double)
-        case finished(discourseID: String, stagedURL: URL)
-        case failed(discourseID: String, error: any Error)
+        // taskID lets the service ignore terminal events from a superseded
+        // task: the stall watchdog cancels and replaces hung transfers under
+        // the same discourse id, and the old task's dying gasp must not be
+        // mistaken for the replacement's outcome.
+        case progress(discourseID: String, taskID: Int, fraction: Double)
+        case finished(discourseID: String, taskID: Int, stagedURL: URL)
+        case failed(discourseID: String, taskID: Int, error: any Error)
         /// All queued events after a background relaunch have been delivered;
         /// the app-provided completion handler may now be called.
         case backgroundEventsDrained
@@ -63,9 +67,13 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
               totalBytesExpectedToWrite > 0 else { return }
         let fraction = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
         let last = lastReportedFraction[downloadTask.taskIdentifier] ?? 0
-        guard fraction - last >= 0.01 || fraction >= 1 else { return }
+        // Report increases of >=1%, completion, AND regressions: after a
+        // network change the system can restart the transfer from byte 0, and
+        // an increase-only throttle froze the ring at the old percentage even
+        // though bytes were flowing again.
+        guard fraction - last >= 0.01 || fraction >= 1 || fraction < last else { return }
         lastReportedFraction[downloadTask.taskIdentifier] = fraction
-        continuation.yield(.progress(discourseID: discourseID, fraction: fraction))
+        continuation.yield(.progress(discourseID: discourseID, taskID: downloadTask.taskIdentifier, fraction: fraction))
     }
 
     func urlSession(
@@ -80,14 +88,14 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         // error pages and 404s that must not be saved as "audio".
         if let http = downloadTask.response as? HTTPURLResponse {
             guard (200...299).contains(http.statusCode) else {
-                continuation.yield(.failed(discourseID: discourseID, error: http.statusCode == 404
+                continuation.yield(.failed(discourseID: discourseID, taskID: downloadTask.taskIdentifier, error: http.statusCode == 404
                     ? DownloadService.DownloadError.notFound
                     : DownloadService.DownloadError.serverError(http.statusCode)))
                 return
             }
             let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
             if contentType.contains("text/html") {
-                continuation.yield(.failed(discourseID: discourseID, error: DownloadService.DownloadError.notAudio))
+                continuation.yield(.failed(discourseID: discourseID, taskID: downloadTask.taskIdentifier, error: DownloadService.DownloadError.notAudio))
                 return
             }
         }
@@ -99,10 +107,10 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         do {
             try FileManager.default.moveItem(at: location, to: staged)
         } catch {
-            continuation.yield(.failed(discourseID: discourseID, error: DownloadService.saveError(from: error)))
+            continuation.yield(.failed(discourseID: discourseID, taskID: downloadTask.taskIdentifier, error: DownloadService.saveError(from: error)))
             return
         }
-        continuation.yield(.finished(discourseID: discourseID, stagedURL: staged))
+        continuation.yield(.finished(discourseID: discourseID, taskID: downloadTask.taskIdentifier, stagedURL: staged))
     }
 
     func urlSession(
@@ -114,7 +122,7 @@ final class BackgroundDownloadDelegate: NSObject, URLSessionDownloadDelegate, @u
         // Success is reported by didFinishDownloadingTo; this callback only
         // matters for transport-level failure (didFinish never fires then).
         guard let error, let discourseID = task.taskDescription else { return }
-        continuation.yield(.failed(discourseID: discourseID, error: error))
+        continuation.yield(.failed(discourseID: discourseID, taskID: task.taskIdentifier, error: error))
     }
 
     /// Fires after iOS relaunched the app to deliver queued download events

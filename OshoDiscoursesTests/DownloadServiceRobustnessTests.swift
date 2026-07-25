@@ -74,4 +74,44 @@ struct DownloadServiceRobustnessTests {
         // Short enough to fit a row subtitle without truncation.
         #expect(description.count < 60)
     }
+
+    // MARK: - Stall watchdog (network-change hang recovery)
+    //
+    // Background sessions never fail fast when connectivity changes — after a
+    // network switch the connection can hang dead without an error until the
+    // 6h resource timeout. The watchdog restarts a transfer that hasn't moved
+    // within the threshold, bounded by a per-attempt restart budget.
+
+    @Test func stalledTransferPastThresholdRestarts() {
+        let last = Date(timeIntervalSinceNow: -DownloadService.stallThreshold - 1)
+        #expect(DownloadService.shouldRestartStalledTransfer(
+            lastProgress: last, now: Date(), restartsSoFar: 0))
+    }
+
+    @Test func activeTransferWithinThresholdDoesNotRestart() {
+        let last = Date(timeIntervalSinceNow: -30)
+        #expect(!DownloadService.shouldRestartStalledTransfer(
+            lastProgress: last, now: Date(), restartsSoFar: 0))
+    }
+
+    @Test func restartBudgetIsBounded() {
+        // A transfer legitimately waiting (e.g. cellular gate closed, waiting
+        // for Wi-Fi) must not be churned forever — after the budget the
+        // system's own retry/timeout semantics take over.
+        let last = Date(timeIntervalSinceNow: -3600)
+        #expect(DownloadService.shouldRestartStalledTransfer(
+            lastProgress: last, now: Date(), restartsSoFar: DownloadService.maxStallRestarts - 1))
+        #expect(!DownloadService.shouldRestartStalledTransfer(
+            lastProgress: last, now: Date(), restartsSoFar: DownloadService.maxStallRestarts))
+    }
+
+    @Test func stallThresholdIsAtExactBoundary() {
+        let now = Date()
+        let atThreshold = now.addingTimeInterval(-DownloadService.stallThreshold)
+        #expect(DownloadService.shouldRestartStalledTransfer(
+            lastProgress: atThreshold, now: now, restartsSoFar: 0))
+        let justUnder = now.addingTimeInterval(-DownloadService.stallThreshold + 1)
+        #expect(!DownloadService.shouldRestartStalledTransfer(
+            lastProgress: justUnder, now: now, restartsSoFar: 0))
+    }
 }

@@ -180,17 +180,25 @@ final class DownloadService {
             for await event in stream {
                 guard let self else { return }
                 switch event {
-                case .progress(let id, let fraction):
-                    // Only a transferring row may move — a late report from a
+                case .progress(let id, let taskID, let fraction):
+                    // Only the CURRENT task for this id may move the row — a
+                    // superseded (stall-restarted) task's late report must not
+                    // overwrite the replacement's progress, and only a
+                    // transferring row may move at all (a late report from a
                     // failed first attempt must not overwrite the retry's
-                    // reset-to-zero, and a completed row must never regress.
+                    // reset-to-zero, nor a completed row regress).
+                    guard self.activeTasks[id]?.taskIdentifier == taskID else { break }
+                    self.lastProgressAt[id] = Date()
                     if case .downloading = self.activeDownloads[id]?.status {
                         self.activeDownloads[id]?.progress = fraction
                     }
-                case .finished(let id, let stagedURL):
+                case .finished(let id, _, let stagedURL):
+                    // A finished file is accepted from ANY task generation —
+                    // even one we were about to restart. transferFinished
+                    // cancels whatever task is current for the id.
                     self.transferFinished(id: id, stagedURL: stagedURL)
-                case .failed(let id, let error):
-                    self.transferFailed(id: id, error: error)
+                case .failed(let id, let taskID, let error):
+                    self.transferFailed(id: id, taskID: taskID, error: error)
                 case .backgroundEventsDrained:
                     AppDelegate.backgroundSessionCompletionHandler?()
                     AppDelegate.backgroundSessionCompletionHandler = nil
@@ -222,8 +230,13 @@ final class DownloadService {
                         if self.activeDownloads[id] == nil {
                             self.activeDownloads[id] = DownloadProgress(status: .downloading)
                         }
+                        // Watchdog coverage for adopted transfers too — they're
+                        // the ones most likely to have gone stale across the
+                        // relaunch.
+                        self.lastProgressAt[id] = Date()
                     }
                 }
+                if !downloads.isEmpty { self.ensureWatchdogRunning() }
             }
         }
     }
@@ -232,6 +245,14 @@ final class DownloadService {
     /// suspended waiting for it; after a background relaunch there is no
     /// waiting call (the process that awaited died), so commit directly.
     private func transferFinished(id: String, stagedURL: URL) {
+        // Whatever task is registered for this id is now moot: normally it IS
+        // the finishing task (cancel is a no-op), but if a stall restart was
+        // in flight it's the replacement — kill it so it doesn't download the
+        // same bytes again. Deregister immediately so the cancelled
+        // replacement's terminal event can't be mistaken for a real outcome.
+        activeTasks[id]?.cancel()
+        activeTasks.removeValue(forKey: id)
+        clearStallTracking(id)
         if let continuation = transferContinuations.removeValue(forKey: id) {
             continuation.resume(returning: stagedURL)
             return
@@ -256,19 +277,132 @@ final class DownloadService {
         activeTasks.removeValue(forKey: id)
     }
 
-    private func transferFailed(id: String, error: Error) {
+    private func transferFailed(id: String, taskID: Int, error: Error) {
+        // A terminal event from a superseded task: the stall watchdog cancelled
+        // it and (has installed / is installing) a replacement. While the
+        // restart is mid-swap the id is marked in restartingIDs; after the
+        // swap the identity check catches it. Either way the awaiting
+        // download() keeps waiting for the replacement's outcome.
+        if restartingIDs.contains(id) { return }
+        if let current = activeTasks[id], current.taskIdentifier != taskID { return }
+
+        clearStallTracking(id)
         if let continuation = transferContinuations.removeValue(forKey: id) {
             continuation.resume(throwing: error)
             return
         }
-        // Adopted/relaunch path with no awaiting call: reflect the outcome in
-        // the row if one exists. A cancel isn't a failure to display.
+        // No awaiting call (adopted transfer, or a stale event from a task
+        // that was deregistered). Only an actively-transferring row may be
+        // touched — a late cancel must never clobber a completed row.
         activeTasks.removeValue(forKey: id)
+        guard case .downloading = activeDownloads[id]?.status else { return }
         if (error as? URLError)?.code == .cancelled || error is CancellationError {
             activeDownloads.removeValue(forKey: id)
         } else {
             activeDownloads[id]?.status = .failed(error.localizedDescription)
         }
+    }
+
+    // MARK: - Stall Watchdog
+
+    /// Background sessions never fail fast when connectivity changes: after a
+    /// network switch the old connection to the (ephemeral) archive datanode
+    /// can hang dead without erroring, and the transfer sits frozen until the
+    /// 6-hour resource timeout. The watchdog notices a transfer that hasn't
+    /// moved in `stallThreshold` and restarts it — with resume data when the
+    /// server offers it, from scratch otherwise — up to `maxStallRestarts`
+    /// times per attempt, keeping the same awaited continuation.
+    nonisolated static let stallThreshold: TimeInterval = 120
+    nonisolated static let maxStallRestarts = 2
+
+    private var lastProgressAt: [String: Date] = [:]
+    private var stallRestarts: [String: Int] = [:]
+    /// The request each in-flight transfer was started with, for from-scratch
+    /// restarts when no resume data is available.
+    private var transferRequests: [String: URLRequest] = [:]
+    /// Ids whose task is being swapped by the watchdog right now: terminal
+    /// events for them are the old task dying, not a real outcome.
+    private var restartingIDs: Set<String> = []
+    private var watchdogTask: Task<Void, Never>?
+
+    /// Pure stall rule, unit-testable: restart only when the transfer hasn't
+    /// progressed within the threshold AND the restart budget isn't exhausted.
+    nonisolated static func shouldRestartStalledTransfer(
+        lastProgress: Date,
+        now: Date,
+        restartsSoFar: Int,
+        threshold: TimeInterval = DownloadService.stallThreshold,
+        maxRestarts: Int = DownloadService.maxStallRestarts
+    ) -> Bool {
+        restartsSoFar < maxRestarts && now.timeIntervalSince(lastProgress) >= threshold
+    }
+
+    private func ensureWatchdogRunning() {
+        guard watchdogTask == nil else { return }
+        watchdogTask = Task { @MainActor [weak self] in
+            defer { self?.watchdogTask = nil }
+            while let self, !self.activeTasks.isEmpty {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { return }
+                self.checkForStalledTransfers()
+            }
+        }
+    }
+
+    private func checkForStalledTransfers() {
+        let now = Date()
+        for (id, task) in activeTasks where task.state == .running {
+            guard case .downloading = activeDownloads[id]?.status,
+                  !restartingIDs.contains(id),
+                  let last = lastProgressAt[id],
+                  Self.shouldRestartStalledTransfer(
+                      lastProgress: last, now: now, restartsSoFar: stallRestarts[id] ?? 0
+                  ) else { continue }
+            restartStalledTransfer(id: id)
+        }
+    }
+
+    private func restartStalledTransfer(id: String) {
+        guard let stalled = activeTasks[id] else { return }
+        stallRestarts[id, default: 0] += 1
+        // Mark BEFORE cancelling: the old task's .cancelled event can arrive
+        // before the resume-data completion runs, and it must not be taken
+        // for the transfer's real outcome.
+        restartingIDs.insert(id)
+        print("[Downloads] transfer for \(id) stalled; restarting (attempt \(stallRestarts[id] ?? 0))")
+        stalled.cancel { [weak self] resumeData in
+            // Completion arrives off-main; the data is Sendable.
+            Task { @MainActor [weak self] in
+                self?.installReplacementTask(id: id, resumeData: resumeData)
+            }
+        }
+    }
+
+    private func installReplacementTask(id: String, resumeData: Data?) {
+        defer { restartingIDs.remove(id) }
+        // The transfer may have concluded in the cancel window (file finished
+        // and resumed the continuation, or the user cancelled the download) —
+        // nothing left to replace.
+        guard transferContinuations[id] != nil, activeDownloads[id] != nil else { return }
+        let task: URLSessionDownloadTask
+        if let resumeData {
+            task = backgroundSession.downloadTask(withResumeData: resumeData)
+        } else if let request = transferRequests[id] {
+            task = backgroundSession.downloadTask(with: request)
+        } else {
+            return
+        }
+        task.taskDescription = id
+        activeTasks[id] = task
+        lastProgressAt[id] = Date()
+        task.resume()
+    }
+
+    private func clearStallTracking(_ id: String) {
+        lastProgressAt.removeValue(forKey: id)
+        stallRestarts.removeValue(forKey: id)
+        transferRequests.removeValue(forKey: id)
+        restartingIDs.remove(id)
     }
 
     // MARK: - Public
@@ -567,11 +701,16 @@ final class DownloadService {
     }
 
     func cancelDownload(discourseID: String) {
-        // Cancelling the URLSession task makes the delegate deliver
-        // didCompleteWithError(.cancelled), which resumes the transfer
-        // continuation throwing — the awaiting download() call unwinds from there.
         activeTasks[discourseID]?.cancel()
         activeTasks.removeValue(forKey: discourseID)
+        // Unwind the awaiting download() directly instead of relying on the
+        // task's .cancelled delegate event: during a watchdog restart the old
+        // task's terminal events are deliberately suppressed, and depending on
+        // them here would leave the continuation parked forever.
+        if let continuation = transferContinuations.removeValue(forKey: discourseID) {
+            continuation.resume(throwing: CancellationError())
+        }
+        clearStallTracking(discourseID)
         pendingQueue.removeAll { $0 == discourseID }
         activeDownloads.removeValue(forKey: discourseID)
         // A queued download is parked on a continuation, not a network task —
@@ -886,8 +1025,11 @@ final class DownloadService {
         request.allowsCellularAccess = UserSettings.shared.allowCellularDownloads
 
         // Whether the transfer completes, throws, or is cancelled, drop the
-        // task handle for this id so nothing leaks.
-        defer { activeTasks.removeValue(forKey: discourseID) }
+        // task handle and stall-tracking for this id so nothing leaks.
+        defer {
+            activeTasks.removeValue(forKey: discourseID)
+            clearStallTracking(discourseID)
+        }
 
         // The transfer runs on the background session so it survives app
         // switches, the lock screen, and even process death (see
@@ -905,6 +1047,13 @@ final class DownloadService {
                     // discourse a finished file belongs to.
                     task.taskDescription = discourseID
                     activeTasks[discourseID] = task
+                    // Arm the stall watchdog: a network change can leave the
+                    // connection hanging dead without an error, and only the
+                    // watchdog gets it moving again.
+                    transferRequests[discourseID] = request
+                    lastProgressAt[discourseID] = Date()
+                    stallRestarts[discourseID] = 0
+                    ensureWatchdogRunning()
                     task.resume()
                 }
             } onCancel: {
