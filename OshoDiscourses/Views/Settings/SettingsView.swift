@@ -195,7 +195,7 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("More from the Developer")
+            Text("My Other Apps")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
