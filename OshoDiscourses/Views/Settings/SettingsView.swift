@@ -74,9 +74,17 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
         } header: {
-            Text("Noise Reduction")
+            HStack(spacing: 6) {
+                Text("Noise Reduction")
+                Text("BETA")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.accent)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.accent.opacity(0.15), in: Capsule())
+            }
         } footer: {
-            Text("Reduces background hiss and hum during playback using on-device speech filtering. It can slightly soften the voice — Light keeps speech clearest, Strong removes the most noise. You can also long-press the Denoise button in the player to change strength.")
+            Text("Beta: this feature is still being tuned and results vary by recording — some talks clean up nicely, others may sound softened or artifacted. Reduces background hiss and hum during playback using on-device speech filtering. Light keeps speech clearest, Strong removes the most noise. You can also long-press the Denoise button in the player to change strength. If it doesn't sound right, just turn it off.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }

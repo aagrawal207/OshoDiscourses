@@ -446,6 +446,24 @@ struct PlayerView: View {
 
     private var denoisePickerContent: some View {
         VStack(spacing: 4) {
+            // Beta banner: results vary by recording, and the picker is where
+            // the user actually engages the feature — set expectations here,
+            // not just in Settings.
+            HStack(spacing: 6) {
+                Text("Noise Reduction")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("BETA")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.accent)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.accent.opacity(0.15), in: Capsule())
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 2)
+
             // Off row — the toggle that used to be the whole control.
             Button {
                 player.isNoiseReductionEnabled = false
