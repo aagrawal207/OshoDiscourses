@@ -42,7 +42,7 @@ final class DownloadService {
 
         var errorDescription: String? {
             switch self {
-            case .wifiOnly:  return "Wi-Fi only — turn on \"Download over Cellular\" in Settings."
+            case .wifiOnly:  return "Wi-Fi only. Turn on \"Download over Cellular\" in Settings."
             case .notFound:  return "Not available on the server (404)."
             case .serverError(let code): return "Server error (HTTP \(code))."
             case .notAudio:  return "Server returned a web page, not audio."

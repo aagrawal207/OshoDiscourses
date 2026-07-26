@@ -84,7 +84,7 @@ struct SettingsView: View {
                     .background(Color.accent.opacity(0.15), in: Capsule())
             }
         } footer: {
-            Text("Beta: this feature is still being tuned and results vary by recording — some talks clean up nicely, others may sound softened or artifacted. Reduces background hiss and hum during playback using on-device speech filtering. Light keeps speech clearest, Strong removes the most noise. You can also long-press the Denoise button in the player to change strength. If it doesn't sound right, just turn it off.")
+            Text("Filters out background hiss and hum using on-device speech filtering. This is still a beta: some talks clean up nicely, others end up sounding a bit muffled. It depends on the recording. Light keeps the voice clearest, Strong removes the most noise. If a talk sounds off, just switch it off. You can also long-press the Denoise button in the player to change strength.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -233,8 +233,8 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Acknowledgements: All discourses are copyright OSHO International Foundation. Audio is served from oshoworld.com.")
                 Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
-                Text("Support keeps development going — new features, fixes, and upkeep. It's a voluntary thank-you for the app, not a purchase, and unlocks nothing.")
-                Text("Your listening progress, bookmarks, and stats sync across your devices through your own iCloud. Everything else stays on this device. No accounts, no servers, no analytics, no tracking.")
+                Text("If the app is useful to you, a coffee helps me keep working on it. It's a voluntary thank-you, not a purchase, and unlocks nothing.")
+                Text("Your listening progress, bookmarks, and stats sync between your devices through your own iCloud. Everything else stays on your phone. There are no accounts, no servers, and no tracking of any kind.")
             }
             .padding(.top, 8)
         }

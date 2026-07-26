@@ -39,49 +39,49 @@ enum SeriesMetadata {
     private static let descriptions: [String: SeriesDescription] = [
         // Popular English
         "Vigyan Bhairav Tantra Vol 1": SeriesDescription(
-            sourceText: "Discourses on the ancient Shiva Sutra text, 112 meditation techniques given by Shiva to Devi. Each discourse explains and guides through specific meditation methods from this foundational tantra scripture.",
+            sourceText: "The 112 meditation techniques Shiva gives Devi in the Vigyan Bhairav Tantra. Each talk takes up specific methods from this old tantra text and how to actually practice them.",
             year: "1972-73",
             location: "Mumbai",
             themes: ["meditation techniques", "tantra", "Shiva", "awareness", "consciousness"]
         ),
         "Vigyan Bhairav Tantra Vol 2": SeriesDescription(
-            sourceText: "Continuation of discourses on the 112 meditation techniques from the ancient Vigyan Bhairav Tantra. Covers breathing methods, visualization, sound meditation, and awareness practices.",
+            sourceText: "Picks up where Vol 1 left off with the remaining techniques of the Vigyan Bhairav Tantra: breathing methods, visualization, sound meditation, awareness practices.",
             year: "1972-73",
             location: "Mumbai",
             themes: ["meditation techniques", "tantra", "breathing", "visualization", "sound"]
         ),
         "Beyond Enlightenment": SeriesDescription(
-            sourceText: "Talks exploring what happens after spiritual awakening. Addresses the nature of consciousness beyond the mind, living in the world after realization, and the difference between knowledge and knowing.",
+            sourceText: "What happens after awakening? Consciousness beyond the mind, living an ordinary life after realization, and why knowing is not the same as knowledge.",
             year: "1986",
             location: "Pune",
             themes: ["enlightenment", "consciousness", "beyond mind", "awakening", "spiritual growth"]
         ),
         "The Mustard Seed": SeriesDescription(
-            sourceText: "Discourses on the sayings of Jesus from the Gospel of Thomas, a gnostic text discovered at Nag Hammadi. Interprets Christ's parables through the lens of Eastern mysticism.",
+            sourceText: "Jesus through the Gospel of Thomas, the gnostic text found at Nag Hammadi. Osho reads Christ's parables the way an Eastern mystic would, and they come out looking very different.",
             year: "1974",
             location: "Pune",
             themes: ["Jesus", "Gospel of Thomas", "Christianity", "mysticism", "parables"]
         ),
         "The Book of Wisdom": SeriesDescription(
-            sourceText: "Discourses on Atisha's Seven Points of Mind Training, a Tibetan Buddhist text on compassion and awareness. Covers the path of the bodhisattva and transforming everyday life into meditation.",
+            sourceText: "Atisha's Seven Points of Mind Training, a Tibetan Buddhist text on compassion and awareness. About the bodhisattva's path, and how everyday life becomes the meditation.",
             year: "1979",
             location: "Pune",
             themes: ["Atisha", "Tibetan Buddhism", "compassion", "mind training", "bodhisattva"]
         ),
         "Tao Vol 1 Absolute Tao": SeriesDescription(
-            sourceText: "Discourses on Lao Tzu's Tao Te Ching. Explores the nature of the Tao as the ultimate reality beyond words, the art of effortless living, and the wisdom of water and emptiness.",
+            sourceText: "Lao Tzu's Tao Te Ching. The Tao that can't be put into words, the art of effortless living, and what water and emptiness have to teach.",
             year: "1975",
             location: "Pune",
             themes: ["Lao Tzu", "Tao Te Ching", "Taoism", "effortlessness", "wu-wei", "emptiness"]
         ),
         "Beyond Psychology": SeriesDescription(
-            sourceText: "Talks during the world tour after leaving Oregon. Covers the limits of Western psychology, moving from therapy to meditation, and the difference between the mind and consciousness.",
+            sourceText: "Talks from the world tour after Oregon. Where Western psychology stops, why therapy isn't meditation, and the difference between mind and consciousness.",
             year: "1986",
             location: "Uruguay",
             themes: ["psychology", "meditation vs therapy", "consciousness", "mind", "freedom"]
         ),
         "The Dhammapada Way of Buddha Vol 1": SeriesDescription(
-            sourceText: "Discourses on the Dhammapada, the collected sayings of Gautama Buddha. Each talk illuminates Buddha's practical teachings on suffering, desire, awareness, and the middle way.",
+            sourceText: "The Dhammapada, Gautama Buddha's collected sayings. Practical talks on suffering, desire, awareness, and the middle way.",
             year: "1979",
             location: "Pune",
             themes: ["Buddha", "Dhammapada", "Buddhism", "suffering", "middle way", "awareness"]
@@ -89,49 +89,49 @@ enum SeriesMetadata {
 
         // Beginner English
         "A Bird on the Wing": SeriesDescription(
-            sourceText: "Eleven Zen stories explored through discourse. Each story is a koan that points beyond the rational mind toward sudden awakening and the absurd nature of enlightenment.",
+            sourceText: "Eleven Zen stories. Each one is a koan that refuses to make rational sense, and that's the point: awakening comes as a jolt, not a conclusion.",
             year: "1974",
             location: "Mumbai",
             themes: ["Zen", "koans", "stories", "awakening", "paradox", "beginner friendly"]
         ),
         "Ancient Music In The Pines": SeriesDescription(
-            sourceText: "Discourses on Zen stories and the art of listening to existence. Explores silence, the music that exists between sounds, and the meditative quality of simply being present.",
+            sourceText: "Zen stories about listening to existence. Silence, the music between sounds, and what it's like to simply be present.",
             year: "1976",
             location: "Pune",
             themes: ["Zen", "silence", "listening", "presence", "nature", "music"]
         ),
         "A Sudden Clash of Thunder": SeriesDescription(
-            sourceText: "Discourses on Zen stories exploring the moment of awakening — sudden, unexpected, like thunder. How enlightenment is not gradual but a discontinuous leap.",
+            sourceText: "Zen stories about the moment of awakening. It arrives like thunder, sudden and uninvited, not as the last step of a gradual climb.",
             year: "1976",
             location: "Pune",
             themes: ["Zen", "sudden awakening", "satori", "stories", "discontinuity"]
         ),
         "Come Come Yet Again Come": SeriesDescription(
-            sourceText: "Named after Rumi's poem of unconditional welcome. Discourses on Sufi stories and the path of love, devotion, and surrender. Emphasizes that the door is always open regardless of past.",
+            sourceText: "Named after Rumi's poem of unconditional welcome. Sufi stories on love, devotion, and surrender. Whatever your past, the door stays open.",
             year: "1980",
             location: "Pune",
             themes: ["Sufism", "Rumi", "love", "devotion", "acceptance", "welcome"]
         ),
         "Be Still and Know": SeriesDescription(
-            sourceText: "Discourses on the biblical phrase 'Be still and know that I am God.' Explores stillness as the doorway to knowing, the difference between belief and experience, and inner silence.",
+            sourceText: "'Be still and know that I am God.' Talks on stillness as the doorway to knowing, and why belief is a poor substitute for experience.",
             year: "1979",
             location: "Pune",
             themes: ["stillness", "silence", "knowing", "meditation", "God", "experience"]
         ),
         "The Hidden Harmony": SeriesDescription(
-            sourceText: "Discourses on the fragments of Heraclitus, the pre-Socratic Greek philosopher. Explores the unity of opposites, the ever-flowing nature of existence, and the logos.",
+            sourceText: "The surviving fragments of Heraclitus, the pre-Socratic Greek. Opposites that turn out to be one, a world in constant flow, and the logos.",
             year: "1974",
             location: "Pune",
             themes: ["Heraclitus", "Greek philosophy", "opposites", "change", "logos", "unity"]
         ),
         "Ah This": SeriesDescription(
-            sourceText: "Discourses on Zen, centering on the realization expressed as 'Ah, this!' — the recognition that what you seek is already here. Points to the ordinary as the extraordinary.",
+            sourceText: "Zen talks circling one recognition: what you're looking for is already here. 'Ah, this!' The ordinary turns out to be the extraordinary.",
             year: "1980",
             location: "Pune",
             themes: ["Zen", "here and now", "ordinary mind", "recognition", "simplicity"]
         ),
         "And the Flowers Showered": SeriesDescription(
-            sourceText: "Eleven Zen stories about disciples who suddenly flower into awakening. Each story shows a different way the mind drops and understanding arises without effort.",
+            sourceText: "Eleven Zen stories of disciples suddenly flowering into awakening. In each one the mind drops in a different way, without effort.",
             year: "1974",
             location: "Pune",
             themes: ["Zen", "stories", "awakening", "flowering", "effortlessness", "grace"]
@@ -139,43 +139,43 @@ enum SeriesMetadata {
 
         // Popular Hindi
         "Ashtavakra Maha Geeta": SeriesDescription(
-            sourceText: "Discourses on the Ashtavakra Gita (Ashtavakra Samhita), a dialogue between sage Ashtavakra and King Janaka on the nature of the Self, reality, and liberation. Considered among the most direct teachings on Advaita.",
+            sourceText: "The Ashtavakra Gita (Ashtavakra Samhita), a dialogue between the sage Ashtavakra and King Janaka about the Self, reality, and liberation. Possibly the most direct Advaita teaching there is.",
             year: "1976",
             location: "Pune",
             themes: ["Ashtavakra", "Advaita", "self-realization", "Janaka", "liberation", "non-duality"]
         ),
         "Geeta Darshan Vol 1-2": SeriesDescription(
-            sourceText: "Discourses on the Bhagavad Gita. Krishna's teaching to Arjuna interpreted as an inner dialogue — the battlefield as a metaphor for inner conflict, action versus renunciation, and the paths of yoga.",
+            sourceText: "The Bhagavad Gita read as an inner dialogue. The battlefield is your own conflict, and Krishna and Arjuna argue out action, renunciation, and the paths of yoga.",
             year: "1970-71",
             location: "Mumbai",
             themes: ["Bhagavad Gita", "Krishna", "Arjuna", "karma yoga", "dharma", "action"]
         ),
         "Tao Upanishad": SeriesDescription(
-            sourceText: "Hindi discourses on Lao Tzu's Tao Te Ching. The path of effortlessness, flowing with nature, the wisdom of the valley, and how doing nothing leads to everything being done.",
+            sourceText: "Lao Tzu's Tao Te Ching in Hindi. Effortlessness, flowing with nature, the wisdom of the valley, and how doing nothing gets everything done.",
             year: "1971-72",
             location: "Mumbai",
             themes: ["Lao Tzu", "Tao", "effortlessness", "nature", "wu-wei", "Hindi"]
         ),
         "Bhakti Sutra": SeriesDescription(
-            sourceText: "Discourses on Narada's Bhakti Sutras — aphorisms on devotion. The path of love and surrender, the nature of divine love versus attachment, and how bhakti leads to liberation.",
+            sourceText: "Narada's Bhakti Sutras, his aphorisms on devotion. Love and surrender as a path, how divine love differs from attachment, and where bhakti finally leads.",
             year: "1976",
             location: "Pune",
             themes: ["Narada", "bhakti", "devotion", "love", "surrender", "Hindi"]
         ),
         "Athato Bhakti Jigyasa": SeriesDescription(
-            sourceText: "An inquiry into devotion. Explores the nature of bhakti (devotion) as a spiritual path — love as a method, the relationship between lover and beloved, and the dissolution of the ego through surrender.",
+            sourceText: "An inquiry into devotion. Bhakti as a spiritual path: love as a method, the lover and the beloved, and the ego dissolving through surrender.",
             year: "1978",
             location: "Pune",
             themes: ["bhakti", "devotion", "inquiry", "love", "ego dissolution", "Hindi"]
         ),
         "Sahaj Yog": SeriesDescription(
-            sourceText: "Discourses on natural or spontaneous yoga — the effortless path that arises from within. Covers meditation without technique, living in the flow, and the spontaneity of spiritual growth.",
+            sourceText: "Natural, spontaneous yoga. Meditation without technique, living in the flow, growth that arises on its own instead of being forced.",
             year: "1970",
             location: "Mumbai",
             themes: ["sahaj", "natural yoga", "spontaneity", "effortless meditation", "Hindi"]
         ),
         "Shiv Sutra": SeriesDescription(
-            sourceText: "Discourses on Shiva Sutras, an ancient Kashmir Shaivism text attributed to sage Vasugupta. Explores the nature of consciousness, methods of awakening, and the recognition of one's divine nature.",
+            sourceText: "The Shiva Sutras of Kashmir Shaivism, attributed to the sage Vasugupta. The nature of consciousness, methods of awakening, and recognizing what you already are.",
             year: "1974",
             location: "Pune",
             themes: ["Shiva Sutras", "Kashmir Shaivism", "consciousness", "Vasugupta", "recognition", "Hindi"]
@@ -183,43 +183,43 @@ enum SeriesMetadata {
 
         // Beginner Hindi
         "Main Mrityu Sikhata Hun": SeriesDescription(
-            sourceText: "I teach death. Discourses on understanding death as a doorway — how awareness of mortality transforms life, the art of dying consciously, and death as the ultimate meditation.",
+            sourceText: "'I teach death.' Death as a doorway: facing mortality changes how you live, and dying consciously is the last meditation.",
             year: "1969",
             location: "Mumbai",
             themes: ["death", "awareness", "mortality", "conscious dying", "transformation", "Hindi"]
         ),
         "Dhyan Sutra": SeriesDescription(
-            sourceText: "Meditation sutras — practical instructions on how to meditate. Covers posture, breathing, watching thoughts, and various techniques for beginners entering the world of meditation.",
+            sourceText: "Practical meditation instruction. Posture, breathing, watching thoughts, and techniques for anyone just starting out.",
             year: "1970",
             location: "Mumbai",
             themes: ["meditation", "practical instructions", "beginner", "techniques", "Hindi"]
         ),
         "Antar Ki Khoj": SeriesDescription(
-            sourceText: "The inner search. Talks on turning inward, the journey from the outer world to inner silence. A beginner-friendly introduction to meditation and self-inquiry.",
+            sourceText: "The inner search. Turning inward, from the noise of the outer world to inner silence. A gentle place to start with meditation and self-inquiry.",
             year: "1970",
             location: "Mumbai",
             themes: ["inner search", "meditation", "silence", "self-inquiry", "beginner", "Hindi"]
         ),
         "Agyat Ki Aur": SeriesDescription(
-            sourceText: "Toward the unknown. Discourses on the courage to step into the unknown, dropping the security of knowledge and belief, and embracing uncertainty as the path to truth.",
+            sourceText: "Toward the unknown. On the courage to drop the safety of knowledge and belief and step into uncertainty, because that's where truth is.",
             year: "1970",
             location: "Mumbai",
             themes: ["unknown", "courage", "uncertainty", "truth seeking", "Hindi"]
         ),
         "Amrit Ki Disha": SeriesDescription(
-            sourceText: "The direction of nectar/immortality. Talks on the deathless consciousness within, how to taste the nectar of existence through meditation and awareness.",
+            sourceText: "The direction of nectar, of immortality. Talks on the consciousness in you that doesn't die, and tasting it through meditation and awareness.",
             year: "1969",
             location: "Mumbai",
             themes: ["immortality", "nectar", "consciousness", "awareness", "Hindi"]
         ),
         "Naye Samaj Ki Khoj": SeriesDescription(
-            sourceText: "In search of a new society. Talks on transforming society through individual transformation — how a new human consciousness can create a new civilization.",
+            sourceText: "In search of a new society. Society doesn't change by decree, it changes when individuals do. Talks on what a new human consciousness could build.",
             year: "1969",
             location: "Mumbai",
             themes: ["society", "transformation", "new man", "consciousness", "Hindi"]
         ),
         "Jeevan Kranti Ke Sutra": SeriesDescription(
-            sourceText: "Sutras for life revolution. Practical principles for radical inner transformation — how to revolutionize your daily life through awareness, love, and meditation.",
+            sourceText: "Sutras for a revolution in living. Practical principles for changing your daily life from the inside, through awareness, love, and meditation.",
             year: "1969",
             location: "Mumbai",
             themes: ["revolution", "transformation", "practical", "daily life", "Hindi"]
@@ -227,13 +227,13 @@ enum SeriesMetadata {
 
         // Additional well-known series
         "Bodhidharma The Greatest Zen Master": SeriesDescription(
-            sourceText: "Discourses on Bodhidharma, who brought Zen from India to China. Explores his teachings on mind, emptiness, direct pointing, and the famous 'wall-gazing' meditation.",
+            sourceText: "Bodhidharma, the man who carried Zen from India to China. Mind, emptiness, direct pointing, and his famous nine years of gazing at a wall.",
             year: "1987",
             location: "Pune",
             themes: ["Bodhidharma", "Zen", "China", "wall-gazing", "direct pointing", "emptiness"]
         ),
         "Christianity and Zen": SeriesDescription(
-            sourceText: "A comparison between Christian mysticism and Zen Buddhism. Explores where they meet in silence and where they diverge in theology, ritual, and approach to the divine.",
+            sourceText: "Christian mysticism and Zen Buddhism side by side. They meet in silence. They part ways over theology, ritual, and how each approaches the divine.",
             year: "1987",
             location: "Pune",
             themes: ["Christianity", "Zen", "mysticism", "comparison", "silence"]
