@@ -15,7 +15,7 @@ enum ReviewRequestService {
 
     /// Distinct days of listening before the first ask. Five matches the common
     /// "engaged, not brand-new" bar without waiting so long that goodwill fades.
-    private static let activeDaysThreshold = 5
+    nonisolated static let activeDaysThreshold = 5
 
     private static let defaults = UserDefaults.standard
     private static let lastPromptedVersionKey = "review.lastPromptedVersion"
@@ -24,12 +24,31 @@ enum ReviewRequestService {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
     }
 
+    nonisolated static func isEligible(
+        activeDays: Int,
+        lastPromptedVersion: String?,
+        currentVersion: String
+    ) -> Bool {
+        activeDays >= activeDaysThreshold && lastPromptedVersion != currentVersion
+    }
+
+    nonisolated static func isGoodMoment(
+        completionWasNatural: Bool,
+        playbackContinues: Bool,
+        sleepTimerWasArmed: Bool
+    ) -> Bool {
+        completionWasNatural && !playbackContinues && !sleepTimerWasArmed
+    }
+
     /// Call after a natural high point (e.g. finishing a discourse). Requests a
     /// review only if the listener has enough active days and hasn't already been
     /// asked on this version. Safe to call often — it self-gates.
     static func requestReviewIfAppropriate() {
-        guard ListeningStatsService.shared.distinctActiveDays >= activeDaysThreshold else { return }
-        guard defaults.string(forKey: lastPromptedVersionKey) != currentVersion else { return }
+        guard isEligible(
+            activeDays: ListeningStatsService.shared.distinctActiveDays,
+            lastPromptedVersion: defaults.string(forKey: lastPromptedVersionKey),
+            currentVersion: currentVersion
+        ) else { return }
 
         guard let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {

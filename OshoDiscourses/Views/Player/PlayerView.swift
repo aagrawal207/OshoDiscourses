@@ -347,7 +347,7 @@ struct PlayerView: View {
 
             playerControlButton(
                 icon: player.isNoiseReductionEnabled ? "waveform.slash" : "waveform",
-                label: player.isNoiseReductionEnabled ? player.denoiseStrength.label : "Denoise",
+                label: denoiseButtonLabel,
                 isActive: player.isNoiseReductionEnabled
             ) {
                 showDenoisePicker.toggle()
@@ -356,17 +356,21 @@ struct PlayerView: View {
                 denoisePickerContent
             }
             .accessibilityLabel("Denoise")
-            .accessibilityValue(player.isNoiseReductionEnabled ? "On, \(player.denoiseStrength.label)" : "Off")
+            .accessibilityValue(
+                player.isNoiseReductionEnabled
+                    ? "On, \(player.noiseReductionMode.displayName), \(player.denoiseStrength.label)"
+                    : "Off"
+            )
 
             playerControlButton(
                 icon: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.2",
-                label: "Boost",
+                label: player.volume > 1.0 ? "2×" : "Boost",
                 isActive: player.volume > 1.0
             ) {
-                player.setVolume(player.volume > 1.0 ? 1.0 : 1.5)
+                player.setVolume(player.volume > 1.0 ? 1.0 : 2.0)
             }
             .accessibilityLabel("Volume boost")
-            .accessibilityValue(player.volume > 1.0 ? "On" : "Off")
+            .accessibilityValue(player.volume > 1.0 ? "On, two times" : "Off")
             .accessibilityHint("Increases volume above the system maximum")
 
             playerControlButton(
@@ -485,28 +489,87 @@ struct PlayerView: View {
 
             Divider()
 
-            ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
+            ForEach(NoiseReductionMode.allCases) { mode in
                 Button {
-                    player.denoiseStrength = strength
+                    player.noiseReductionMode = mode
                     player.isNoiseReductionEnabled = true
-                    showDenoisePicker = false
                 } label: {
                     HStack {
-                        Text(strength.label)
-                            .font(.body)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(mode.displayName)
+                                .font(.body)
+                            // For DeepFilterNet, show live state once selected —
+                            // the model loads asynchronously, so "Loading…" or an
+                            // error is more useful than a static description.
+                            Text(statusDescriptor(for: mode))
+                                .font(.caption)
+                                .foregroundStyle(
+                                    mode == player.noiseReductionMode && player.isDeepFilterBypassing
+                                        ? .orange
+                                        : .secondary
+                                )
+                        }
                         Spacer()
-                        if player.isNoiseReductionEnabled, player.denoiseStrength == strength {
+                        if player.isNoiseReductionEnabled, player.noiseReductionMode == mode {
                             Image(systemName: "checkmark")
                                 .font(.caption)
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
             }
+
+            Divider()
+
+            // DeepFilterNet is always fully wet, so a dry/wet "strength" does
+            // not apply. It gets the voice-forward variants instead, switchable
+            // mid-discourse so they can be compared on the same passage.
+            if player.noiseReductionMode == .deepFilterNet {
+                ForEach(VoiceFocusPreset.allCases) { preset in
+                    Button {
+                        player.voiceFocusPreset = preset
+                        player.isNoiseReductionEnabled = true
+                    } label: {
+                        HStack {
+                            Text(preset.displayName)
+                                .font(.body)
+                            Spacer()
+                            if player.isNoiseReductionEnabled, player.voiceFocusPreset == preset {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
+                    Button {
+                        player.denoiseStrength = strength
+                        player.isNoiseReductionEnabled = true
+                        showDenoisePicker = false
+                    } label: {
+                        HStack {
+                            Text(strength.label)
+                                .font(.body)
+                            Spacer()
+                            if player.isNoiseReductionEnabled, player.denoiseStrength == strength {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
-        .frame(width: 180)
+        .frame(width: 220)
         .padding(.vertical, 8)
         .presentationCompactAdaptation(.popover)
     }
@@ -581,6 +644,28 @@ struct PlayerView: View {
     }
 
     // MARK: - Helpers
+
+    /// Player button caption. While comparing DeepFilterNet variants the active
+    /// preset matters more than the processor name, so show that instead.
+    private var denoiseButtonLabel: String {
+        guard player.isNoiseReductionEnabled else { return "Denoise" }
+        if player.noiseReductionMode == .deepFilterNet {
+            return player.voiceFocusPreset.displayName
+        }
+        return player.noiseReductionMode.playerLabel
+    }
+
+    /// Subtitle for a processor row. DeepFilterNet reports its real runtime state
+    /// while selected so a listener never assumes audio is being processed when
+    /// the model is still loading or failed to load.
+    private func statusDescriptor(for mode: NoiseReductionMode) -> String {
+        guard mode == .deepFilterNet,
+              player.isNoiseReductionEnabled,
+              player.noiseReductionMode == .deepFilterNet else {
+            return mode.shortDescriptor
+        }
+        return player.deepFilterStatus.label
+    }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite && seconds >= 0 else { return "0:00" }

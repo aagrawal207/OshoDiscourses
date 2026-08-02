@@ -39,11 +39,31 @@ final class AudioPlayerService {
     enum DenoiseStrength: String, CaseIterable, Sendable {
         case light, medium, strong
         /// Wet (denoised) fraction. Lower = clearer voice, higher = more noise removed.
+        /// Used by RNNoise only — DeepFilterNet is always fully wet and uses
+        /// `attenuationLimitDb` instead.
         var wetMix: Float {
             switch self {
             case .light: return 0.35
             case .medium: return 0.5
             case .strong: return 0.6
+            }
+        }
+        var intensity: Float {
+            switch self {
+            case .light: return 0.45
+            case .medium: return 0.7
+            case .strong: return 1.0
+            }
+        }
+        /// DeepFilterNet's native strength control: the maximum attenuation the
+        /// model may apply, in dB. This is spectrally aware, so it preserves the
+        /// voice far better than mixing the noisy signal back in. Upstream treats
+        /// 100 dB and above as "no limit", which is what Strong uses.
+        var attenuationLimitDb: Float {
+            switch self {
+            case .light: return 6
+            case .medium: return 12
+            case .strong: return 100
             }
         }
         var label: String {
@@ -56,15 +76,44 @@ final class AudioPlayerService {
     }
 
     var isNoiseReductionEnabled: Bool = false {
-        didSet { rebuildAudioMix() }
+        didSet {
+            UserSettings.shared.noiseReduction = isNoiseReductionEnabled
+            rebuildAudioMix()
+        }
+    }
+    var noiseReductionMode: NoiseReductionMode = .rnnoise {
+        didSet {
+            UserSettings.shared.noiseReductionMode = noiseReductionMode
+            configureNoiseProcessor()
+        }
     }
     var denoiseStrength: DenoiseStrength = .medium {
         didSet {
-            noiseProcessor.wetMix = denoiseStrength.wetMix
             UserSettings.shared.denoiseStrength = denoiseStrength.rawValue
+            configureNoiseProcessor()
+        }
+    }
+    /// Which DeepFilterNet voice-forward variant is active. Only affects the
+    /// DeepFilterNet mode; RNNoise and Cadence ignore it.
+    var voiceFocusPreset: VoiceFocusPreset = .focus {
+        didSet {
+            UserSettings.shared.voiceFocusPreset = voiceFocusPreset
+            configureNoiseProcessor()
         }
     }
     private let noiseProcessor = NoiseReductionProcessor()
+
+    /// Live state of the native DeepFilterNet runtime. Surfaced in the UI so the
+    /// listener can tell actual denoising apart from silent passthrough (the
+    /// model loads asynchronously and can be unavailable).
+    private(set) var deepFilterStatus: DeepFilterProcessor.Status = .idle
+
+    /// Whether DeepFilterNet is selected but not currently processing audio.
+    var isDeepFilterBypassing: Bool {
+        isNoiseReductionEnabled
+            && noiseReductionMode == .deepFilterNet
+            && deepFilterStatus.isBypassing
+    }
 
     // MARK: - Playback State
 
@@ -104,6 +153,7 @@ final class AudioPlayerService {
     private var pendingSeekTarget: TimeInterval?
     private var pendingSeekIssuedAt: Date?
     private var seekGeneration = 0
+    private var didManuallySeekNearEnd = false
 
     // Audio-session lifecycle observers. iOS tears the session down on calls,
     // Siri, alarms, and headphone changes; without these we never reattach and
@@ -119,11 +169,20 @@ final class AudioPlayerService {
 
     init() {
         isNoiseReductionEnabled = UserSettings.shared.noiseReduction
+        noiseReductionMode = UserSettings.shared.noiseReductionMode
         denoiseStrength = DenoiseStrength(rawValue: UserSettings.shared.denoiseStrength) ?? .medium
-        noiseProcessor.wetMix = denoiseStrength.wetMix
+        voiceFocusPreset = UserSettings.shared.voiceFocusPreset
+        configureNoiseProcessor()
+        // Mirror the native runtime's state onto the main actor for the UI.
+        noiseProcessor.deepFilter.observeStatus { status in
+            Task { @MainActor [weak self] in
+                self?.deepFilterStatus = status
+            }
+        }
         // Restore the listener's preferred speed; clamp in case a stale/corrupt
         // value was stored outside the supported 0.5–2.0 range.
         playbackRate = max(0.5, min(Float(UserSettings.shared.defaultPlaybackRate), 2.0))
+        volume = max(1.0, min(Float(UserSettings.shared.volumeBoost), 2.0))
         setupAudioSession()
         setupRemoteCommands()
     }
@@ -198,12 +257,19 @@ final class AudioPlayerService {
     }
 
     func seekWithHistory(to time: TimeInterval) {
+        if Self.isNearEndSeek(target: time, duration: duration) {
+            didManuallySeekNearEnd = true
+        }
         guard abs(currentTime - time) > 10 else {
             seek(to: time)
             return
         }
         previousPosition = currentTime
         seek(to: time)
+    }
+
+    nonisolated static func isNearEndSeek(target: TimeInterval, duration: TimeInterval) -> Bool {
+        duration > 0 && target >= duration - 5
     }
 
     func returnToPreviousPosition() {
@@ -287,7 +353,7 @@ final class AudioPlayerService {
     func skipForward(_ seconds: TimeInterval = 30) {
         switch Self.skipForwardOutcome(anchor: skipAnchor, seconds: seconds, duration: duration) {
         case .finish:
-            finishCurrentTrack()
+            finishCurrentTrack(naturally: false)
         case .seek(let target):
             seek(to: target)
         }
@@ -325,7 +391,7 @@ final class AudioPlayerService {
         loadAndPlay(item: queue[currentIndex])
     }
 
-    private func finishCurrentTrack() {
+    private func finishCurrentTrack(naturally: Bool) {
         // Idempotency: a skipForward that lands .finish and the item's natural
         // DidPlayToEndTime can both call this for the same instant. The first
         // call either advances (new track id) or clears currentTrackId; a stray
@@ -340,6 +406,7 @@ final class AudioPlayerService {
         // auto-advance). discourseDidFinish() resets the timer afterward.
         let endSleepArmed = SleepTimerService.shared.mode == .endOfDiscourse
         let autoNext = UserSettings.shared.autoPlayNext && !endSleepArmed
+        var playbackContinues = false
 
         // Auto-play is download-only. Prefer the queue's next item; if the queue
         // is exhausted — a single-item queue (e.g. started from a bookmark), or
@@ -348,10 +415,12 @@ final class AudioPlayerService {
         // fully-downloaded series plays straight through regardless of how
         // playback started. This never advances to a discourse not on disk.
         if autoNext, hasNext {
+            playbackContinues = true
             skipToNext()
         } else if autoNext,
                   let completedTrackId,
                   let next = nextDownloadedItem(after: completedTrackId) {
+            playbackContinues = true
             queue.append(next)
             currentIndex = queue.count - 1
             loadAndPlay(item: next)
@@ -379,10 +448,16 @@ final class AudioPlayerService {
         // Notify the sleep timer so an armed end-of-discourse timer fires/resets.
         SleepTimerService.shared.discourseDidFinish()
 
-        // Finishing a discourse is a natural high point — a good, non-intrusive
-        // moment to ask for an App Store rating. The service self-gates on active
-        // days and once-per-version, so this is safe to call on every finish.
-        ReviewRequestService.requestReviewIfAppropriate()
+        // Ask only after natural completion when playback has actually stopped.
+        // Skip-to-end and auto-advance are active listening moments, not pauses in
+        // which a system dialog should interrupt the listener.
+        if ReviewRequestService.isGoodMoment(
+            completionWasNatural: naturally,
+            playbackContinues: playbackContinues,
+            sleepTimerWasArmed: endSleepArmed
+        ) {
+            ReviewRequestService.requestReviewIfAppropriate()
+        }
     }
 
     private func markCurrentAsCompleted() {
@@ -468,6 +543,7 @@ final class AudioPlayerService {
         let clamped = max(0.0, min(vol, 2.0))
         let crossedBoostBoundary = (volume > 1.0) != (clamped > 1.0)
         volume = clamped
+        UserSettings.shared.volumeBoost = Double(clamped)
         player?.volume = min(clamped, 1.0)
         guard let currentItem = player?.currentItem else { return }
         // Volume ≤ 1.0 is handled entirely by player.volume; the audio mix only
@@ -498,6 +574,7 @@ final class AudioPlayerService {
         currentSeries = ""
         pendingSeekTarget = nil
         pendingSeekIssuedAt = nil
+        didManuallySeekNearEnd = false
         removeTimeObserver()
         removeEndObserver()
         // Kill the status observation too: a still-loading item's readyToPlay
@@ -529,6 +606,7 @@ final class AudioPlayerService {
         // new track's time observer.
         pendingSeekTarget = nil
         pendingSeekIssuedAt = nil
+        didManuallySeekNearEnd = false
         didTriggerPreemptiveDownload = false
 
         let playerItem = AVPlayerItem(url: item.url)
@@ -848,7 +926,7 @@ final class AudioPlayerService {
             }
             let position = event.positionTime
             Task { @MainActor [weak self] in
-                self?.seek(to: position)
+                self?.seekWithHistory(to: position)
             }
             return .success
         }
@@ -956,7 +1034,7 @@ final class AudioPlayerService {
                 guard let self,
                       let observedItemID,
                       (self.player?.currentItem).map(ObjectIdentifier.init) == observedItemID else { return }
-                self.finishCurrentTrack()
+                self.finishCurrentTrack(naturally: !self.didManuallySeekNearEnd)
             }
         }
     }
@@ -994,6 +1072,15 @@ final class AudioPlayerService {
         guard let item = player?.currentItem else { return }
         noiseProcessor.reset()
         applyAudioMix(to: item)
-        UserSettings.shared.noiseReduction = isNoiseReductionEnabled
+    }
+
+    private func configureNoiseProcessor() {
+        noiseProcessor.configure(
+            mode: noiseReductionMode,
+            wetMix: denoiseStrength.wetMix,
+            intensity: denoiseStrength.intensity,
+            attenuationLimitDb: denoiseStrength.attenuationLimitDb,
+            voiceFocus: voiceFocusPreset
+        )
     }
 }

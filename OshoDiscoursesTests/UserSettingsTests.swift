@@ -18,6 +18,26 @@ struct UserSettingsTests {
         settings.defaultPlaybackRate = original
     }
 
+    @Test func volumeBoostPersists() {
+        let settings = UserSettings.shared
+        let original = settings.volumeBoost
+        settings.volumeBoost = 2.0
+        #expect(UserDefaults.standard.double(forKey: "settings.volumeBoost") == 2.0)
+        settings.volumeBoost = 1.0
+        #expect(UserDefaults.standard.double(forKey: "settings.volumeBoost") == 1.0)
+        settings.volumeBoost = original
+    }
+
+    @Test func volumeBoostDefaultsToTwoTimes() {
+        let defaults = UserDefaults.standard
+        let stored = defaults.object(forKey: "settings.volumeBoost")
+        defaults.removeObject(forKey: "settings.volumeBoost")
+        #expect(defaults.double(forKey: "settings.volumeBoost") == 2.0)
+        if let stored {
+            defaults.set(stored, forKey: "settings.volumeBoost")
+        }
+    }
+
     @Test func cellularDownloadsPersists() {
         let settings = UserSettings.shared
         let original = settings.allowCellularDownloads
@@ -65,6 +85,14 @@ struct UserSettingsTests {
         settings.languageFilter = .hindi
         #expect(UserDefaults.standard.string(forKey: "settings.languageFilter") == "Hindi")
         settings.languageFilter = original
+    }
+
+    @Test func noiseReductionModePersists() {
+        let settings = UserSettings.shared
+        let original = settings.noiseReductionMode
+        settings.noiseReductionMode = .cadence
+        #expect(UserDefaults.standard.string(forKey: "settings.noiseReductionMode") == "cadence")
+        settings.noiseReductionMode = original
     }
 
     // MARK: - Daily accent shuffle

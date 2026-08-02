@@ -66,12 +66,49 @@ struct SettingsView: View {
             Toggle("Noise Reduction", isOn: $player.isNoiseReductionEnabled)
 
             if player.isNoiseReductionEnabled {
-                Picker("Strength", selection: $player.denoiseStrength) {
-                    ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
-                        Text(strength.label).tag(strength)
+                Picker("Method", selection: $player.noiseReductionMode) {
+                    ForEach(NoiseReductionMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
                     }
                 }
-                .pickerStyle(.segmented)
+
+                // "Strength" is a dry/wet control, which is meaningless for
+                // DeepFilterNet (it is always fully wet). That mode gets the
+                // voice-forward variant picker instead.
+                if player.noiseReductionMode == .deepFilterNet {
+                    Picker("Voice Focus", selection: $player.voiceFocusPreset) {
+                        ForEach(VoiceFocusPreset.allCases) { preset in
+                            Text(preset.displayName).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(player.voiceFocusPreset.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Strength", selection: $player.denoiseStrength) {
+                        ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
+                            Text(strength.label).tag(strength)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(player.noiseReductionMode.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                // DeepFilterNet loads a bundled model asynchronously and can be
+                // unavailable, so report what is actually happening instead of
+                // letting the listener assume the audio is being processed.
+                if player.noiseReductionMode == .deepFilterNet {
+                    LabeledContent("Status") {
+                        Text(player.deepFilterStatus.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(player.deepFilterStatus.isBypassing ? .orange : .secondary)
+                    }
+                }
             }
         } header: {
             HStack(spacing: 6) {
@@ -84,7 +121,7 @@ struct SettingsView: View {
                     .background(Color.accent.opacity(0.15), in: Capsule())
             }
         } footer: {
-            Text("Filters out background hiss and hum using on-device speech filtering. This is still a beta: some talks clean up nicely, others end up sounding a bit muffled. It depends on the recording. Light keeps the voice clearest, Strong removes the most noise. If a talk sounds off, just switch it off. You can also long-press the Denoise button in the player to change strength.")
+            Text("Compare the processors on the same passage. DeepFilterNet is the strongest and also clears steady tape hiss, at a higher battery cost. RNNoise handles varied noise but may soften the voice. Cadence targets hum and long noisy pauses more conservatively.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -232,6 +269,7 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Acknowledgements: All discourses are copyright OSHO International Foundation. Audio is served from oshoworld.com.")
+                Text("Noise reduction uses RNNoise (Xiph.Org, BSD 3-Clause) and DeepFilterNet by Hendrik Schröter (MIT/Apache-2.0).")
                 Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
                 Text("If the app is useful to you, a coffee helps me keep working on it. It's a voluntary thank-you, not a purchase, and unlocks nothing.")
                 Text("Your listening progress, bookmarks, and stats sync between your devices through your own iCloud. Everything else stays on your phone. There are no accounts, no servers, and no tracking of any kind.")
@@ -256,4 +294,3 @@ struct SettingsView: View {
         .padding(.vertical, 2)
     }
 }
-

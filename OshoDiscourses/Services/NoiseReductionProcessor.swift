@@ -8,8 +8,11 @@ import Accelerate
 /// RNNoise processes fixed 480-sample frames and expects samples in int16 range
 /// (±32768), while the audio tap delivers variable-size buffers of ±1.0 float.
 /// This class bridges both: it scales the domain and uses a per-channel FIFO
-/// delay line (primed with one block of silence) so every callback emits exactly
-/// as many samples as it received, with a constant ~10ms latency and no underflow.
+/// delay line so every callback emits exactly as many samples as it received.
+/// It also hosts the beta Cadence filter, which uses classical DSP rather than
+/// RNNoise so the two approaches can be compared on the same recordings, and
+/// delegates the DeepFilterNet mode to `DeepFilterProcessor` (a native 48 kHz
+/// model with its own streaming state and no dry/wet blend).
 ///
 /// All buffers are preallocated in `prepare` — the `process` path (which runs on
 /// the realtime audio render thread) performs no allocation.
@@ -17,14 +20,73 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
     private let frameSize = Int(rnnoise_get_frame_size())   // 480
 
-    /// Fraction of the denoised (wet) signal in the output, 0...1. The remainder
-    /// is the original (dry) signal. A blend below 1.0 preserves voice clarity:
-    /// it floors how much any frequency band — including the consonant energy
-    /// (s, t, f, sh) that RNNoise tends to over-suppress and that makes speech
-    /// intelligible — can be attenuated. At 0.5, no band ever drops below half
-    /// amplitude, keeping words crisp while still dropping steady noise ~6dB.
-    var wetMix: Float = 0.5 {
-        didSet { wetMix = min(max(wetMix, 0), 1) }
+    private var mode: NoiseReductionMode = .rnnoise
+    private var wetMix: Float = 0.5
+    private var intensity: Float = 0.7
+    /// DeepFilterNet's strength control: a cap on attenuation in dB.
+    private var attenuationLimitDb: Float = 100
+
+    /// Native DeepFilterNet runtime. Owned here so the tap has a single host,
+    /// but it keeps its own state and lock — it is not driven by the RNNoise
+    /// FIFOs below.
+    let deepFilter = DeepFilterProcessor()
+
+    private struct Biquad {
+        var b0: Float = 1
+        var b1: Float = 0
+        var b2: Float = 0
+        var a1: Float = 0
+        var a2: Float = 0
+        var z1: Float = 0
+        var z2: Float = 0
+
+        mutating func process(_ input: Float) -> Float {
+            let output = b0 * input + z1
+            z1 = b1 * input - a1 * output + z2
+            z2 = b2 * input - a2 * output
+            return output
+        }
+
+        static func notch(frequency: Double, sampleRate: Double, q: Double) -> Self {
+            let omega = 2 * Double.pi * frequency / sampleRate
+            let alpha = sin(omega) / (2 * q)
+            let a0 = 1 + alpha
+            return Self(
+                b0: Float(1 / a0),
+                b1: Float(-2 * cos(omega) / a0),
+                b2: Float(1 / a0),
+                a1: Float(-2 * cos(omega) / a0),
+                a2: Float((1 - alpha) / a0)
+            )
+        }
+
+        static func highPass(frequency: Double, sampleRate: Double) -> Self {
+            let omega = 2 * Double.pi * frequency / sampleRate
+            let alpha = sin(omega) / (2 * 0.707)
+            let cosOmega = cos(omega)
+            let a0 = 1 + alpha
+            return Self(
+                b0: Float((1 + cosOmega) / 2 / a0),
+                b1: Float(-(1 + cosOmega) / a0),
+                b2: Float((1 + cosOmega) / 2 / a0),
+                a1: Float(-2 * cosOmega / a0),
+                a2: Float((1 - alpha) / a0)
+            )
+        }
+
+        static func lowPass(frequency: Double, sampleRate: Double) -> Self {
+            let omega = 2 * Double.pi * frequency / sampleRate
+            let alpha = sin(omega) / (2 * 0.707)
+            let cosOmega = cos(omega)
+            let a0 = 1 + alpha
+            return Self(
+                b0: Float((1 - cosOmega) / 2 / a0),
+                b1: Float((1 - cosOmega) / a0),
+                b2: Float((1 - cosOmega) / 2 / a0),
+                a1: Float(-2 * cosOmega / a0),
+                a2: Float((1 - alpha) / a0)
+            )
+        }
     }
 
     private final class Channel {
@@ -34,9 +96,20 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         var dryBuf: UnsafeMutablePointer<Float>   // dry FIFO, lockstep with outBuf
         var frameIn: UnsafeMutablePointer<Float>
         var frameOut: UnsafeMutablePointer<Float>
+        var previousDryFrame: UnsafeMutablePointer<Float>
         var inCount = 0
         var outCount = 0
         let capacity: Int
+        var sampleRate: Double = 48_000
+        var highPass = Biquad()
+        var notch50 = Biquad()
+        var notch60 = Biquad()
+        var notch100 = Biquad()
+        var notch120 = Biquad()
+        var hissLowPass = Biquad()
+        var envelope: Float = 0
+        var quietSamples = 0
+        var gateGain: Float = 1
 
         init(capacity: Int, frameSize: Int) {
             self.capacity = capacity
@@ -45,12 +118,31 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             dryBuf = .allocate(capacity: capacity)
             frameIn = .allocate(capacity: frameSize)
             frameOut = .allocate(capacity: frameSize)
+            previousDryFrame = .allocate(capacity: frameSize)
             inBuf.initialize(repeating: 0, count: capacity)
             outBuf.initialize(repeating: 0, count: capacity)
             dryBuf.initialize(repeating: 0, count: capacity)
             frameIn.initialize(repeating: 0, count: frameSize)
             frameOut.initialize(repeating: 0, count: frameSize)
+            previousDryFrame.initialize(repeating: 0, count: frameSize)
             state = rnnoise_create(nil)
+        }
+
+        func configureArchive(sampleRate: Double, intensity: Float) {
+            self.sampleRate = sampleRate
+            highPass = .highPass(frequency: 32, sampleRate: sampleRate)
+            notch50 = .notch(frequency: 50, sampleRate: sampleRate, q: 35)
+            notch60 = .notch(frequency: 60, sampleRate: sampleRate, q: 35)
+            notch100 = .notch(frequency: 100, sampleRate: sampleRate, q: 42)
+            notch120 = .notch(frequency: 120, sampleRate: sampleRate, q: 42)
+            let cutoff = 14_000 - 3_500 * Double(intensity)
+            hissLowPass = .lowPass(
+                frequency: min(cutoff, sampleRate * 0.45),
+                sampleRate: sampleRate
+            )
+            envelope = 0
+            quietSamples = 0
+            gateGain = 1
         }
 
         deinit {
@@ -60,6 +152,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             dryBuf.deallocate()
             frameIn.deallocate()
             frameOut.deallocate()
+            previousDryFrame.deallocate()
         }
     }
 
@@ -73,10 +166,52 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
     // MARK: - Lifecycle (called from tap prepare/unprepare)
 
-    /// Allocate per-channel RNNoise state and FIFO buffers sized for this format.
-    func prepare(channelCount: Int, maxFrames: Int) {
+    func configure(
+        mode: NoiseReductionMode,
+        wetMix: Float,
+        intensity: Float,
+        attenuationLimitDb: Float,
+        voiceFocus: VoiceFocusPreset
+    ) {
         lock.lock()
-        defer { lock.unlock() }
+        let modeChanged = self.mode != mode
+        self.mode = mode
+        self.wetMix = min(max(wetMix, 0), 1)
+        self.intensity = min(max(intensity, 0), 1)
+        self.attenuationLimitDb = max(attenuationLimitDb, 0)
+        for ch in channels {
+            ch.configureArchive(sampleRate: ch.sampleRate, intensity: self.intensity)
+            if modeChanged {
+                resetRNNoiseChannel(ch)
+            }
+        }
+        let format = channels.first.map { ($0.sampleRate, self.maxFrames, channels.count) }
+        // Capture before unlocking: reading these properties afterwards would be
+        // an unsynchronized read from whatever thread called configure.
+        let attenuation = self.attenuationLimitDb
+        lock.unlock()
+
+        // DeepFilterNet keeps its own state, so drive it outside the lock.
+        deepFilter.setAttenuationLimit(attenuation)
+        deepFilter.setVoiceFocus(voiceFocus)
+        if mode == .deepFilterNet {
+            if let (sampleRate, maxFrames, channelCount) = format, maxFrames > 0 {
+                deepFilter.activate(
+                    channelCount: channelCount,
+                    maxFrames: maxFrames,
+                    sampleRate: sampleRate
+                )
+            }
+        } else if modeChanged {
+            // Leaving DeepFilterNet: clear streaming state but keep the loaded
+            // model so switching back does not pay the load cost again.
+            deepFilter.reset()
+        }
+    }
+
+    /// Allocate per-channel processor state and FIFO buffers sized for this format.
+    func prepare(channelCount: Int, maxFrames: Int, sampleRate: Double) {
+        lock.lock()
         teardownLocked()
         self.maxFrames = maxFrames
         // FIFO capacity must hold: a sub-frame remainder (<480) plus one full tap
@@ -86,6 +221,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         built.reserveCapacity(channelCount)
         for _ in 0..<max(channelCount, 1) {
             let ch = Channel(capacity: capacity, frameSize: frameSize)
+            ch.configureArchive(sampleRate: sampleRate, intensity: intensity)
             // Prime both FIFOs with one block of silence. This establishes a
             // constant `frameSize` latency and guarantees the emit step below can
             // always pull as many samples as came in (proven: in+out == frameSize
@@ -97,20 +233,37 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             built.append(ch)
         }
         channels = built
+        let activeMode = mode
+        lock.unlock()
+
+        if activeMode == .deepFilterNet {
+            deepFilter.activate(
+                channelCount: max(channelCount, 1),
+                maxFrames: maxFrames,
+                sampleRate: sampleRate
+            )
+        }
     }
 
     /// Reset filter memory without reallocating (e.g. on track change / toggle).
     func reset() {
         lock.lock()
-        defer { lock.unlock() }
         for ch in channels {
-            if let s = ch.state { rnnoise_destroy(s) }
-            ch.state = rnnoise_create(nil)
-            ch.inCount = 0
-            ch.outBuf.update(repeating: 0, count: ch.capacity)
-            ch.dryBuf.update(repeating: 0, count: ch.capacity)
-            ch.outCount = frameSize       // re-prime latency block (both FIFOs)
+            resetRNNoiseChannel(ch)
+            ch.configureArchive(sampleRate: ch.sampleRate, intensity: intensity)
         }
+        lock.unlock()
+        deepFilter.reset()
+    }
+
+    private func resetRNNoiseChannel(_ ch: Channel) {
+        if let state = ch.state { rnnoise_destroy(state) }
+        ch.state = rnnoise_create(nil)
+        ch.inCount = 0
+        ch.outBuf.update(repeating: 0, count: ch.capacity)
+        ch.dryBuf.update(repeating: 0, count: ch.capacity)
+        ch.previousDryFrame.update(repeating: 0, count: frameSize)
+        ch.outCount = frameSize
     }
 
     private func teardown() {
@@ -146,11 +299,21 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             guard let raw = audioBuffer.mData else { continue }
             guard bufIdx < channels.count else { continue }
             let samples = raw.assumingMemoryBound(to: Float.self)
-            processChannel(samples: samples, count: n, channel: channels[bufIdx])
+            switch mode {
+            case .rnnoise:
+                processRNNoise(samples: samples, count: n, channel: channels[bufIdx])
+            case .cadence:
+                processCadence(samples: samples, count: n, channel: channels[bufIdx])
+            case .deepFilterNet:
+                // Owns its own state and lock. A false return means it is not
+                // ready (still loading, or unavailable) and left the audio
+                // untouched, which is the correct passthrough behaviour.
+                deepFilter.process(samples: samples, count: n, channelIndex: bufIdx)
+            }
         }
     }
 
-    private func processChannel(samples: UnsafeMutablePointer<Float>, count n: Int, channel ch: Channel) {
+    private func processRNNoise(samples: UnsafeMutablePointer<Float>, count n: Int, channel ch: Channel) {
         // Guard against an unexpectedly large buffer overrunning our FIFO.
         guard ch.inCount + n <= ch.capacity, n <= ch.capacity else { return }
 
@@ -160,8 +323,9 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         ch.inCount += n
 
         // 2. Drain every complete 480-sample frame through RNNoise. For each frame
-        //    we push the denoised (wet) result to outBuf and the matching original
-        //    (dry) samples to dryBuf at the same offset, keeping them aligned.
+        //    RNNoise's synthesis output is one frame behind its input, so pair it
+        //    with the previous dry frame rather than the current one. Mixing the
+        //    current dry frame caused comb-like coloration, especially on Strong.
         var consumed = 0
         while ch.inCount - consumed >= frameSize {
             // out must hold a full frame; capacity guarantees it (see prepare).
@@ -170,7 +334,8 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             (ch.frameIn).update(from: ch.inBuf + consumed, count: frameSize)
             rnnoise_process_frame(ch.state, ch.frameOut, ch.frameIn)
             (ch.outBuf + ch.outCount).update(from: ch.frameOut, count: frameSize)
-            (ch.dryBuf + ch.outCount).update(from: ch.frameIn, count: frameSize)
+            (ch.dryBuf + ch.outCount).update(from: ch.previousDryFrame, count: frameSize)
+            ch.previousDryFrame.update(from: ch.frameIn, count: frameSize)
             ch.outCount += frameSize
             consumed += frameSize
         }
@@ -210,6 +375,44 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             memmove(ch.dryBuf, ch.dryBuf + emit, leftover * MemoryLayout<Float>.size)
         }
         ch.outCount = leftover
+    }
+
+    private func processCadence(samples: UnsafeMutablePointer<Float>, count: Int, channel ch: Channel) {
+        let sampleRate = Float(ch.sampleRate)
+        let envelopeAttack = exp(-1 / (0.008 * sampleRate))
+        let envelopeRelease = exp(-1 / (0.22 * sampleRate))
+        let gateOpen = exp(-1 / (0.006 * sampleRate))
+        let gateClose = exp(-1 / (0.35 * sampleRate))
+        let quietHold = Int(sampleRate * (0.22 + 0.18 * (1 - intensity)))
+        let quietThreshold: Float = 0.009
+        let quietGain = 1 - 0.82 * intensity
+
+        for index in 0..<count {
+            let dry = samples[index]
+            var filtered = ch.highPass.process(dry)
+            filtered = ch.notch50.process(filtered)
+            filtered = ch.notch60.process(filtered)
+            filtered = ch.notch100.process(filtered)
+            filtered = ch.notch120.process(filtered)
+            filtered = ch.hissLowPass.process(filtered)
+
+            let level = abs(filtered)
+            let envelopeCoefficient = level > ch.envelope ? envelopeAttack : envelopeRelease
+            ch.envelope = level + envelopeCoefficient * (ch.envelope - level)
+
+            if ch.envelope < quietThreshold {
+                ch.quietSamples += 1
+            } else {
+                ch.quietSamples = 0
+            }
+
+            let targetGain: Float = ch.quietSamples >= quietHold ? quietGain : 1
+            let gateCoefficient = targetGain > ch.gateGain ? gateOpen : gateClose
+            ch.gateGain = targetGain + gateCoefficient * (ch.gateGain - targetGain)
+
+            let processed = filtered * ch.gateGain
+            samples[index] = dry + intensity * (processed - dry)
+        }
     }
 
     // MARK: - Audio Tap
@@ -264,7 +467,11 @@ private func tapPrepare(tap: MTAudioProcessingTap, maxFrames: CMItemCount, proce
     let storage = MTAudioProcessingTapGetStorage(tap)
     let processor = Unmanaged<NoiseReductionProcessor>.fromOpaque(storage).takeUnretainedValue()
     let asbd = processingFormat.pointee
-    processor.prepare(channelCount: Int(asbd.mChannelsPerFrame), maxFrames: Int(maxFrames))
+    processor.prepare(
+        channelCount: Int(asbd.mChannelsPerFrame),
+        maxFrames: Int(maxFrames),
+        sampleRate: asbd.mSampleRate
+    )
 }
 
 private func tapUnprepare(tap: MTAudioProcessingTap) {
