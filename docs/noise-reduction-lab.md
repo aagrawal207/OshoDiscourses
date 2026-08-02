@@ -141,6 +141,56 @@ This reduced noise in short gaps from +3.2 dB to +2.2 dB.
 - Lift and Strong measure close together on this material; Focus is the clearly
   distinct option (no levelling, deepest ducking).
 
+### Open issues — next session starts here
+
+Reported after listening to all three presets on Maha Geeta #5 around 41:37.
+Sentence endings and overall clarity were confirmed fixed; these remain.
+
+**1. Chirping while Osho speaks (not present in the source).**
+
+Chirping that is absent from the source is the signature of imaging or aliasing
+folding high-frequency content back into the speech band, so the prime suspect
+is `PolyphaseResampler`, not the model.
+
+Supporting evidence, not yet confirmed:
+
+- `tapsPerPhase` is 16. Transition bandwidth works out to roughly
+  `5.5 * inputRate / tapsPerPhase`, i.e. ~7.6 kHz for 22,050 Hz input — far too
+  gentle for 22.05 <-> 48 kHz. Images begin at 11.025 kHz and are barely
+  attenuated there.
+- `suppressesContentAboveTheOutputNyquist` only asserts ~17 dB of rejection on
+  an 18 kHz tone. Good audio resampling wants 80-100 dB. That threshold was set
+  too lax and hid this.
+
+Plan:
+
+1. Measure real imaging/aliasing rejection. A probe was written for this; it is
+   throwaway (absolute paths) and lives outside the repo — see the handoff note
+   in `~/Desktop/osho-voice-focus-ab/`.
+2. Render a **resample-only** clip at 41:37 with DeepFilterNet bypassed. If the
+   chirping is audible there, the resampler is confirmed as the cause and the
+   model is exonerated.
+3. If confirmed: raise `tapsPerPhase` substantially (~128 for the upsampler,
+   ~256 for the downsampler gives roughly a 1 kHz transition) and switch the
+   window to Kaiser with a specified stopband attenuation. Cost is a few million
+   multiply-adds per second, negligible against the current 0.123 real-time
+   factor. Then tighten the resampler test to demand real rejection.
+
+**2. Breathing sounds are obtrusive.**
+
+Probably a different cause, and partly a side effect of the tail fix:
+
+- The 220 ms hold keeps the gate fully open through a breath taken right after
+  speech, while ducking the noise around it, so the breath now stands out.
+- The +3.5 dB bell at 1.6 kHz sits in the breath and fricative band.
+- DeepFilterNet partially suppresses then releases breath, which modulates it.
+
+Worth trying in order: trim the emphasis gain, then consider treating
+low-harmonicity frames inside the hold window differently from voiced ones.
+Resolve the chirping first — improving the resampler may change how breath
+sounds, so tuning the emphasis before that risks compensating for the wrong
+defect.
+
 ### Measured cost
 
 Full chain (resample → model → focus → resample) at 22,050 Hz: **real-time
