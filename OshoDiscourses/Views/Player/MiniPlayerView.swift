@@ -9,6 +9,21 @@ struct MiniPlayerView: View {
         return min(player.currentTime / player.duration, 1.0)
     }
 
+    // The service's `currentTitle` stays "<series> - #N" because that same
+    // string feeds the lock screen. Here the number leads and the series name
+    // is the subtitle, so the name isn't repeated (and truncated).
+    private var seriesLine: String {
+        player.currentSeries.isEmpty ? player.currentTitle : player.currentSeries
+    }
+
+    private var discourseLine: String? {
+        guard !player.currentSeries.isEmpty,
+              let hash = player.currentTitle.lastIndex(of: "#") else { return nil }
+        let number = player.currentTitle[player.currentTitle.index(after: hash)...]
+        guard !number.isEmpty, number.allSatisfy(\.isNumber) else { return nil }
+        return "Discourse \(number)"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { geo in
@@ -30,14 +45,16 @@ struct MiniPlayerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(player.currentTitle)
-                        .font(.subheadline.weight(.medium))
+                    Text(discourseLine ?? seriesLine)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
 
-                    Text(player.currentSeries)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if discourseLine != nil {
+                        Text(seriesLine)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer()

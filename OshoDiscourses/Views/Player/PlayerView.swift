@@ -33,6 +33,14 @@ struct PlayerView: View {
             // ScrollView keeps the transport controls reachable once Dynamic
             // Type pushes the column taller than the screen.
             GeometryReader { proxy in
+                // The column is sized from the space actually available: a
+                // 375pt phone and the ~580x650pt iPad form sheet both used to
+                // overflow because artwork, paddings and the transport row were
+                // all fixed. Artwork absorbs the slack; paddings tighten when
+                // the sheet is short.
+                let artwork = artworkEdge(in: proxy.size)
+                let sidePadding: CGFloat = proxy.size.width < 380 ? 16 : 24
+                let tight = proxy.size.height < 700
                 ScrollView {
                     VStack(spacing: 0) {
                         // Drag handle
@@ -49,7 +57,7 @@ struct PlayerView: View {
                         Spacer()
 
                         // Artwork
-                        artworkView
+                        artworkView(edge: artwork)
 
                         Spacer()
 
@@ -78,19 +86,19 @@ struct PlayerView: View {
 
                         // Seek slider
                         seekSlider
-                            .padding(.top, 24)
+                            .padding(.top, tight ? 12 : 24)
 
                         // Transport controls
-                        transportControls
-                            .padding(.top, 24)
+                        transportControls(width: proxy.size.width - sidePadding * 2)
+                            .padding(.top, tight ? 12 : 24)
 
                         // Bottom controls
                         bottomControls
-                            .padding(.top, 32)
+                            .padding(.top, tight ? 16 : 32)
 
                         Spacer()
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, sidePadding)
                     .frame(minHeight: proxy.size.height)
                 }
             }
@@ -98,7 +106,12 @@ struct PlayerView: View {
         }
         .presentationDragIndicator(.hidden)
         .sheet(isPresented: $showQueue) {
+            // Re-injected for the same reason as the full player in ContentView:
+            // a sheet gets a fresh PresentationHostingController whose graph
+            // doesn't inherit @Observable objects on macOS, so QueueView's
+            // @Environment(AudioPlayerService.self) would trap.
             QueueView()
+                .environment(player)
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showBookmarkSheet) {
@@ -135,12 +148,19 @@ struct PlayerView: View {
 
     // MARK: - Artwork
 
-    private var artworkView: some View {
+    /// Artwork is the one elastic block in the column, so it takes the leftover
+    /// space rather than a fixed 280pt. Capped by width on narrow phones and by
+    /// height in the short iPad form sheet — the old width-only cap is what
+    /// clipped the bottom row and forced scrolling on iPad.
+    private func artworkEdge(in size: CGSize) -> CGFloat {
+        max(150, min(artworkSize, size.width - 48, size.height * 0.34))
+    }
+
+    private func artworkView(edge: CGFloat) -> some View {
         Image("OshoPortrait")
             .resizable()
             .aspectRatio(contentMode: .fill)
-            // Cap so the scaled artwork never eats the whole screen at AX sizes.
-            .frame(width: min(artworkSize, 340), height: min(artworkSize, 340))
+            .frame(width: edge, height: edge)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .white.opacity(0.08), radius: 30)
             .accessibilityHidden(true)
@@ -274,8 +294,12 @@ struct PlayerView: View {
 
     // MARK: - Transport Controls
 
-    private var transportControls: some View {
-        HStack(spacing: 40) {
+    private func transportControls(width: CGFloat) -> some View {
+        // Spacers, not a fixed 40pt gap. Five glyphs plus 4x40pt needed ~324pt
+        // of the 327pt available on a 375pt phone, and since this row then
+        // defined the column's width it dragged the slider, the time labels and
+        // the bottom row off-screen with it.
+        HStack(spacing: 0) {
             // Previous
             Button {
                 player.skipToPrevious()
@@ -286,6 +310,8 @@ struct PlayerView: View {
             .disabled(!player.hasPrevious && player.currentTime <= 3)
             .accessibilityLabel("Previous")
 
+            Spacer(minLength: 8)
+
             // Skip back
             Button {
                 player.skipBackward()
@@ -295,16 +321,20 @@ struct PlayerView: View {
             }
             .accessibilityLabel("Skip back 15 seconds")
 
+            Spacer(minLength: 8)
+
             // Play/Pause
             Button {
                 player.togglePlayPause()
             } label: {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    // Scaled with Dynamic Type but capped so the transport row
-                    // still fits on screen at accessibility sizes.
-                    .font(.system(size: min(playGlyphSize, 88)))
+                    // Scaled with Dynamic Type but clamped to the real width so
+                    // the row still fits at accessibility sizes.
+                    .font(.system(size: max(44, min(playGlyphSize, width * 0.18))))
             }
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+
+            Spacer(minLength: 8)
 
             // Skip forward
             Button {
@@ -314,6 +344,8 @@ struct PlayerView: View {
                     .font(.title2)
             }
             .accessibilityLabel("Skip forward 30 seconds")
+
+            Spacer(minLength: 8)
 
             // Next
             Button {
@@ -325,6 +357,7 @@ struct PlayerView: View {
             .disabled(!player.hasNext)
             .accessibilityLabel("Next")
         }
+        .frame(maxWidth: .infinity)
         .foregroundStyle(.primary)
     }
 

@@ -155,15 +155,19 @@ struct HomeView: View {
                             SeriesThumbnailView(name: item.seriesInfo.name, size: 48, seriesID: item.seriesInfo.id)
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(item.discourse.displayTitle)
-                                    .font(.subheadline)
+                                // Discourse number leads as the row's identity,
+                                // series name is the subtitle. The old
+                                // "<series> - #N" title truncated on narrow
+                                // screens and repeated the name underneath.
+                                Text("Discourse \(item.discourse.number)")
+                                    .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
 
                                 Text(item.seriesInfo.name)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
                             }
 
                             Spacer()
@@ -204,6 +208,11 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
+        // Children already carry 16pt side padding, so the section is capped at
+        // the content width plus that padding. Keeps the header's "Clear All"
+        // on the same right edge as the card instead of flung to the iPad's
+        // far edge.
+        .frame(maxWidth: contentMaxWidth + 32, alignment: .leading)
     }
 
     // MARK: - Continue Listening
@@ -248,6 +257,7 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
+        .frame(maxWidth: contentMaxWidth + 32, alignment: .leading)
     }
 }
 
@@ -432,15 +442,18 @@ private struct ContinueListeningRow: View {
                     SeriesThumbnailView(name: item.seriesInfo.name, size: 48, seriesID: item.seriesInfo.id)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(item.discourse.displayTitle)
-                            .font(.subheadline)
+                        // Discourse number leads as the row's identity, series
+                        // name is the subtitle. The old "<series> - #N" title
+                        // truncated on narrow screens and repeated the name.
+                        Text("Discourse \(item.discourse.number)")
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
 
                         Text(item.seriesInfo.name)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
 
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {

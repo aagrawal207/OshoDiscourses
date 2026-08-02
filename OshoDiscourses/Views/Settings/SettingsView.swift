@@ -224,17 +224,21 @@ struct SettingsView: View {
                             // App Store icon curvature ≈ 22.4% of the side.
                             .clipShape(RoundedRectangle(cornerRadius: 9))
                         VStack(alignment: .leading, spacing: 2) {
+                            // Color.primary/.secondary, not .primary/.secondary.
+                            // The bare hierarchical styles resolve against the
+                            // enclosing Link's tint, so they came out accent
+                            // coloured; the absolute Colors stay label black.
                             Text(app.name)
                                 .font(.subheadline)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(Color.primary)
                             Text(app.subtitle)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondary)
                         }
                         Spacer()
                         Image(systemName: "arrow.up.right")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondary)
                     }
                     .padding(.vertical, 2)
                 }
