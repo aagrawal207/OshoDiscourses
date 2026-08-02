@@ -20,10 +20,14 @@ Many audio apps include social feeds, subscriptions, accounts, and other feature
 
 There are no ads, accounts, subscriptions, or tracking.
 
-## Screenshot
+## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="320" alt="Osho Talks home screen showing popular and beginner-friendly English and Hindi series">
+  <img src="docs/screenshots/home-and-library.jpg" width="900" alt="Home screen in light mode, the series library with language and theme filters, and the same home screen in dark mode">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/stats-and-bookmarks.jpg" width="900" alt="Listening stats with all-time total and streak, the daily listening history log, and bookmarks grouped by series">
 </p>
 
 ## Features
