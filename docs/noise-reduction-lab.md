@@ -146,35 +146,55 @@ This reduced noise in short gaps from +3.2 dB to +2.2 dB.
 Reported after listening to all three presets on Maha Geeta #5 around 41:37.
 Sentence endings and overall clarity were confirmed fixed; these remain.
 
-**1. Chirping while Osho speaks (not present in the source).**
+**1. Chirping while Osho speaks. It is the model's musical noise, exposed.**
 
-Chirping that is absent from the source is the signature of imaging or aliasing
-folding high-frequency content back into the speech band, so the prime suspect
-is `PolyphaseResampler`, not the model.
+The first hypothesis — imaging or aliasing in `PolyphaseResampler` — was measured
+and is **wrong**. Recording it because the reasoning was plausible and someone
+will otherwise re-run it:
 
-Supporting evidence, not yet confirmed:
+- DeepFilterNet's 48 kHz output holds energy above 11,025 Hz at **-143 dB**
+  relative to total. The input was upsampled from a band-limited 22.05 kHz
+  source, and the model's gains are multiplicative, so it never creates content
+  up there. The downsampler has nothing to fold down.
+- Rendering 40:00-42:00 with the downsampler at 16 taps against 256 taps changes
+  the 2-10 kHz band by 0.2 dB and leaves the frame-to-frame burble index
+  identical (2.45 vs 2.45).
 
-- `tapsPerPhase` is 16. Transition bandwidth works out to roughly
-  `5.5 * inputRate / tapsPerPhase`, i.e. ~7.6 kHz for 22,050 Hz input — far too
-  gentle for 22.05 <-> 48 kHz. Images begin at 11.025 kHz and are barely
-  attenuated there.
-- `suppressesContentAboveTheOutputNyquist` only asserts ~17 dB of rejection on
-  an 18 kHz tone. Good audio resampling wants 80-100 dB. That threshold was set
-  too lax and hid this.
+What it actually is, measured over 1.5-8 kHz on speech frames at 40:00-42:00:
+the model pushes the **masking noise bed down 10.4 dB while the residual blobs
+only fall 2.1 dB**, so the blobs end up standing 8.3 dB further out of the bed
+than they did in the source. Spectrograms show it plainly: the source's smooth
+noise wash is replaced by sparse speckle, and a 1.3 s pause is driven to nearly
+black.
 
-Plan:
+So the blob *count* is not the problem — it barely moves (182/s in the source
+against 196/s enhanced). The problem is that the noise which used to **mask**
+them has been removed. This is ordinary musical noise, and it only became
+audible once the tail-muting fix stopped hiding it.
 
-1. Measure real imaging/aliasing rejection. A probe was written for this; it is
-   throwaway (absolute paths) and lives outside the repo — see the handoff note
-   in `~/Desktop/osho-voice-focus-ab/`.
-2. Render a **resample-only** clip at 41:37 with DeepFilterNet bypassed. If the
-   chirping is audible there, the resampler is confirmed as the cause and the
-   model is exonerated.
-3. If confirmed: raise `tapsPerPhase` substantially (~128 for the upsampler,
-   ~256 for the downsampler gives roughly a 1 kHz transition) and switch the
-   window to Kaiser with a specified stopband attenuation. Cost is a few million
-   multiply-adds per second, negligible against the current 0.123 real-time
-   factor. Then tighten the resampler test to demand real rejection.
+The knob is DeepFilterNet's attenuation limit, which caps how far any band may
+be pushed down and therefore leaves a masking bed in place. It already exists
+and is already wired to Settings > Noise reduction as Light/Medium/Strong
+(`AudioPlayerService.DenoiseStrength`: 6 / 12 / 100 dB). Measured with preset
+Focus:
+
+| strength | noise removed | chirp exposure |
+| --- | --- | --- |
+| Strong (100 dB, no limit) | -11.1 dB | 9.9 dB |
+| Medium (12 dB, the default) | -6.5 dB | 5.8 dB |
+| Light (6 dB) | -3.9 dB | 3.8 dB |
+
+Exposure falls monotonically with the limit, and so does the noise reduction —
+it is a direct trade, not a free fix.
+
+**Note the earlier listening tests were run at full attenuation**, as
+`VoiceFocusPreset`'s doc comment says. That is the Strong setting, not the
+`medium` default the app actually ships, so those clips were harsher than what a
+default install produces. Any future preset comparison must state its
+attenuation limit or it is not reproducible.
+
+Awaiting a listening verdict on which strength is acceptable before changing any
+default.
 
 **2. Breathing sounds are obtrusive.**
 
@@ -187,9 +207,33 @@ Probably a different cause, and partly a side effect of the tail fix:
 
 Worth trying in order: trim the emphasis gain, then consider treating
 low-harmonicity frames inside the hold window differently from voiced ones.
-Resolve the chirping first — improving the resampler may change how breath
-sounds, so tuning the emphasis before that risks compensating for the wrong
-defect.
+Note the emphasis bell also sits inside the chirp band, and measurably makes
+exposure worse (7.9 dB model-only against 8.3 dB with Focus applied), so it is
+implicated in both issues.
+
+### The resampler is still a weak filter, on its own merits
+
+Not the cause of the chirping, but the measurements stand and are worth fixing
+separately. Transition width is `5.5 * inputRate / tapsPerPhase`: at 16 taps
+that is ~7.6 kHz upsampling and ~16.5 kHz downsampling. Measured rejection of a
+tone that should vanish entirely:
+
+| tone (48 kHz in) | folds to | 16 taps | 256 taps |
+| --- | --- | --- | --- |
+| 12 kHz | 10,050 Hz | **-18.8 dB** | -104.1 dB |
+| 14 kHz | 8,050 Hz | -29.8 dB | -125.3 dB |
+| 15 kHz | 7,050 Hz | -36.7 dB | -127.1 dB |
+
+-18.8 dB is only 13 dB below the tone itself. This is inert in the current
+pipeline solely because the 22.05 kHz source has nothing up there — it would
+bite immediately on 44.1 kHz input, or if anything in the chain ever generated
+high-frequency content. `suppressesContentAboveTheOutputNyquist` asserts only
+~17 dB, which is why it passed.
+
+Fix when convenient: ~128 taps up / ~256 down for roughly a 1 kHz transition,
+Kaiser window with a specified stopband, then tighten that test to demand real
+rejection. Cost is a few million multiply-adds per second against a 0.123
+real-time factor.
 
 ### Measured cost
 
