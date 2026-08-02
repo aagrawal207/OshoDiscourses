@@ -117,16 +117,27 @@ final class VoiceFocusChain: @unchecked Sendable {
         }
 
         /// Peaking bell.
-        static func peaking(frequency: Double, sampleRate: Double, q: Double, gainDb: Double) -> Biquad {
+        ///
+        /// With `normalisingPeakToUnity`, the whole response is scaled down by the
+        /// bell's gain so the boosted band reaches 0 dB instead of `gainDb`. The
+        /// relative shape is identical; it just cannot add level.
+        static func peaking(
+            frequency: Double,
+            sampleRate: Double,
+            q: Double,
+            gainDb: Double,
+            normalisingPeakToUnity: Bool = false
+        ) -> Biquad {
             let amplitude = pow(10, gainDb / 40)
             let omega = 2 * Double.pi * frequency / sampleRate
             let alpha = sin(omega) / (2 * q)
             let cosOmega = cos(omega)
             let a0 = 1 + alpha / amplitude
+            let makeup = normalisingPeakToUnity ? pow(10, -gainDb / 20) : 1
             return Biquad(
-                b0: Float((1 + alpha * amplitude) / a0),
-                b1: Float(-2 * cosOmega / a0),
-                b2: Float((1 - alpha * amplitude) / a0),
+                b0: Float(makeup * (1 + alpha * amplitude) / a0),
+                b1: Float(makeup * -2 * cosOmega / a0),
+                b2: Float(makeup * (1 - alpha * amplitude) / a0),
                 a1: Float(-2 * cosOmega / a0),
                 a2: Float((1 - alpha / amplitude) / a0)
             )
@@ -158,16 +169,22 @@ final class VoiceFocusChain: @unchecked Sendable {
     /// of the final words.
     private var duckGainState: Float = 1
     private var liftGainState: Float = 1
+    /// Current gain reduction held by the output limiter. 1 means not limiting.
+    private var limitGainState: Float = 1
     private let duckOpen: Float
     private var duckClose: Float
     private let liftAttack: Float
     private let liftRelease: Float
+    private let limiterRelease: Float
     /// Samples of hold remaining before ducking may resume.
     private var holdRemaining = 0
     /// Running estimate of Osho's speech level, updated only on speech frames.
     /// Roughly a half-second time constant at 100 frames/second.
     private var speechLevelDb: Float = 0
     private static let speechLevelSmoothing: Float = 0.02
+    /// How far 1.6 kHz sits above the rest of the band. Applied as a cut
+    /// elsewhere rather than a boost here, so it adds no level.
+    private static let emphasisGainDb: Double = 3.5
 
     init(sampleRate: Double, parameters: Parameters) {
         self.sampleRate = sampleRate
@@ -182,7 +199,16 @@ final class VoiceFocusChain: @unchecked Sendable {
         // there (the first attempt used 900 Hz) amplifies noise more than voice.
         // 1.6 kHz is sparse in both, so lifting it raises consonants without
         // dragging up a large noise mass.
-        presence = .peaking(frequency: 1600, sampleRate: sampleRate, q: 0.9, gainDb: 3.5)
+        //
+        // The bell's gain is normalised away so its peak response is unity. This
+        // archive is already mastered into full scale, so a bell that genuinely
+        // *added* 3.5 dB simply clipped. Cutting everything else by 3.5 dB
+        // instead keeps the tilt that was chosen by listening while adding no
+        // gain of its own.
+        presence = .peaking(
+            frequency: 1600, sampleRate: sampleRate, q: 0.9, gainDb: Self.emphasisGainDb,
+            normalisingPeakToUnity: true
+        )
         // Seeded high so the first frames are not ducked before any SNR arrives.
         snrHistory = [Float](repeating: 30, count: max(Self.snrAlignmentFrames, 1))
         // Open quickly so a syllable onset is never clipped.
@@ -194,6 +220,9 @@ final class VoiceFocusChain: @unchecked Sendable {
         speechLevelDb = parameters.liftTargetDb
         liftAttack = exp(-1 / Float(0.020 * sampleRate))
         liftRelease = exp(-1 / Float(0.140 * sampleRate))
+        // Long enough that gain reduction rides over syllables instead of
+        // tracking individual waveform peaks, which would distort them.
+        limiterRelease = exp(-1 / Float(0.120 * sampleRate))
     }
 
     func update(parameters: Parameters) {
@@ -206,6 +235,7 @@ final class VoiceFocusChain: @unchecked Sendable {
         presence.resetState()
         duckGainState = 1
         liftGainState = 1
+        limitGainState = 1
         holdRemaining = 0
         speechLevelDb = parameters.liftTargetDb
         for index in snrHistory.indices { snrHistory[index] = 30 }
@@ -250,10 +280,50 @@ final class VoiceFocusChain: @unchecked Sendable {
             frame[index] *= duckGainState * liftGainState
         }
 
-        guard parameters.emphasisEnabled else { return }
+        // Emphasis and the safety limiter share one pass. The limiter has to come
+        // last because the emphasis bell is itself a source of gain.
         for index in 0..<count {
-            frame[index] = presence.process(highPass.process(frame[index]))
+            var sample = frame[index]
+            if parameters.emphasisEnabled {
+                sample = presence.process(highPass.process(sample))
+            }
+            frame[index] = limited(sample)
         }
+    }
+
+    // MARK: - Output ceiling
+
+    /// Keep the chain from ever handing back a sample that would clip.
+    ///
+    /// This is a safety net, not a mastering limiter. It is needed because this
+    /// archive is already mastered into full scale — Maha Geeta #5 peaks at
+    /// 0 dBFS — while this chain *adds* gain: up to `liftMaxDb` (9 dB) plus the
+    /// 3.5 dB emphasis bell. Measured on 40:00-42:00 the output reached
+    /// +3.3 dBFS with Focus and +10.1 dBFS with Lift and Strong, so roughly
+    /// 0.3-0.4% of samples were being clipped by the output hardware. Clipped
+    /// speech peaks crackle, and that was mistaken for a denoiser artifact.
+    ///
+    /// Attack is instantaneous by construction: the gain applied to a sample is
+    /// never larger than `ceiling / |sample|`, so the ceiling cannot be exceeded
+    /// even for one sample and no look-ahead delay is required. Release is slow
+    /// enough that gain reduction does not follow the waveform and distort it.
+    ///
+    /// The ceiling sits below full scale on purpose: this runs at the model's
+    /// 48 kHz, and the downsampler that follows reconstructs intersample peaks
+    /// slightly above the samples it is given.
+    private static let limiterCeiling: Float = 0.891   // -1 dBFS
+
+    private func limited(_ sample: Float) -> Float {
+        let magnitude = abs(sample)
+        let required = magnitude > Self.limiterCeiling
+            ? Self.limiterCeiling / magnitude
+            : 1
+        if required < limitGainState {
+            limitGainState = required          // clamp immediately
+        } else {
+            limitGainState = required + limiterRelease * (limitGainState - required)
+        }
+        return sample * limitGainState
     }
 
     // MARK: - Gain rules
@@ -287,8 +357,11 @@ final class VoiceFocusChain: @unchecked Sendable {
         guard parameters.liftMaxDb > 0 else { return 1 }
 
         var sumOfSquares: Float = 0
+        var peak: Float = 0
         for index in 0..<count {
-            sumOfSquares += frame[index] * frame[index]
+            let sample = frame[index]
+            sumOfSquares += sample * sample
+            peak = max(peak, abs(sample))
         }
         let rms = sqrt(sumOfSquares / Float(count))
         let levelDb = rms > 1e-6 ? 20 * log10(rms) : -120
@@ -302,6 +375,18 @@ final class VoiceFocusChain: @unchecked Sendable {
         guard speechLike || inHold else { return 1 }
         let deficit = parameters.liftTargetDb - speechLevelDb
         guard deficit > 0 else { return 1 }
-        return pow(10, min(deficit, parameters.liftMaxDb) / 20)
+        let wanted = pow(10, min(deficit, parameters.liftMaxDb) / 20)
+
+        // The target is an RMS one, but clipping is a peak problem. Speech runs
+        // roughly 18 dB of crest factor, so a frame sitting at -20 dBFS RMS is
+        // already peaking near -2 dBFS and the full 9 dB of lift would push it
+        // well past full scale. Cap the boost by what the frame's own peak can
+        // take, which leaves the lift free to work on genuinely quiet passages —
+        // where the headroom actually exists — and idle on loud ones.
+        //
+        // Clamped at unity: this is an upward-only control. Pulling anything down
+        // is the ducking gain's job and, past the ceiling, the limiter's.
+        guard peak > 1e-6 else { return wanted }
+        return min(wanted, max(1, Self.limiterCeiling / peak))
     }
 }

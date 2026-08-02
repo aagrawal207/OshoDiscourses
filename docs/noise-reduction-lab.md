@@ -144,13 +144,14 @@ This reduced noise in short gaps from +3.2 dB to +2.2 dB.
 ### Open issues — next session starts here
 
 Reported after listening to all three presets on Maha Geeta #5 around 41:37.
-Sentence endings and overall clarity were confirmed fixed; these remain.
+Sentence endings and overall clarity were confirmed fixed.
 
-**1. Chirping while Osho speaks. It is the model's musical noise, exposed.**
+**1. Chirping — resolved. It was clipping, and the bug was real in playback too.**
 
-The first hypothesis — imaging or aliasing in `PolyphaseResampler` — was measured
-and is **wrong**. Recording it because the reasoning was plausible and someone
-will otherwise re-run it:
+Two hypotheses were measured and both were wrong. Recorded because each was
+plausible and someone will otherwise re-run them.
+
+*Wrong hypothesis one: imaging or aliasing in `PolyphaseResampler`.*
 
 - DeepFilterNet's 48 kHz output holds energy above 11,025 Hz at **-143 dB**
   relative to total. The input was upsampled from a band-limited 22.05 kHz
@@ -160,32 +161,69 @@ will otherwise re-run it:
   the 2-10 kHz band by 0.2 dB and leaves the frame-to-frame burble index
   identical (2.45 vs 2.45).
 
-What it actually is, measured over 1.5-8 kHz on speech frames at 40:00-42:00:
-the model pushes the **masking noise bed down 10.4 dB while the residual blobs
-only fall 2.1 dB**, so the blobs end up standing 8.3 dB further out of the bed
-than they did in the source. Spectrograms show it plainly: the source's smooth
-noise wash is replaced by sparse speckle, and a 1.3 s pause is driven to nearly
-black.
+*Wrong hypothesis two: the model's musical noise, exposed.* The measurement below
+is real and worth keeping as characterisation, it just is not what was being
+reported. Over 1.5-8 kHz on speech frames the model pushes the **masking noise
+bed down 10.4 dB while the residual blobs only fall 2.1 dB**, so blobs stand
+8.3 dB further out than in the source. The blob *count* barely moves (182/s
+source against 196/s enhanced) — what changes is that the noise which used to
+mask them is gone. Spectrograms show the smooth noise wash replaced by sparse
+speckle, and a 1.3 s pause driven nearly black. Attenuation limit controls it:
 
-So the blob *count* is not the problem — it barely moves (182/s in the source
-against 196/s enhanced). The problem is that the noise which used to **mask**
-them has been removed. This is ordinary musical noise, and it only became
-audible once the tail-muting fix stopped hiding it.
-
-The knob is DeepFilterNet's attenuation limit, which caps how far any band may
-be pushed down and therefore leaves a masking bed in place. It already exists
-and is already wired to Settings > Noise reduction as Light/Medium/Strong
-(`AudioPlayerService.DenoiseStrength`: 6 / 12 / 100 dB). Measured with preset
-Focus:
-
-| strength | noise removed | chirp exposure |
+| strength | noise removed | blob exposure |
 | --- | --- | --- |
 | Strong (100 dB, no limit) | -11.1 dB | 9.9 dB |
 | Medium (12 dB, the default) | -6.5 dB | 5.8 dB |
 | Light (6 dB) | -3.9 dB | 3.8 dB |
 
-Exposure falls monotonically with the limit, and so does the noise reduction —
-it is a direct trade, not a free fix.
+On a blind listen of that ladder, none of the three was reported as chirping.
+That is what ruled this out as the cause.
+
+*The actual cause: the audition WAV files were clipping.*
+
+| clip set | peak | clipped samples |
+| --- | --- | --- |
+| `AB_*`, the Python prototypes that were approved | -0.92 dBFS | 0 |
+| `SWIFT_focus/lift/strong` | 0.00 dBFS | 1,559-1,730 (0.18-0.20%) |
+| `at-41-37/4137_*` | 0.00 dBFS | 478-1,404 (0.11-0.32%) |
+
+Clipped speech peaks crackle, which is what "chirping" described. It was absent
+from the zero-clipped prototypes, and absent again once renders were written with
+shared headroom. `4137_lift` and `4137_strong` clipped 2.4x more than
+`4137_focus` — those are the two presets carrying the +9 dB lift, which is the
+tell.
+
+**And the same defect was real in live playback, not just in the renders.** With
+no normalisation the chain handed back, on 40:00-42:00:
+
+| strength | preset | peak out | samples over full scale |
+| --- | --- | --- | --- |
+| Medium | focus | +3.34 dBFS | 7,977 |
+| Medium | lift | +10.06 dBFS | 11,487 |
+| Medium | strong | +10.06 dBFS | 11,333 |
+
+Two structural causes, since this archive is already mastered into full scale
+(Maha Geeta #5 peaks at 0 dBFS):
+
+1. The emphasis bell added a flat +3.5 dB. It is now normalised so its peak
+   response is unity — the same tilt, achieved by cutting elsewhere.
+2. The lift aims at **-20 dBFS RMS**, but speech carries ~18 dB of crest factor,
+   so a frame at -20 dBFS RMS is already peaking near -2 dBFS and 9 dB of lift
+   put it past full scale. The lift is now capped by what the frame's own peak
+   can take, and clamped at unity so it stays an upward-only control.
+
+A safety limiter backs both up, with instantaneous attack by construction (the
+gain applied to a sample never exceeds `ceiling / |sample|`, so no look-ahead
+delay is needed) and a 120 ms release. Its ceiling is -1 dBFS rather than 0
+because the downsampler that follows reconstructs intersample peaks slightly
+above the samples it is handed — measured output lands at -0.94 dBFS.
+
+Fixing the causes rather than leaning on the limiter mattered: with the limiter
+alone it engaged on **44% of samples**, which is a compressor, not a safety net.
+After both fixes it engages on 0.005% (Focus) to 0.04% (Lift/Strong).
+
+Cost: output RMS is ~3.8 dB below the source, part noise removal and part the
+emphasis normalisation. Level cannot be given back — the source has no headroom.
 
 **Note the earlier listening tests were run at full attenuation**, as
 `VoiceFocusPreset`'s doc comment says. That is the Strong setting, not the
@@ -193,8 +231,13 @@ it is a direct trade, not a free fix.
 default install produces. Any future preset comparison must state its
 attenuation limit or it is not reproducible.
 
-Awaiting a listening verdict on which strength is acceptable before changing any
-default.
+Medium was chosen on that listen: Light still left audible noise. Medium is
+already the default, so no default changed. Note that the default *mode* is
+still `rnnoise`, so DeepFilterNet remains opt-in.
+
+Any future audition file must be written with shared headroom and checked for
+clipped samples before anyone is asked to judge it. That mistake cost two wrong
+diagnoses.
 
 **2. Breathing sounds are obtrusive.**
 
@@ -202,7 +245,8 @@ Probably a different cause, and partly a side effect of the tail fix:
 
 - The 220 ms hold keeps the gate fully open through a breath taken right after
   speech, while ducking the noise around it, so the breath now stands out.
-- The +3.5 dB bell at 1.6 kHz sits in the breath and fricative band.
+- The 1.6 kHz emphasis tilt sits in the breath and fricative band. It no longer
+  adds absolute level, but it still raises that band relative to the rest.
 - DeepFilterNet partially suppresses then releases breath, which modulates it.
 
 Worth trying in order: trim the emphasis gain, then consider treating

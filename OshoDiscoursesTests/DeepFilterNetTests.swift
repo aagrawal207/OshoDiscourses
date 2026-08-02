@@ -526,6 +526,114 @@ struct DeepFilterNetTests {
         #expect(strong.closeMs <= focus.closeMs)
     }
 
+    // MARK: - Output ceiling
+
+    /// A frame of 1.6 kHz — the emphasis bell's own centre frequency — that is
+    /// near-silent apart from an occasional full-scale burst.
+    ///
+    /// The shape matters. The lift aims at an RMS target, so it only engages when
+    /// the running speech level is low, while clipping is caused by *peaks*. A
+    /// signal has to be quiet on average yet reach full scale to expose that gap,
+    /// which is exactly the crest factor real speech has. A steadier burst train
+    /// sat above the RMS target, the lift stayed idle, and the test proved nothing.
+    private func quietWithFullScaleBursts(
+        frameIndex: Int,
+        hop: Int,
+        phase: inout Double,
+        sampleRate: Double
+    ) -> [Float] {
+        var frame = [Float](repeating: 0, count: hop)
+        let isBurst = frameIndex % 8 == 7
+        for index in 0..<hop {
+            // Two full periods at 48 kHz, so the burst is guaranteed to reach
+            // full scale rather than depending on where the phase happens to sit.
+            let amplitude: Float = (isBurst && index < 60) ? 1.0 : 0.01
+            frame[index] = amplitude * Float(sin(phase))
+            phase += 2 * Double.pi * 1600 / sampleRate
+        }
+        return frame
+    }
+
+    @Test func outputNeverClipsOnAFullScaleSource() {
+        // This archive is already mastered into full scale — Maha Geeta #5 peaks
+        // at 0 dBFS — while the chain adds gain: up to 9 dB of lift plus the
+        // 3.5 dB emphasis bell. Measured on 40:00-42:00 the output reached
+        // +3.3 dBFS with Focus and +10.1 dBFS with Lift and Strong, so 0.3-0.4%
+        // of samples were being clipped by the output hardware. Clipped speech
+        // peaks crackle, and that was mistaken for a denoiser artifact.
+        let sampleRate = 48_000.0
+        let hop = 480
+        for preset in VoiceFocusPreset.allCases {
+            let chain = VoiceFocusChain(sampleRate: sampleRate, parameters: .forPreset(preset))
+            var phase = 0.0
+            var worstPeak: Float = 0
+            for frameIndex in 0..<400 {
+                var frame = quietWithFullScaleBursts(
+                    frameIndex: frameIndex, hop: hop, phase: &phase, sampleRate: sampleRate
+                )
+                frame.withUnsafeMutableBufferPointer { pointer in
+                    chain.process(frame: pointer.baseAddress!, count: pointer.count, localSnrDb: 20)
+                }
+                worstPeak = max(worstPeak, frame.map(abs).max() ?? 0)
+            }
+            #expect(
+                worstPeak <= 1.0,
+                "\(preset.rawValue) hands back \(worstPeak), which the output stage would clip"
+            )
+        }
+    }
+
+    @Test func emphasisAddsNoLevelOfItsOwn() {
+        // The bell is normalised so its peak response is unity: 1.6 kHz is tilted
+        // up by cutting everything else, not by boosting. A bell that genuinely
+        // added 3.5 dB clipped this material on its own.
+        let sampleRate = 48_000.0
+        let hop = 480
+        let chain = VoiceFocusChain(sampleRate: sampleRate, parameters: .focus)
+        let amplitude: Float = 0.8
+        var phase = 0.0
+        var worstPeak: Float = 0
+        for frameIndex in 0..<200 {
+            var frame = [Float](repeating: 0, count: hop)
+            for index in 0..<hop {
+                frame[index] = amplitude * Float(sin(phase))
+                phase += 2 * Double.pi * 1600 / sampleRate
+            }
+            frame.withUnsafeMutableBufferPointer { pointer in
+                chain.process(frame: pointer.baseAddress!, count: pointer.count, localSnrDb: 20)
+            }
+            // Skip the first frames while the biquads settle.
+            if frameIndex > 5 { worstPeak = max(worstPeak, frame.map(abs).max() ?? 0) }
+        }
+        #expect(
+            worstPeak <= amplitude + 0.01,
+            "emphasis at its own centre frequency added level: \(worstPeak) from \(amplitude)"
+        )
+    }
+
+    @Test func liftStillRaisesQuietSpeechThatHasHeadroom() {
+        // The peak cap must not defeat the lift: quiet passages, where the
+        // headroom genuinely exists, are the whole reason it is there.
+        let sampleRate = 48_000.0
+        let hop = 480
+        let chain = VoiceFocusChain(sampleRate: sampleRate, parameters: .lift)
+        var phase = 0.0
+        var gainDb: Float = 0
+        for _ in 0..<200 {
+            var frame = [Float](repeating: 0, count: hop)
+            for index in 0..<hop {
+                frame[index] = 0.02 * Float(sin(phase))
+                phase += 2 * Double.pi * 300 / sampleRate
+            }
+            let before = rms(frame)
+            frame.withUnsafeMutableBufferPointer { pointer in
+                chain.process(frame: pointer.baseAddress!, count: pointer.count, localSnrDb: 20)
+            }
+            gainDb = 20 * log10(max(rms(frame), 1e-9) / max(before, 1e-9))
+        }
+        #expect(gainDb > 3, "quiet speech is no longer being lifted (got \(gainDb) dB)")
+    }
+
     // MARK: - Helpers
 
     private func rms(_ v: [Float]) -> Float {
