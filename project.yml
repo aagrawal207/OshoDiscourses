@@ -32,12 +32,18 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses
-        SWIFT_OBJC_BRIDGING_HEADER: OshoDiscourses/RNNoise/include/RNNoiseBridge.h
+        SWIFT_OBJC_BRIDGING_HEADER: OshoDiscourses/Bridging/OshoDiscourses-Bridging-Header.h
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OshoDiscourses/RNNoise/include
           - $(SRCROOT)/OshoDiscourses/RNNoise/src
+          - $(SRCROOT)/native/deepfilter-bridge/include
         GCC_WARN_INHIBIT_ALL_WARNINGS: YES
         GCC_FAST_MATH: NO
+    dependencies:
+      # Static library XCFramework (DeepFilterNet via Rust/tract) — linked, not
+      # embedded. Rebuild with native/deepfilter-bridge/build-xcframework.sh.
+      - framework: Vendor/DeepFilterBridge.xcframework
+        embed: false
     info:
       path: OshoDiscourses/Info.plist
       properties:

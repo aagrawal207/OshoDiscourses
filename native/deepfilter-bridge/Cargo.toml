@@ -1,0 +1,34 @@
+[package]
+name = "deepfilter_bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Panic-safe C bridge over DeepFilterNet's tract runtime for iOS"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "deepfilter_bridge"
+# staticlib for the iOS XCFramework; cdylib so the same bridge can be driven
+# from an offline harness on the Mac when evaluating audio.
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+# Pinned to an exact upstream commit so the produced XCFramework is reproducible.
+# `default-features = false` drops the HDF5 dataset stack and the vorbis/flac
+# decoders — none of which build or are needed on iOS. Only the `tract`
+# inference runtime is enabled.
+deep_filter = { git = "https://github.com/Rikorose/DeepFilterNet", rev = "d375b2d8309e0935d165700c91da9de862a99c31", default-features = false, features = [
+  "tract",
+] }
+# Must match the ndarray major version deep_filter exposes in its public API,
+# otherwise the ArrayView types below are a different, incompatible type.
+ndarray = "^0.15"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# `panic = "unwind"` (the default) is required: the bridge relies on
+# `catch_unwind` to stop a Rust panic from unwinding across the FFI boundary
+# into Swift, which would abort the whole app.
+panic = "unwind"

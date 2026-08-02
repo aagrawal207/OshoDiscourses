@@ -19,6 +19,13 @@ build/
 .build/
 Packages/
 
+# Rust (DeepFilterNet bridge) — build output only.
+# Cargo.lock IS committed: it pins every transitive crate so the XCFramework is
+# reproducible. Vendor/DeepFilterBridge.xcframework is also committed so app
+# builds need no Rust toolchain.
+native/deepfilter-bridge/target/
+native/deepfilter-bridge/.cargo/
+
 # macOS
 .DS_Store
 *.swp
