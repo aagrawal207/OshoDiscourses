@@ -20,7 +20,8 @@ xcodegen generate
 
 - Swift 6.0, SwiftUI, iOS 18+
 - AVFoundation + MediaPlayer (audio playback + lock screen controls)
-- No external dependencies — all Apple frameworks
+- Apple frameworks only, with one vendored native exception: DeepFilterNet
+  (Rust/tract, built into `Vendor/DeepFilterBridge.xcframework`)
 - No SwiftData — catalog is static structs, settings use UserDefaults, downloads tracked by filesystem
 
 ## Architecture
@@ -47,14 +48,23 @@ OshoDiscourses/
 │   ├── SleepTimerService.swift         # Countdown + end-of-discourse sleep modes
 │   ├── BookmarkService.swift           # Bookmarks persisted to bookmarks.json; union-by-id cloud merge
 │   ├── ListeningStatsService.swift     # Daily listening totals + streak (listening_stats.json); max-per-day cloud merge
-│   ├── NoiseReductionProcessor.swift   # RNNoise wrapper (MTAudioProcessingTap, wet/dry mix)
+│   ├── NoiseReductionProcessor.swift   # Tap host: RNNoise + Cadence DSP, delegates DeepFilterNet
+│   ├── DeepFilterProcessor.swift       # DeepFilterNet 3 via native Rust/tract bridge (resample, async load, status)
+│   ├── PolyphaseResampler.swift        # 22.05kHz catalog <-> 48kHz model rate (streaming, allocation-free)
+│   ├── VoiceFocusChain.swift           # Voice-forward presets: SNR ducking + quiet-speech lift + emphasis
 │   └── UserSettings.swift              # @Observable singleton over UserDefaults
 ├── RNNoise/                            # Vendored RNNoise C sources + bridging header
+├── Bridging/                           # Single Obj-C bridging header (RNNoise + DeepFilter)
 ├── Resources/
 │   ├── Catalog.swift                   # 261 series, 4,361 discourses — static data + URL builder
+│   ├── DeepFilterNet3_onnx.tar.gz      # Bundled DFN3 model (48 kHz, 480-sample hop)
 │   └── Assets.xcassets/                # App icon placeholder
+native/deepfilter-bridge/               # Rust crate + build-xcframework.sh (pinned upstream commit)
+Vendor/DeepFilterBridge.xcframework     # Committed static lib: ios-arm64 + arm64/x86_64 simulator
 OshoDiscoursesTests/
 ├── OshoDiscoursesTests.swift           # Catalog + URL builder tests
+├── DeepFilterNetTests.swift            # Real model load, bridge contract, denoising, resampled 22.05kHz path, Voice Focus contrast
+├── PolyphaseResamplerTests.swift       # Ratio reduction, DC/tone fidelity, anti-aliasing, round trip
 ├── PlaybackStateTests.swift            # Position/recent/completed + cloud-merge tests
 ├── ListeningStatsTests.swift           # Daily totals + streak tests
 ├── SeriesMetadataTests.swift           # Theme/metadata tests
@@ -122,6 +132,9 @@ OshoDiscoursesTests/
 - [x] Sleep timer — 5/10/15/30/45/60 min + "End of discourse" mode
 - [x] Listening stats dashboard + streak (My Activity tab)
 - [x] Noise reduction — RNNoise neural denoise with Light/Medium/Strong wet-dry mix
+- [x] Noise reduction — DeepFilterNet 3 (native Rust/tract, 48 kHz, strength = attenuation limit)
+- [x] Voice Focus — Focus/Lift/Strong presets that make Osho's voice sit forward over overlapping noise
+- [x] Resampling so the 48 kHz models actually run on the 22.05 kHz catalog
 - [x] Recently Played / Continue Listening + Recently Completed on Home
 - [x] iCloud sync of progress + bookmarks + daily stats (silent, NSUbiquitousKeyValueStore)
 - [x] Downloads excluded from iCloud backup (re-downloadable content)
@@ -140,7 +153,12 @@ OshoDiscoursesTests/
 ## Key decisions
 
 - **Static catalog, not fetched** — 4,361 discourses hardcoded. Updates via app releases. No server needed.
-- **No third-party deps** — everything from Apple frameworks. Simpler, faster, no CocoaPods/SPM issues.
+- **Almost no third-party deps** — everything from Apple frameworks except the vendored RNNoise C sources and the DeepFilterNet Rust/tract bridge, both linked statically with no package manager. Adding DeepFilterNet was a deliberate trade: it is the only option that removes steady tape hiss and noise overlapping speech.
+- **The catalog is 22.05 kHz, not 48 kHz** — the Hindi talks are 22,050 Hz 43 kbps MP3s (the archive.org mirror is byte-identical). Both neural denoisers are 48 kHz models, so without `PolyphaseResampler` DeepFilterNet was bypassed entirely and RNNoise ran on mis-mapped bands. This was the real reason noise reduction "did nothing".
+- **The denoise gate is slow to close, never fast** — Osho's sentences decay in level, so the model's local SNR collapses on his final words. A conventional fast-closing gate (the first attempt used 10 ms) mutes the end of every sentence. The gate now opens in 8 ms, holds ~220 ms after speech, then closes over 400 ms; levelling tracks running speech level rather than per-frame level, which otherwise boosts quiet noise in the gaps harder than the voice.
+- **Noise that overlaps speech is attacked in time, not frequency** — an aircraft at 40:20 of Maha Geeta #5 occupies the same 150-700 Hz as the voice, with only ~0.5% of energy above 3 kHz. So Voice Focus raises speech-to-pause contrast using the model's own local SNR instead of EQ. Downward compression was measured and rejected (it lifts pauses too); DSP without the model was worse than doing nothing.
+- **DeepFilterNet strength = attenuation limit, not dry/wet** — blending the untouched signal back in would reintroduce the very noise the model removed, and would need sample-alignment against the model's lookahead. Output is always fully wet.
+- **DeepFilterNet failures degrade to passthrough** — a panic-safe Rust bridge (`catch_unwind`) plus explicit UI status, so a bad model or frame never crashes playback and never silently substitutes another denoiser.
 - **No database** — catalog is static structs, downloads tracked by filesystem, settings in UserDefaults.
 - **Services as @Observable** — injected via .environment(), shared app-wide.
 - **Apple Music dark UI** — true black, white text, .ultraThinMaterial for glass, SF Symbols.
