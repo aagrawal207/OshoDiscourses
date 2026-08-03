@@ -25,6 +25,7 @@ struct OshoDiscoursesApp: App {
     @State private var audioPlayer = AudioPlayerService()
     @State private var downloadService = DownloadService()
     @State private var playbackState = PlaybackStateService()
+    @State private var enhancementStore = AudioEnhancementStore()
     @State private var showingSplash = true
     @Environment(\.scenePhase) private var scenePhase
 
@@ -35,6 +36,7 @@ struct OshoDiscoursesApp: App {
                 .environment(audioPlayer)
                 .environment(downloadService)
                 .environment(playbackState)
+                .environment(enhancementStore)
                 .onChange(of: scenePhase) { _, newPhase in
                     // Returning to the foreground: reclaim the audio session and
                     // refresh Now Playing so Lock Screen / AirPods controls come
@@ -54,6 +56,7 @@ struct OshoDiscoursesApp: App {
                     playbackState.attach(to: audioPlayer)
                     audioPlayer.playbackStateService = playbackState
                     audioPlayer.downloadService = downloadService
+                    audioPlayer.enhancementStore = enhancementStore
                     SleepTimerService.shared.onExpire = { [weak audioPlayer] in
                         guard let audioPlayer, audioPlayer.isPlaying else { return }
                         audioPlayer.togglePlayPause()

@@ -188,6 +188,7 @@ private struct DiscourseRowView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
     @Environment(PlaybackStateService.self) private var playbackState
+    @Environment(AudioEnhancementStore.self) private var enhancement
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
     @State private var showDownloadHint = false
@@ -202,6 +203,18 @@ private struct DiscourseRowView: View {
 
     private var isCompleted: Bool {
         playbackState.isCompleted(discourse.id)
+    }
+
+    private var isEnhanced: Bool {
+        enhancement.isReady(discourseId: discourse.id)
+    }
+
+    private var isEnhancing: Bool {
+        enhancement.renderingId == discourse.id
+    }
+
+    private var enhanceFailure: String? {
+        enhancement.failure?.id == discourse.id ? enhancement.failure?.message : nil
     }
 
     var body: some View {
@@ -230,7 +243,19 @@ private struct DiscourseRowView: View {
                     .lineLimit(1)
                     .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
 
-                if let failureMessage {
+                if let enhanceFailure {
+                    Text(enhanceFailure)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if isEnhancing {
+                    // Rendering runs about 8x faster than playback, so a full
+                    // discourse is minutes rather than seconds — worth showing a
+                    // real percentage instead of an indeterminate spinner.
+                    Text("Filtering… \(Int(enhancement.progress * 100))%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else if let failureMessage {
                     Text(failureMessage)
                         .font(.caption2)
                         .foregroundStyle(.red)
@@ -244,6 +269,13 @@ private struct DiscourseRowView: View {
             }
 
             Spacer()
+
+            if isEnhanced {
+                Image(systemName: "wand.and.sparkles")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+                    .accessibilityLabel("Noise filtered copy ready")
+            }
 
             actionButton
         }
@@ -262,6 +294,36 @@ private struct DiscourseRowView: View {
             playDiscourse()
         }
         .contextMenu {
+            if isDownloaded {
+                if isEnhancing {
+                    Button(role: .destructive) {
+                        enhancement.cancel()
+                    } label: {
+                        Label("Stop Filtering", systemImage: "stop.circle")
+                    }
+                } else if isEnhanced {
+                    Button {
+                        enhanceDiscourse()
+                    } label: {
+                        Label("Filter Again", systemImage: "arrow.clockwise")
+                    }
+                    Button(role: .destructive) {
+                        enhancement.remove(discourseId: discourse.id)
+                    } label: {
+                        Label("Remove Filtered Copy", systemImage: "trash")
+                    }
+                } else {
+                    Button {
+                        enhanceDiscourse()
+                    } label: {
+                        Label("Apply Noise Filter", systemImage: "wand.and.sparkles")
+                    }
+                    // Rendering only makes sense when there is a filter to apply,
+                    // and the settings it would bake in are the ones in force now.
+                    .disabled(!player.isNoiseReductionEnabled || enhancement.renderingId != nil)
+                }
+            }
+
             if playbackState.isCompleted(discourse.id) {
                 Button {
                     playbackState.unmarkCompleted(discourseId: discourse.id)
@@ -276,6 +338,12 @@ private struct DiscourseRowView: View {
                 }
             }
         }
+    }
+
+    /// Renders this discourse through the chain so playback stops paying for it.
+    private func enhanceDiscourse() {
+        guard let source = downloads.localFileURL(for: discourse.id) else { return }
+        enhancement.enhance(discourseId: discourse.id, sourceURL: source)
     }
 
     private var estimatedSize: String {

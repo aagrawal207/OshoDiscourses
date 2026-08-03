@@ -119,6 +119,8 @@ final class AudioPlayerService {
 
     weak var playbackStateService: PlaybackStateService?
     weak var downloadService: DownloadService?
+    /// Set by the app so playback can prefer a pre-rendered copy.
+    weak var enhancementStore: AudioEnhancementStore?
 
     // MARK: - Position History (Kindle-style)
 
@@ -609,7 +611,7 @@ final class AudioPlayerService {
         didManuallySeekNearEnd = false
         didTriggerPreemptiveDownload = false
 
-        let playerItem = AVPlayerItem(url: item.url)
+        let playerItem = AVPlayerItem(url: resolvedURL(for: item))
 
         if player == nil {
             player = AVPlayer(playerItem: playerItem)
@@ -1046,6 +1048,27 @@ final class AudioPlayerService {
         }
     }
 
+    // MARK: - Private: Pre-rendered audio
+
+    /// Whether the item now loaded is a file that was already put through the
+    /// noise-reduction chain. The live tap must not run on top of it.
+    private(set) var isPlayingPreRendered = false
+
+    /// Swaps in a pre-rendered copy when one exists for the current settings.
+    ///
+    /// Every playback path funnels through `loadAndPlay`, so resolving here covers
+    /// play, queue advance, and the rebuild after a torn-down player, rather than
+    /// leaving each call site to remember.
+    private func resolvedURL(for item: QueueItem) -> URL {
+        guard isNoiseReductionEnabled,
+              let rendered = enhancementStore?.readyURL(discourseId: item.id) else {
+            isPlayingPreRendered = false
+            return item.url
+        }
+        isPlayingPreRendered = true
+        return rendered
+    }
+
     // MARK: - Private: Audio Mix (Noise Reduction / Voice Filter + Volume Boost)
 
     private func applyAudioMix(to item: AVPlayerItem) {
@@ -1053,7 +1076,10 @@ final class AudioPlayerService {
             guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
             let boost = volume > 1.0 ? volume : Float(1.0)
 
-            if isNoiseReductionEnabled {
+            // A pre-rendered file has already been through the chain. Running the
+            // tap as well would denoise twice — two rounds of ducking and
+            // emphasis on audio that has had both.
+            if isNoiseReductionEnabled, !isPlayingPreRendered {
                 guard let mix = noiseProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
                 await MainActor.run { item.audioMix = mix }
             } else if volume > 1.0 {
@@ -1070,6 +1096,21 @@ final class AudioPlayerService {
 
     private func rebuildAudioMix() {
         guard let item = player?.currentItem else { return }
+        // A pre-rendered file has its settings baked in, so a settings change
+        // cannot be honoured by rebuilding the tap — the file being played is
+        // itself the wrong one now. Swap the file instead; `loadAndPlay` saves the
+        // outgoing position and resumes it, so this is not audible beyond a
+        // reload. Without this, turning noise reduction off while a rendered copy
+        // played would appear to do nothing.
+        if queue.indices.contains(currentIndex) {
+            let candidate = queue[currentIndex]
+            let wantsPreRendered = isNoiseReductionEnabled
+                && enhancementStore?.readyURL(discourseId: candidate.id) != nil
+            if wantsPreRendered != isPlayingPreRendered {
+                loadAndPlay(item: candidate)
+                return
+            }
+        }
         noiseProcessor.reset()
         applyAudioMix(to: item)
     }

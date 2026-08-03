@@ -23,10 +23,11 @@ struct AudioEnhancementTests {
     private func writeSource(
         seconds: Double,
         sampleRate: Double = 22_050,
-        silent: Bool = false
+        silent: Bool = false,
+        channels: AVAudioChannelCount = 1
     ) throws -> URL {
         let format = try #require(
-            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
+            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channels)
         )
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("enhance-source-\(UUID().uuidString).wav")
@@ -35,7 +36,7 @@ struct AudioEnhancementTests {
             settings: [
                 AVFormatIDKey: kAudioFormatLinearPCM,
                 AVSampleRateKey: sampleRate,
-                AVNumberOfChannelsKey: 1,
+                AVNumberOfChannelsKey: Int(channels),
                 AVLinearPCMBitDepthKey: 16,
                 AVLinearPCMIsFloatKey: false,
                 AVLinearPCMIsBigEndianKey: false
@@ -52,7 +53,10 @@ struct AudioEnhancementTests {
         let syllable = 0.5
         var phase = 0.0
         for index in 0..<frames {
-            guard !silent else { data[0][index] = 0; continue }
+            guard !silent else {
+                for channel in 0..<Int(channels) { data[channel][index] = 0 }
+                continue
+            }
             let t = Double(index) / sampleRate
             let slot = Int(t / syllable)
             let within = t - Double(slot) * syllable
@@ -62,7 +66,12 @@ struct AudioEnhancementTests {
             phase += 2 * .pi * pitch / sampleRate
             let envelope = min(within / 0.03, (0.35 - within) / 0.03, 1)
             let tone = sin(phase) + 0.5 * sin(2 * phase) + 0.3 * sin(3 * phase)
-            data[0][index] = Float(0.25 * max(envelope, 0) * tone)
+            let sample = Float(0.25 * max(envelope, 0) * tone)
+            for channel in 0..<Int(channels) {
+                // Slightly different per channel, so a test cannot pass by
+                // accidentally comparing a channel against itself.
+                data[channel][index] = channel == 0 ? sample : sample * 0.8
+            }
         }
         try file.write(from: buffer)
         return url
@@ -146,6 +155,40 @@ struct AudioEnhancementTests {
         #expect(
             abs(lag) < Int(original.rate * 0.03),
             "rendered audio sits \(lag) frames off the source"
+        )
+    }
+
+    @Test func rendersTheStereoLayoutTheDownloadsActuallyUse() async throws {
+        // The real files are not mono. oshoworld ships 22,050 Hz joint-stereo
+        // MP3s — measured on Maha Geeta #5, the two channels differ by only
+        // -18.4 dB, so it is a near-dual-mono source in a stereo container. That
+        // means DeepFilterNet loads one model instance per channel, and every
+        // other render test here is mono, so this covers the layout that will
+        // actually turn up.
+        let source = try writeSource(seconds: 5, silent: false, channels: 2)
+        defer { try? FileManager.default.removeItem(at: source) }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("enhance-stereo-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: destination) }
+
+        let service = AudioEnhancementService()
+        let result = try await service.render(
+            source: source,
+            destination: destination,
+            recipe: .init(mode: .deepFilterNet, strength: .medium, voiceFocus: .focus)
+        )
+        #expect(result.latencyFrames > 0)
+
+        let rendered = try AVAudioFile(forReading: destination)
+        #expect(
+            rendered.processingFormat.channelCount == 2,
+            "channel count must survive the render"
+        )
+        let original = try AVAudioFile(forReading: source)
+        let drift = abs(rendered.length - original.length)
+        #expect(
+            Double(drift) < rendered.processingFormat.sampleRate * 0.15,
+            "stereo render drifted by \(drift) frames"
         )
     }
 
