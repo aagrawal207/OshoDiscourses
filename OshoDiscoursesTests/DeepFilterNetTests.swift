@@ -526,6 +526,150 @@ struct DeepFilterNetTests {
         #expect(strong.closeMs <= focus.closeMs)
     }
 
+    // MARK: - Latency across resets
+
+    /// Lag, in samples, that best lines `rendered` up against `reference`.
+    private func bestLag(reference: [Float], rendered: [Float], maxLag: Int) -> Int {
+        var bestLag = 0
+        var bestScore = 0.0
+        let window = min(reference.count, rendered.count) - maxLag - 1
+        guard window > 1000 else { return 0 }
+        for lag in 0..<maxLag {
+            var score = 0.0
+            var index = 0
+            while index < window {
+                score += Double(reference[index]) * Double(rendered[index + lag])
+                index += 2
+            }
+            if score > bestScore { bestScore = score; bestLag = lag }
+        }
+        return bestLag
+    }
+
+    /// Voiced-sounding syllables whose pitch changes each time, so the signal has
+    /// a single unambiguous alignment. A steady note correlates once per period
+    /// and would let this test lock onto the wrong peak.
+    private func syllables(seconds: Double, sampleRate: Double) -> [Float] {
+        let pitches: [Double] = [150, 232, 191, 305, 168, 264, 212, 143, 287, 176]
+        let syllable = 0.5
+        var phase = 0.0
+        var out = [Float](repeating: 0, count: Int(seconds * sampleRate))
+        for index in out.indices {
+            let t = Double(index) / sampleRate
+            let slot = Int(t / syllable)
+            let within = t - Double(slot) * syllable
+            guard within < 0.35 else { out[index] = 0; phase = 0; continue }
+            phase += 2 * Double.pi * pitches[slot % pitches.count] / sampleRate
+            let envelope = min(within / 0.03, (0.35 - within) / 0.03, 1)
+            out[index] = Float(0.25 * max(envelope, 0) * (sin(phase) + 0.5 * sin(2 * phase)))
+        }
+        return out
+    }
+
+    private func delayThroughChain(
+        _ processor: NoiseReductionProcessor,
+        signal: [Float],
+        format: AVAudioFormat
+    ) throws -> Int {
+        var out = [Float]()
+        out.reserveCapacity(signal.count)
+        var offset = 0
+        while offset < signal.count {
+            let count = min(4096, signal.count - offset)
+            let block = try #require(
+                AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count))
+            )
+            block.frameLength = AVAudioFrameCount(count)
+            let data = try #require(block.floatChannelData)
+            for index in 0..<count { data[0][index] = signal[offset + index] }
+            processor.process(buffer: block.mutableAudioBufferList, frameCount: block.frameLength)
+            out.append(contentsOf: UnsafeBufferPointer(start: data[0], count: count))
+            offset += count
+        }
+        return bestLag(reference: signal, rendered: out, maxLag: Int(format.sampleRate * 0.45))
+    }
+
+    @Test func latencyDoesNotGrowWhenTheStreamIsReset() async throws {
+        // `reset()` runs on every track change, seek and settings toggle. It used
+        // to forward to upstream's `DfTract::init()`, which re-primes
+        // `rolling_spec_buf_x` without clearing it first, so each call added
+        // `df_order` (5) hops of delay and it accumulated without bound: measured
+        // at 103, 153, 203, 253 and 303 ms over successive resets on a 22.05 kHz
+        // source. After roughly eight resets the output FIFO overflowed, `push`
+        // started failing, and DeepFilterNet fell back to passthrough for the
+        // rest of the session.
+        let sampleRate = 22_050.0
+        let format = try #require(
+            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
+        )
+        let signal = syllables(seconds: 6, sampleRate: sampleRate)
+
+        let processor = NoiseReductionProcessor()
+        processor.prepare(channelCount: 1, maxFrames: 4096, sampleRate: sampleRate)
+        processor.configure(
+            mode: .deepFilterNet, wetMix: 0.5, intensity: 0.7,
+            attenuationLimitDb: 12, voiceFocus: .focus
+        )
+        var waited = 0
+        while !processor.deepFilter.currentStatus.isActive, waited < 600 {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            waited += 1
+        }
+        try #require(processor.deepFilter.currentStatus.isActive)
+
+        let first = try delayThroughChain(processor, signal: signal, format: format)
+        #expect(first > 0, "the chain should hold a real delay")
+
+        for pass in 1...4 {
+            processor.reset()
+            let again = try delayThroughChain(processor, signal: signal, format: format)
+            #expect(
+                again == first,
+                "latency moved from \(first) to \(again) frames after \(pass) reset(s)"
+            )
+        }
+    }
+
+    @Test func resetClearsAudioCarriedOverFromThePreviousPosition() async throws {
+        // Latency is held steady by displacing the model's stale spectra with
+        // silence rather than re-priming them, so this checks the displacement
+        // actually happens: after a loud passage and a reset, silence must come
+        // back as silence and not as a remnant of what came before.
+        let sampleRate = 22_050.0
+        let format = try #require(
+            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
+        )
+        let processor = NoiseReductionProcessor()
+        processor.prepare(channelCount: 1, maxFrames: 4096, sampleRate: sampleRate)
+        processor.configure(
+            mode: .deepFilterNet, wetMix: 0.5, intensity: 0.7,
+            attenuationLimitDb: 12, voiceFocus: .focus
+        )
+        var waited = 0
+        while !processor.deepFilter.currentStatus.isActive, waited < 600 {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            waited += 1
+        }
+        try #require(processor.deepFilter.currentStatus.isActive)
+
+        _ = try delayThroughChain(
+            processor, signal: syllables(seconds: 4, sampleRate: sampleRate), format: format
+        )
+        processor.reset()
+
+        // One block of silence, straight after the reset.
+        let count = 4096
+        let block = try #require(
+            AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count))
+        )
+        block.frameLength = AVAudioFrameCount(count)
+        let data = try #require(block.floatChannelData)
+        data[0].update(repeating: 0, count: count)
+        processor.process(buffer: block.mutableAudioBufferList, frameCount: block.frameLength)
+        let peak = (0..<count).map { abs(data[0][$0]) }.max() ?? 0
+        #expect(peak < 0.01, "audio from before the reset leaked through at \(peak)")
+    }
+
     // MARK: - Output ceiling
 
     /// A frame of 1.6 kHz — the emphasis bell's own centre frequency — that is

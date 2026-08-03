@@ -283,8 +283,50 @@ real-time factor.
 
 Full chain (resample → model → focus → resample) at 22,050 Hz: **real-time
 factor 0.123**, about 8x faster than playback, with zero bypassed blocks and
-~103 ms of constant latency. Model load is ~230 ms, which is why it happens off
+**53 ms** of constant latency. Model load is ~230 ms, which is why it happens off
 the audio thread.
+
+That latency was 103 ms and grew by 50 ms on every reset until the reset path was
+fixed — see below.
+
+### The reset path used to leak latency
+
+`reset()` runs on every track change, seek and settings toggle. It forwarded to
+`dfb_reset`, which forwards to upstream's `DfTract::init()`, and that method is
+not idempotent: it clears `rolling_spec_buf_y` before re-priming it but never
+clears `rolling_spec_buf_x`, so each call appends another `df_order` (5) frames
+to the noisy-spectrum buffer.
+
+Measured on a 22.05 kHz source, delay through the chain over successive resets:
+
+| resets | delay |
+| --- | --- |
+| 0 | 103 ms |
+| 1 | 153 ms |
+| 2 | 203 ms |
+| 3 | 253 ms |
+| 4 | 303 ms |
+
+Unbounded, and not merely cosmetic: the output FIFO is sized
+`primeCount + 2 * maxFrames + downCapacity + 64`, so after roughly eight resets
+it overflowed, `push` began returning false, and DeepFilterNet fell back to
+passthrough for the rest of the session. Anyone who seeked a few times silently
+lost noise reduction.
+
+`resetStreamState` now displaces the stale spectra by pushing 8 hops of silence
+through the model instead of calling `dfb_reset`. Latency is constant at 1,174
+frames across any number of resets, and the baseline dropped to 53 ms because the
+startup path had been paying one spurious `init()` too.
+
+`rolling_spec_buf_x` is private, so it cannot be cleared from the bridge. The
+alternative fix — destroying and recreating the native handle — is also correct
+but re-parses the ONNX model on every seek, about 230 ms of unprocessed audio
+each time. The running normalisation states are deliberately left alone: they are
+not part of the latency, they re-adapt within a few frames, and keeping them
+means a seek does not start from a cold estimate.
+
+This was found while building offline rendering, because a render has to know the
+chain's delay to trim it, and the measured delay kept disagreeing with itself.
 
 Device app bundle grows from roughly 4 MB to 32 MB (static tract code plus the
 7.6 MB model).

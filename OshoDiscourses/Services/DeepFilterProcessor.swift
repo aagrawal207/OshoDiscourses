@@ -197,9 +197,50 @@ final class DeepFilterProcessor: @unchecked Sendable {
             upsampler?.reset()
             downsampler?.reset()
             focus.reset()
-            _ = dfb_reset(handle)
+            flushModelState()
             outBuffer.update(repeating: 0, count: min(primeCount, outCapacity))
             outCount = min(primeCount, outCapacity)
+        }
+
+        /// Number of silent hops pushed through the model to displace the spectra
+        /// left over from the previous position. DeepFilterNet 3 holds `df_order`
+        /// (5) frames plus its convolution lookahead; 8 covers both with margin
+        /// and costs well under a millisecond of inference.
+        private static let flushHops = 8
+
+        /// Clears the model's carried-over spectra by washing silence through it,
+        /// rather than by calling `dfb_reset`.
+        ///
+        /// `dfb_reset` forwards to upstream's `DfTract::init()`, which is **not**
+        /// idempotent. It clears `rolling_spec_buf_y` before re-priming it but
+        /// never clears `rolling_spec_buf_x`, so every call appends another
+        /// `df_order` frames to the noisy-spectrum buffer. Each reset therefore
+        /// added 5 hops of latency and it accumulated without bound — measured on
+        /// a 22.05 kHz source at 103, 153, 203, 253 and 303 ms over successive
+        /// resets. Since `reset()` runs on every track change, seek and settings
+        /// toggle, the output FIFO overflowed after roughly eight of them, `push`
+        /// began failing, and DeepFilterNet dropped to passthrough for the rest of
+        /// the session.
+        ///
+        /// Pushing silence displaces the stale frames instead of re-priming them,
+        /// so latency stays put. The alternative — destroying and recreating the
+        /// native handle — is correct too, but re-parses the ONNX model on every
+        /// seek for about 230 ms of unprocessed audio each time.
+        ///
+        /// The running normalisation states are deliberately left alone. They are
+        /// not part of the latency, they re-adapt within a few frames, and keeping
+        /// them means a seek does not start from a cold estimate.
+        private func flushModelState() {
+            guard hopSize > 0 else { return }
+            let silence = UnsafeMutablePointer<Float>.allocate(capacity: hopSize)
+            defer { silence.deallocate() }
+            silence.initialize(repeating: 0, count: hopSize)
+            var snr: Float = 0
+            for _ in 0..<Self.flushHops {
+                guard dfb_process_frame(handle, silence, frameBuffer, hopSize, &snr) == DFB_OK else {
+                    return
+                }
+            }
         }
 
         /// Push `count` source-rate samples through the chain. Returns false if a
