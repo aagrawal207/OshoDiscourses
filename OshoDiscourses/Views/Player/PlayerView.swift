@@ -26,6 +26,27 @@ struct PlayerView: View {
         isDragging ? dragTime : player.currentTime
     }
 
+    /// Boost steps offered by the control. Above unity the peaks are limited
+    /// rather than clipped, which is what makes anything past 2x usable at all —
+    /// a plain multiply on a source already at full scale just distorts.
+    private static let boostSteps: [Float] = [1.0, 1.5, 2.0, 3.0, 4.0]
+
+    /// Cycles up through the steps and wraps back to off, so one button covers
+    /// the range without needing a slider in the transport row.
+    private var nextBoostLevel: Float {
+        let current = player.volume
+        let next = Self.boostSteps.first { $0 > current + 0.01 }
+        return next ?? Self.boostSteps[0]
+    }
+
+    private var boostLabel: String {
+        let value = player.volume
+        // 1.5x reads better than "1.5×" truncated; whole numbers stay compact.
+        return value == value.rounded()
+            ? "\(Int(value))×"
+            : String(format: "%.1f×", value)
+    }
+
     var body: some View {
         NavigationStack {
             // GeometryReader + minHeight keeps the Spacer()-driven layout
@@ -397,14 +418,14 @@ struct PlayerView: View {
 
             playerControlButton(
                 icon: player.volume > 1.0 ? "speaker.wave.3.fill" : "speaker.wave.2",
-                label: player.volume > 1.0 ? "2×" : "Boost",
+                label: player.volume > 1.0 ? boostLabel : "Boost",
                 isActive: player.volume > 1.0
             ) {
-                player.setVolume(player.volume > 1.0 ? 1.0 : 2.0)
+                player.setVolume(nextBoostLevel)
             }
             .accessibilityLabel("Volume boost")
-            .accessibilityValue(player.volume > 1.0 ? "On, two times" : "Off")
-            .accessibilityHint("Increases volume above the system maximum")
+            .accessibilityValue(player.volume > 1.0 ? "\(boostLabel)" : "Off")
+            .accessibilityHint("Steps the volume above the system maximum, then back off")
 
             playerControlButton(
                 icon: sleepTimer.isActive ? "moon.fill" : "moon",

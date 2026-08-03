@@ -169,13 +169,12 @@ final class VoiceFocusChain: @unchecked Sendable {
     /// of the final words.
     private var duckGainState: Float = 1
     private var liftGainState: Float = 1
-    /// Current gain reduction held by the output limiter. 1 means not limiting.
-    private var limitGainState: Float = 1
+    /// Output ceiling, so the chain can never hand back a clipping sample.
+    private var limiter: PeakLimiter
     private let duckOpen: Float
     private var duckClose: Float
     private let liftAttack: Float
     private let liftRelease: Float
-    private let limiterRelease: Float
     /// Samples of hold remaining before ducking may resume.
     private var holdRemaining = 0
     /// Running estimate of Osho's speech level, updated only on speech frames.
@@ -220,9 +219,7 @@ final class VoiceFocusChain: @unchecked Sendable {
         speechLevelDb = parameters.liftTargetDb
         liftAttack = exp(-1 / Float(0.020 * sampleRate))
         liftRelease = exp(-1 / Float(0.140 * sampleRate))
-        // Long enough that gain reduction rides over syllables instead of
-        // tracking individual waveform peaks, which would distort them.
-        limiterRelease = exp(-1 / Float(0.120 * sampleRate))
+        limiter = PeakLimiter(sampleRate: sampleRate)
     }
 
     func update(parameters: Parameters) {
@@ -235,7 +232,7 @@ final class VoiceFocusChain: @unchecked Sendable {
         presence.resetState()
         duckGainState = 1
         liftGainState = 1
-        limitGainState = 1
+        limiter.reset()
         holdRemaining = 0
         speechLevelDb = parameters.liftTargetDb
         for index in snrHistory.indices { snrHistory[index] = 30 }
@@ -287,44 +284,23 @@ final class VoiceFocusChain: @unchecked Sendable {
             if parameters.emphasisEnabled {
                 sample = presence.process(highPass.process(sample))
             }
-            frame[index] = limited(sample)
+            frame[index] = limiter.process(sample)
         }
     }
 
     // MARK: - Output ceiling
 
-    /// Keep the chain from ever handing back a sample that would clip.
+    /// Why the chain needs a ceiling at all: this archive is already mastered into
+    /// full scale — Maha Geeta #5 peaks at 0 dBFS — while this chain *adds* gain,
+    /// up to `liftMaxDb` (9 dB) plus the emphasis tilt. Measured on 40:00-42:00 the
+    /// output reached +3.3 dBFS with Focus and +10.1 dBFS with Lift and Strong, so
+    /// roughly 0.3-0.4% of samples were being clipped by the output hardware.
+    /// Clipped speech peaks crackle, and that was mistaken for a denoiser artifact.
     ///
-    /// This is a safety net, not a mastering limiter. It is needed because this
-    /// archive is already mastered into full scale — Maha Geeta #5 peaks at
-    /// 0 dBFS — while this chain *adds* gain: up to `liftMaxDb` (9 dB) plus the
-    /// 3.5 dB emphasis bell. Measured on 40:00-42:00 the output reached
-    /// +3.3 dBFS with Focus and +10.1 dBFS with Lift and Strong, so roughly
-    /// 0.3-0.4% of samples were being clipped by the output hardware. Clipped
-    /// speech peaks crackle, and that was mistaken for a denoiser artifact.
-    ///
-    /// Attack is instantaneous by construction: the gain applied to a sample is
-    /// never larger than `ceiling / |sample|`, so the ceiling cannot be exceeded
-    /// even for one sample and no look-ahead delay is required. Release is slow
-    /// enough that gain reduction does not follow the waveform and distort it.
-    ///
-    /// The ceiling sits below full scale on purpose: this runs at the model's
-    /// 48 kHz, and the downsampler that follows reconstructs intersample peaks
-    /// slightly above the samples it is given.
-    private static let limiterCeiling: Float = 0.891   // -1 dBFS
-
-    private func limited(_ sample: Float) -> Float {
-        let magnitude = abs(sample)
-        let required = magnitude > Self.limiterCeiling
-            ? Self.limiterCeiling / magnitude
-            : 1
-        if required < limitGainState {
-            limitGainState = required          // clamp immediately
-        } else {
-            limitGainState = required + limiterRelease * (limitGainState - required)
-        }
-        return sample * limitGainState
-    }
+    /// The limiter is a net, not the fix: on its own it engaged on 44% of samples,
+    /// which is a compressor. The causes are handled above — the emphasis bell is
+    /// normalised to unity peak and the lift is capped by the frame's own peak — so
+    /// this now catches 0.005-0.04%.
 
     // MARK: - Gain rules
 
@@ -387,6 +363,6 @@ final class VoiceFocusChain: @unchecked Sendable {
         // Clamped at unity: this is an upward-only control. Pulling anything down
         // is the ducking gain's job and, past the ceiling, the limiter's.
         guard peak > 1e-6 else { return wanted }
-        return min(wanted, max(1, Self.limiterCeiling / peak))
+        return min(wanted, max(1, PeakLimiter.defaultCeiling / peak))
     }
 }

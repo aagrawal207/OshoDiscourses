@@ -182,7 +182,7 @@ final class AudioPlayerService {
         // Restore the listener's preferred speed; clamp in case a stale/corrupt
         // value was stored outside the supported 0.5–2.0 range.
         playbackRate = max(0.5, min(Float(UserSettings.shared.defaultPlaybackRate), 2.0))
-        volume = max(1.0, min(Float(UserSettings.shared.volumeBoost), 2.0))
+        volume = max(1.0, min(Float(UserSettings.shared.volumeBoost), Self.maximumBoost))
         setupAudioSession()
         setupRemoteCommands()
     }
@@ -539,28 +539,28 @@ final class AudioPlayerService {
 
     private var volumeMixRebuildTask: Task<Void, Never>?
 
+    /// Highest boost offered. Above unity the peaks are limited rather than
+    /// clipped, which is what lets this go past the 2x a plain multiply allowed.
+    static let maximumBoost: Float = 4.0
+
     func setVolume(_ vol: Float) {
-        let clamped = max(0.0, min(vol, 2.0))
+        let clamped = max(0.0, min(vol, Self.maximumBoost))
         let crossedBoostBoundary = (volume > 1.0) != (clamped > 1.0)
         volume = clamped
         UserSettings.shared.volumeBoost = Double(clamped)
+        // Attenuation below unity is the player's job; gain above it is the tap's.
         player?.volume = min(clamped, 1.0)
+        // The boost is a tap parameter now rather than a property of the mix, so
+        // changing the amount takes effect at once and needs no rebuild. That also
+        // retires the debounce the old mix-based boost needed, since a rebuild
+        // meant tearing down and recreating an MTAudioProcessingTap mid-render.
+        noiseProcessor.setOutputGain(clamped > 1.0 ? clamped : 1.0)
         guard let currentItem = player?.currentItem else { return }
-        // Volume ≤ 1.0 is handled entirely by player.volume; the audio mix only
-        // carries the boost above 1.0 (and the denoise tap). Rebuilding the mix
-        // creates a fresh MTAudioProcessingTap, so during a slider drag we
-        // rebuild once when crossing the 1.0 boundary and otherwise debounce —
-        // per-tick rebuilds thrash tap prepare/finalize while audio renders.
-        if crossedBoostBoundary {
+        // Only whether the tap exists at all can change here, and only when
+        // denoising is off — with it on, the tap is already installed.
+        if crossedBoostBoundary, !isNoiseReductionEnabled {
             volumeMixRebuildTask?.cancel()
             applyAudioMix(to: currentItem)
-        } else if clamped > 1.0 {
-            volumeMixRebuildTask?.cancel()
-            volumeMixRebuildTask = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(250))
-                guard !Task.isCancelled, let self, let item = self.player?.currentItem else { return }
-                self.applyAudioMix(to: item)
-            }
         }
     }
 
@@ -1053,14 +1053,11 @@ final class AudioPlayerService {
             guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
             let boost = volume > 1.0 ? volume : Float(1.0)
 
-            if isNoiseReductionEnabled {
-                guard let mix = noiseProcessor.createAudioMix(for: track, volumeBoost: boost) else { return }
-                await MainActor.run { item.audioMix = mix }
-            } else if volume > 1.0 {
-                let params = AVMutableAudioMixInputParameters(track: track)
-                params.setVolume(volume, at: .zero)
-                let mix = AVMutableAudioMix()
-                mix.inputParameters = [params]
+            // The tap carries both jobs now: denoising, and the boost that has to
+            // be limited rather than simply multiplied. So it is installed when
+            // either is wanted, and `denoiseEnabled` decides what it does.
+            if isNoiseReductionEnabled || boost > 1.0 {
+                guard let mix = noiseProcessor.createAudioMix(for: track) else { return }
                 await MainActor.run { item.audioMix = mix }
             } else {
                 await MainActor.run { item.audioMix = nil }
@@ -1080,7 +1077,9 @@ final class AudioPlayerService {
             wetMix: denoiseStrength.wetMix,
             intensity: denoiseStrength.intensity,
             attenuationLimitDb: denoiseStrength.attenuationLimitDb,
-            voiceFocus: voiceFocusPreset
+            voiceFocus: voiceFocusPreset,
+            denoiseEnabled: isNoiseReductionEnabled,
+            outputGain: volume > 1.0 ? volume : 1.0
         )
     }
 }

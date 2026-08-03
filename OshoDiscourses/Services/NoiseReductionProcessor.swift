@@ -35,6 +35,14 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     /// because the render thread must not allocate.
     private var monoScratch: UnsafeMutablePointer<Float>?
 
+    /// Output gain above unity, applied after whichever denoiser ran.
+    private var outputGain: Float = 1
+    /// Whether any denoising should happen. The tap is also installed for a
+    /// boost alone, and in that case it must not denoise.
+    private var denoiseEnabled = true
+    /// One limiter per channel, so a boost raises level instead of clipping.
+    private var boostLimiters: [PeakLimiter] = []
+
     private struct Biquad {
         var b0: Float = 1
         var b1: Float = 0
@@ -175,11 +183,15 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         wetMix: Float,
         intensity: Float,
         attenuationLimitDb: Float,
-        voiceFocus: VoiceFocusPreset
+        voiceFocus: VoiceFocusPreset,
+        denoiseEnabled: Bool = true,
+        outputGain: Float = 1
     ) {
         lock.lock()
         let modeChanged = self.mode != mode
         self.mode = mode
+        self.denoiseEnabled = denoiseEnabled
+        self.outputGain = max(outputGain, 1)
         self.wetMix = min(max(wetMix, 0), 1)
         self.intensity = min(max(intensity, 0), 1)
         self.attenuationLimitDb = max(attenuationLimitDb, 0)
@@ -198,7 +210,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         // DeepFilterNet keeps its own state, so drive it outside the lock.
         deepFilter.setAttenuationLimit(attenuation)
         deepFilter.setVoiceFocus(voiceFocus)
-        if mode == .deepFilterNet {
+        if mode == .deepFilterNet, denoiseEnabled {
             if let (sampleRate, maxFrames) = format, maxFrames > 0 {
                 deepFilter.activate(
                     channelCount: 1,
@@ -211,6 +223,17 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             // model so switching back does not pay the load cost again.
             deepFilter.reset()
         }
+    }
+
+    /// Change just the boost.
+    ///
+    /// Separate from `configure` on purpose: that path re-fits the archive filters
+    /// and re-activates the model, which flushes its state. Doing that on every
+    /// tick of a volume control would keep resetting the denoiser mid-sentence.
+    func setOutputGain(_ gain: Float) {
+        lock.lock()
+        outputGain = max(gain, 1)
+        lock.unlock()
     }
 
     /// Allocate per-channel processor state and FIFO buffers sized for this format.
@@ -241,10 +264,17 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         let scratch = UnsafeMutablePointer<Float>.allocate(capacity: max(maxFrames, 1))
         scratch.initialize(repeating: 0, count: max(maxFrames, 1))
         monoScratch = scratch
+        boostLimiters = (0..<max(channelCount, 1)).map { _ in
+            // Tighter ceiling than the voice chain's: this is the last stage before
+            // output, so there is no later resampling to reconstruct peaks above
+            // these samples, and 0.7 dB matters when the point is loudness.
+            PeakLimiter(sampleRate: sampleRate, ceiling: PeakLimiter.outputCeiling)
+        }
         let activeMode = mode
+        let denoiseActive = denoiseEnabled
         lock.unlock()
 
-        if activeMode == .deepFilterNet {
+        if activeMode == .deepFilterNet, denoiseActive {
             // One instance, not one per channel: the model is fed a mono mix.
             deepFilter.activate(
                 channelCount: 1,
@@ -303,29 +333,64 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
         // DeepFilterNet works on one mono mix rather than each channel in turn,
         // so it is handled as a whole buffer list instead of channel by channel.
-        if mode == .deepFilterNet {
+        if denoiseEnabled, mode == .deepFilterNet {
             processDeepFilterNet(bufferList, count: n)
-            return
+        } else if denoiseEnabled {
+            for bufIdx in 0..<bufferList.count {
+                let audioBuffer = bufferList[bufIdx]
+                // RNNoise is single-channel. Taps deliver deinterleaved float (one
+                // channel per AudioBuffer). If a buffer is interleaved multichannel
+                // we can't safely split it here, so pass it through untouched.
+                let chans = Int(audioBuffer.mNumberChannels)
+                guard chans == 1 else { continue }
+                guard let raw = audioBuffer.mData else { continue }
+                guard bufIdx < channels.count else { continue }
+                let samples = raw.assumingMemoryBound(to: Float.self)
+                switch mode {
+                case .rnnoise:
+                    processRNNoise(samples: samples, count: n, channel: channels[bufIdx])
+                case .cadence:
+                    processCadence(samples: samples, count: n, channel: channels[bufIdx])
+                case .deepFilterNet:
+                    break   // handled above
+                }
+            }
         }
 
-        for bufIdx in 0..<bufferList.count {
-            let audioBuffer = bufferList[bufIdx]
-            // RNNoise is single-channel. Taps deliver deinterleaved float (one
-            // channel per AudioBuffer). If a buffer is interleaved multichannel we
-            // can't safely split it here, so pass it through untouched.
-            let chans = Int(audioBuffer.mNumberChannels)
-            guard chans == 1 else { continue }
-            guard let raw = audioBuffer.mData else { continue }
-            guard bufIdx < channels.count else { continue }
+        // Last, so the boost applies whichever denoiser ran — and when none did.
+        applyOutputBoost(bufferList, count: n)
+    }
+
+    /// Raises level above the system maximum without clipping.
+    ///
+    /// `AVAudioMix`'s own volume is not used for this. Its behaviour above 1.0 is
+    /// not dependable, and more importantly a plain multiply cannot make this
+    /// material louder: the archive already peaks at 0 dBFS, so gain alone only
+    /// clips. Limiting the peaks is what turns gain into loudness — the recordings
+    /// carry roughly 14 dB of crest factor, and that is the headroom a boost is
+    /// actually spending.
+    ///
+    /// Applied here rather than in `VoiceFocusChain` so it works with every mode
+    /// and with noise reduction switched off entirely.
+    private func applyOutputBoost(
+        _ bufferList: UnsafeMutableAudioBufferListPointer,
+        count n: Int
+    ) {
+        let gain = outputGain
+        guard gain > 1.0001 else { return }
+        for index in 0..<bufferList.count {
+            let audioBuffer = bufferList[index]
+            guard audioBuffer.mNumberChannels == 1,
+                  let raw = audioBuffer.mData,
+                  index < boostLimiters.count else { continue }
             let samples = raw.assumingMemoryBound(to: Float.self)
-            switch mode {
-            case .rnnoise:
-                processRNNoise(samples: samples, count: n, channel: channels[bufIdx])
-            case .cadence:
-                processCadence(samples: samples, count: n, channel: channels[bufIdx])
-            case .deepFilterNet:
-                break   // handled above
+            // Copied out and back so the per-sample loop touches a local: this is
+            // the render thread.
+            var limiter = boostLimiters[index]
+            for frame in 0..<n {
+                samples[frame] = limiter.process(samples[frame] * gain)
             }
+            boostLimiters[index] = limiter
         }
     }
 
@@ -499,7 +564,12 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
     // MARK: - Audio Tap
 
-    func createAudioMix(for track: AVAssetTrack, volumeBoost: Float = 1.0) -> AVAudioMix? {
+    /// Builds the mix that hosts the tap.
+    ///
+    /// No `setVolume` here: any boost is applied inside the tap, where it can be
+    /// limited. Setting it on the mix as well would apply the gain twice, and the
+    /// mix's own behaviour above 1.0 is not dependable in any case.
+    func createAudioMix(for track: AVAssetTrack) -> AVAudioMix? {
         // +1 retain that tapFinalize will balance with .release(). Held in a local
         // so we can release it ourselves if the tap is never created (see below).
         let retained = Unmanaged.passRetained(self)
@@ -524,9 +594,6 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
         let params = AVMutableAudioMixInputParameters(track: track)
         params.audioTapProcessor = audioTap
-        if volumeBoost > 1.0 {
-            params.setVolume(volumeBoost, at: .zero)
-        }
 
         let mix = AVMutableAudioMix()
         mix.inputParameters = [params]

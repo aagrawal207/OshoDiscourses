@@ -117,7 +117,7 @@ OshoDiscoursesTests/
 - [x] Download with progress tracking (background URLSession — continues when app is backgrounded/locked/killed)
 - [x] Audio playback (AVPlayer with queue management)
 - [x] Background audio + lock screen / Control Center / AirPods controls (MPRemoteCommandCenter, with interruption + route-change recovery)
-- [x] Seek slider, playback speed (0.5x–2x, persisted across launches), volume boost
+- [x] Seek slider, playback speed (0.5x–2x, persisted across launches), volume boost (1.5x/2x/3x/4x, gain + peak limiter in the tap)
 - [x] Mini-player bar (ultraThinMaterial glass)
 - [x] Full player screen (Apple Music style)
 - [x] Downloads screen grouped by series + total storage-used meter
@@ -157,6 +157,7 @@ OshoDiscoursesTests/
 - **The catalog is 22.05 kHz, not 48 kHz** — the Hindi talks are 22,050 Hz 43 kbps MP3s (the archive.org mirror is byte-identical). Both neural denoisers are 48 kHz models, so without `PolyphaseResampler` DeepFilterNet was bypassed entirely and RNNoise ran on mis-mapped bands. This was the real reason noise reduction "did nothing".
 - **The denoise gate is slow to close, never fast** — Osho's sentences decay in level, so the model's local SNR collapses on his final words. A conventional fast-closing gate (the first attempt used 10 ms) mutes the end of every sentence. The gate now opens in 8 ms, holds ~220 ms after speech, then closes over 400 ms; levelling tracks running speech level rather than per-frame level, which otherwise boosts quiet noise in the gaps harder than the voice.
 - **Noise that overlaps speech is attacked in time, not frequency** — an aircraft at 40:20 of Maha Geeta #5 occupies the same 150-700 Hz as the voice, with only ~0.5% of energy above 3 kHz. So Voice Focus raises speech-to-pause contrast using the model's own local SNR instead of EQ. Downward compression was measured and rejected (it lifts pauses too); DSP without the model was worse than doing nothing.
+- **A volume boost spends crest factor, it does not multiply loudness** — the archive averages -13.8 dBFS against 0 dBFS peaks, so plain gain only clips. The boost applies gain inside the tap followed by a peak limiter, which converts the ~14 dB of crest into real level: measured +1.9/+3.1/+4.1/+4.6 dB for 1.5x/2x/3x/4x on a 12.9 dB-crest signal, never exceeding -0.3 dBFS. Going louder than that needs compression, which would flatten Osho's dynamics.
 - **The chain must never add level** — this archive is already mastered into full scale (Maha Geeta #5 peaks at 0 dBFS), so the emphasis bell's +3.5 dB and up to 9 dB of speech lift simply clipped: measured +3.3 dBFS with Focus and +10.1 dBFS with Lift. The bell is now normalised to unity peak (a cut elsewhere, not a boost), the lift is capped by the frame's own peak, and a safety limiter catches the rest. Fixing the causes mattered: a limiter alone engaged on 44% of samples, which is a compressor, not a safety net.
 - **`reset()` must not re-init the model** — `dfb_reset` forwards to upstream's `DfTract::init()`, which never clears `rolling_spec_buf_x`, so every track change, seek or settings toggle added 5 hops of latency. It grew 103 → 153 → 203 → 253 → 303 ms and after ~8 resets the output FIFO overflowed and DeepFilterNet fell back to passthrough for the rest of the session. Stale spectra are now displaced with silence instead; latency is constant at 53 ms.
 - **DeepFilterNet runs on a mono mix, not per channel** — the downloads are joint stereo whose channels differ by only -18.4 dB, so per-channel inference cost twice as much to reproduce nearly the same signal, and two independent gates made the stereo image wander.
@@ -187,5 +188,5 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-08-02 (178 tests passing; Release verified for device arm64 and simulator)
+- Build succeeds as of 2026-08-02 (182 tests passing; Release verified for device arm64 and simulator)
 - Dynamic Island / Live Activity was removed (was a Live Activity hosted by a now-deleted widget extension); standard lock-screen/Control-Center controls stay via MediaPlayer
