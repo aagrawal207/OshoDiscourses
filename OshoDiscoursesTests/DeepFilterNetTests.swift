@@ -670,6 +670,73 @@ struct DeepFilterNetTests {
         #expect(peak < 0.01, "audio from before the reset leaked through at \(peak)")
     }
 
+    @Test func bothChannelsOfAStereoSourceStayAligned() async throws {
+        // The downloads are not mono. oshoworld ships 22,050 Hz joint-stereo MP3s
+        // — measured on Maha Geeta #5 the two channels differ by only -18.4 dB,
+        // so it is a near-dual-mono source in a stereo container. That means
+        // DeepFilterNet runs one model instance and one resampler pair per
+        // channel. If those drifted apart by even a few milliseconds the result
+        // would be a phasey smear rather than a cleaner recording, and every
+        // other test here is mono.
+        let sampleRate = 22_050.0
+        let format = try #require(
+            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)
+        )
+        let signal = syllables(seconds: 6, sampleRate: sampleRate)
+
+        let processor = NoiseReductionProcessor()
+        processor.prepare(channelCount: 2, maxFrames: 4096, sampleRate: sampleRate)
+        processor.configure(
+            mode: .deepFilterNet, wetMix: 0.5, intensity: 0.7,
+            attenuationLimitDb: 12, voiceFocus: .focus
+        )
+        var waited = 0
+        while !processor.deepFilter.currentStatus.isActive, waited < 600 {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            waited += 1
+        }
+        try #require(processor.deepFilter.currentStatus.isActive)
+
+        var left = [Float]()
+        var right = [Float]()
+        var offset = 0
+        while offset < signal.count {
+            let count = min(4096, signal.count - offset)
+            let block = try #require(
+                AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count))
+            )
+            block.frameLength = AVAudioFrameCount(count)
+            let data = try #require(block.floatChannelData)
+            for index in 0..<count {
+                data[0][index] = signal[offset + index]
+                // Right slightly quieter, so neither channel can pass by being
+                // compared against itself.
+                data[1][index] = signal[offset + index] * 0.8
+            }
+            processor.process(buffer: block.mutableAudioBufferList, frameCount: block.frameLength)
+            left.append(contentsOf: UnsafeBufferPointer(start: data[0], count: count))
+            right.append(contentsOf: UnsafeBufferPointer(start: data[1], count: count))
+            offset += count
+        }
+
+        let maxLag = Int(sampleRate * 0.45)
+        let leftLag = bestLag(reference: signal, rendered: left, maxLag: maxLag)
+        let rightLag = bestLag(reference: signal, rendered: right, maxLag: maxLag)
+        #expect(leftLag > 0, "left channel was not processed")
+        #expect(
+            leftLag == rightLag,
+            "channels drifted apart: left \(leftLag) frames, right \(rightLag)"
+        )
+
+        // Both channels must actually have been denoised, not just one. A second
+        // channel silently passing through would be easy to miss by ear on
+        // near-dual-mono material.
+        let quietLeft = left.suffix(2048).map(abs).max() ?? 0
+        let quietRight = right.suffix(2048).map(abs).max() ?? 0
+        #expect(quietLeft < 0.02, "left channel not ducked in the closing pause: \(quietLeft)")
+        #expect(quietRight < 0.02, "right channel not ducked in the closing pause: \(quietRight)")
+    }
+
     // MARK: - Output ceiling
 
     /// A frame of 1.6 kHz — the emphasis bell's own centre frequency — that is

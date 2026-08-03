@@ -282,9 +282,24 @@ real-time factor.
 ### Measured cost
 
 Full chain (resample → model → focus → resample) at 22,050 Hz: **real-time
-factor 0.123**, about 8x faster than playback, with zero bypassed blocks and
-**53 ms** of constant latency. Model load is ~230 ms, which is why it happens off
-the audio thread.
+factor 0.123 per channel**, about 8x faster than playback, with zero bypassed
+blocks and **53 ms** of constant latency. Model load is ~230 ms, which is why it
+happens off the audio thread.
+
+**Per channel matters here.** The downloads are not mono: oshoworld ships
+22,050 Hz joint-stereo MP3s, so DeepFilterNet runs one model instance and one
+resampler pair per channel and the real cost during playback is about **0.246**,
+roughly a quarter of a core held for the length of a discourse. Measured on Maha
+Geeta #5 the two channels differ by only **-18.4 dB**, so this is a near-dual-mono
+source in a stereo container and half that work is close to redundant. Collapsing
+to mono would halve the CPU, the battery and the model memory; it has not been
+done because it changes what the listener hears from what the source contains, and
+that is a product decision rather than a measurement.
+
+A test pins the two channels to the same latency. Two independent model instances
+and two independent resampler pairs that drifted apart would smear the stereo
+image rather than clean it up, and it would be easy to miss by ear on
+near-dual-mono material.
 
 That latency was 103 ms and grew by 50 ms on every reset until the reset path was
 fixed — see below.
@@ -365,7 +380,34 @@ Listen blind when possible and keep the unprocessed excerpt as a reference.
 
 1. Compare Off, RNNoise, Cadence, and DeepFilterNet in the app on the fixed listening set.
 2. Confirm DeepFilterNet's real-time factor, battery, and thermal behaviour on the phone across a full discourse.
-3. If DeepFilterNet wins consistently but costs too much battery, consider a Core ML port (stateful recurrent graph, STFT/ISTFT and ERB in Accelerate) or pre-processing into a post-download cached file.
+3. If DeepFilterNet wins consistently but costs too much battery, the cheapest win is collapsing the near-dual-mono stereo to a single channel, which halves everything. After that, consider a Core ML port (stateful recurrent graph, STFT/ISTFT and ERB in Accelerate).
+
+### Pre-rendering after download was built and removed
+
+Worth recording so it is not re-litigated from scratch. A full offline renderer
+existed briefly: it drove the same `NoiseReductionProcessor` the tap drives, wrote
+48 kbps AAC beside the download, and playback preferred the rendered copy and
+skipped the tap. It worked, with tests.
+
+It was removed because the costs outweighed a live chain that had become good
+enough:
+
+- **Settings bake in.** Changing strength or preset means re-rendering, so the
+  instant A/B that all of this tuning depended on is gone.
+- **Time.** The sources are joint-stereo, so a render ran at about 0.246 real
+  time — roughly 20 minutes for an 85-minute discourse.
+- **Storage.** Each rendered copy roughly doubles that discourse's footprint.
+- **A second path through the DSP** to keep in sync forever.
+
+Two things it left behind, both kept: the output-ceiling fix, and the reset
+latency leak below. The second was only found because a renderer has to know the
+chain's delay in order to trim it, and the measurement kept disagreeing with
+itself.
+
+If it is ever revisited, the argument for it is not CPU — it is that offline work
+can be non-causal, which allows a true look-ahead limiter, exact SNR alignment
+instead of a fixed delay, and two-pass loudness normalisation to recover the
+3.8 dB the ceiling fix costs.
 4. Fine-tune only after the baseline comparison. Use clean speech plus synthetic hum, hiss, traffic, and recording artifacts; use noise-only Osho pauses as noise material, not as clean targets.
 5. Gate any default-on change to DeepFilterNet on blind preference, preserved Hindi and English consonants, zero playback underruns, sustained thermal performance, and verified model/data licenses.
 
