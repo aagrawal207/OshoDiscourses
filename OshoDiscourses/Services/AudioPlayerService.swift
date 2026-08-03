@@ -81,7 +81,7 @@ final class AudioPlayerService {
             rebuildAudioMix()
         }
     }
-    var noiseReductionMode: NoiseReductionMode = .rnnoise {
+    var noiseReductionMode: NoiseReductionMode = .deepFilterNet {
         didSet {
             UserSettings.shared.noiseReductionMode = noiseReductionMode
             configureNoiseProcessor()

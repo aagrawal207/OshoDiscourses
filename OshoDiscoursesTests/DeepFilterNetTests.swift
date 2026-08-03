@@ -670,14 +670,16 @@ struct DeepFilterNetTests {
         #expect(peak < 0.01, "audio from before the reset leaked through at \(peak)")
     }
 
-    @Test func bothChannelsOfAStereoSourceStayAligned() async throws {
+    @Test func stereoIsCollapsedToOneMonoMixThroughTheModel() async throws {
         // The downloads are not mono. oshoworld ships 22,050 Hz joint-stereo MP3s
         // — measured on Maha Geeta #5 the two channels differ by only -18.4 dB,
-        // so it is a near-dual-mono source in a stereo container. That means
-        // DeepFilterNet runs one model instance and one resampler pair per
-        // channel. If those drifted apart by even a few milliseconds the result
-        // would be a phasey smear rather than a cleaner recording, and every
-        // other test here is mono.
+        // so it is a near-dual-mono source in a stereo container. Running the
+        // model per channel meant two model instances and twice the inference,
+        // about 0.246 of real time, to reproduce nearly the same signal twice.
+        //
+        // So the channels are mixed to mono, denoised once, and the result written
+        // back to both. That also rules out two independent gates ducking at
+        // slightly different moments, which would make the stereo image wander.
         let sampleRate = 22_050.0
         let format = try #require(
             AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)
@@ -709,9 +711,9 @@ struct DeepFilterNetTests {
             let data = try #require(block.floatChannelData)
             for index in 0..<count {
                 data[0][index] = signal[offset + index]
-                // Right slightly quieter, so neither channel can pass by being
-                // compared against itself.
-                data[1][index] = signal[offset + index] * 0.8
+                // Deliberately different, so the mix is provably a mix and the
+                // channels cannot match by having started identical.
+                data[1][index] = signal[offset + index] * 0.6
             }
             processor.process(buffer: block.mutableAudioBufferList, frameCount: block.frameLength)
             left.append(contentsOf: UnsafeBufferPointer(start: data[0], count: count))
@@ -719,22 +721,16 @@ struct DeepFilterNetTests {
             offset += count
         }
 
-        let maxLag = Int(sampleRate * 0.45)
-        let leftLag = bestLag(reference: signal, rendered: left, maxLag: maxLag)
-        let rightLag = bestLag(reference: signal, rendered: right, maxLag: maxLag)
-        #expect(leftLag > 0, "left channel was not processed")
-        #expect(
-            leftLag == rightLag,
-            "channels drifted apart: left \(leftLag) frames, right \(rightLag)"
-        )
+        #expect(left == right, "both channels must carry the same denoised mix")
 
-        // Both channels must actually have been denoised, not just one. A second
-        // channel silently passing through would be easy to miss by ear on
-        // near-dual-mono material.
-        let quietLeft = left.suffix(2048).map(abs).max() ?? 0
-        let quietRight = right.suffix(2048).map(abs).max() ?? 0
-        #expect(quietLeft < 0.02, "left channel not ducked in the closing pause: \(quietLeft)")
-        #expect(quietRight < 0.02, "right channel not ducked in the closing pause: \(quietRight)")
+        let lag = bestLag(reference: signal, rendered: left, maxLag: Int(sampleRate * 0.45))
+        #expect(lag > 0, "audio was not processed at all")
+        // Only one model instance should exist now, so the delay must match what a
+        // mono stream sees rather than anything doubled.
+        #expect(Double(lag) < sampleRate * 0.1, "unexpected latency of \(lag) frames")
+
+        let quiet = left.suffix(2048).map(abs).max() ?? 0
+        #expect(quiet < 0.02, "the closing pause was not ducked: \(quiet)")
     }
 
     // MARK: - Output ceiling

@@ -239,7 +239,7 @@ final class UserSettings {
             Keys.allowCellularDownloads: false,
             Keys.noiseReduction: false,
             Keys.denoiseStrength: "medium",
-            Keys.noiseReductionMode: NoiseReductionMode.rnnoise.rawValue,
+            Keys.noiseReductionMode: NoiseReductionMode.deepFilterNet.rawValue,
             Keys.voiceFocusPreset: VoiceFocusPreset.focus.rawValue,
             Keys.defaultPlaybackRate: 1.0,
             Keys.volumeBoost: 2.0,
@@ -259,7 +259,7 @@ final class UserSettings {
         self.denoiseStrength = d.string(forKey: Keys.denoiseStrength) ?? "medium"
         self.noiseReductionMode = NoiseReductionMode(
             rawValue: d.string(forKey: Keys.noiseReductionMode) ?? ""
-        ) ?? .rnnoise
+        ) ?? .deepFilterNet
         self.voiceFocusPreset = VoiceFocusPreset(
             rawValue: d.string(forKey: Keys.voiceFocusPreset) ?? ""
         ) ?? .focus

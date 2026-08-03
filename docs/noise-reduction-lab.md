@@ -282,24 +282,23 @@ real-time factor.
 ### Measured cost
 
 Full chain (resample → model → focus → resample) at 22,050 Hz: **real-time
-factor 0.123 per channel**, about 8x faster than playback, with zero bypassed
-blocks and **53 ms** of constant latency. Model load is ~230 ms, which is why it
-happens off the audio thread.
+factor 0.123**, about 8x faster than playback, with zero bypassed blocks and
+**53 ms** of constant latency. Model load is ~230 ms, which is why it happens off
+the audio thread.
 
-**Per channel matters here.** The downloads are not mono: oshoworld ships
-22,050 Hz joint-stereo MP3s, so DeepFilterNet runs one model instance and one
-resampler pair per channel and the real cost during playback is about **0.246**,
-roughly a quarter of a core held for the length of a discourse. Measured on Maha
-Geeta #5 the two channels differ by only **-18.4 dB**, so this is a near-dual-mono
-source in a stereo container and half that work is close to redundant. Collapsing
-to mono would halve the CPU, the battery and the model memory; it has not been
-done because it changes what the listener hears from what the source contains, and
-that is a product decision rather than a measurement.
+**One model instance, not one per channel.** The downloads are not mono:
+oshoworld ships 22,050 Hz joint-stereo MP3s. Running DeepFilterNet per channel
+meant two model instances and twice the inference — about 0.246 of real time — to
+reproduce nearly the same signal twice, because measured on Maha Geeta #5 the two
+channels differ by only **-18.4 dB**. It is a near-dual-mono source in a stereo
+container.
 
-A test pins the two channels to the same latency. Two independent model instances
-and two independent resampler pairs that drifted apart would smear the stereo
-image rather than clean it up, and it would be easy to miss by ear on
-near-dual-mono material.
+The channels are now mixed to mono, denoised once, and the result written back to
+both. That halves the CPU, the battery and the model memory, and it removes an
+artifact the per-channel version could produce: two independent gates ducking at
+slightly different moments make the stereo image wander, which is worse on a voice
+recording than having no width at all. The cost is that genuine stereo content in
+the source is collapsed, which is an accepted trade for spoken word.
 
 That latency was 103 ms and grew by 50 ms on every reset until the reset path was
 fixed — see below.
@@ -380,7 +379,7 @@ Listen blind when possible and keep the unprocessed excerpt as a reference.
 
 1. Compare Off, RNNoise, Cadence, and DeepFilterNet in the app on the fixed listening set.
 2. Confirm DeepFilterNet's real-time factor, battery, and thermal behaviour on the phone across a full discourse.
-3. If DeepFilterNet wins consistently but costs too much battery, the cheapest win is collapsing the near-dual-mono stereo to a single channel, which halves everything. After that, consider a Core ML port (stateful recurrent graph, STFT/ISTFT and ERB in Accelerate).
+3. If DeepFilterNet still costs too much battery, consider a Core ML port (stateful recurrent graph, STFT/ISTFT and ERB in Accelerate). The cheap win — collapsing the near-dual-mono stereo to one channel — is already taken.
 
 ### Pre-rendering after download was built and removed
 
@@ -409,7 +408,12 @@ can be non-causal, which allows a true look-ahead limiter, exact SNR alignment
 instead of a fixed delay, and two-pass loudness normalisation to recover the
 3.8 dB the ceiling fix costs.
 4. Fine-tune only after the baseline comparison. Use clean speech plus synthetic hum, hiss, traffic, and recording artifacts; use noise-only Osho pauses as noise material, not as clean targets.
-5. Gate any default-on change to DeepFilterNet on blind preference, preserved Hindi and English consonants, zero playback underruns, sustained thermal performance, and verified model/data licenses.
+5. Gate turning noise reduction **on** by default on blind preference, preserved Hindi and English consonants, zero playback underruns, sustained thermal performance, and verified model/data licenses. None of the device-side items have been measured yet, so noise reduction still ships off.
+
+DeepFilterNet **is** now the mode you get when you switch noise reduction on: it
+was reached only by changing a setting most listeners never open, which meant the
+work above reached almost nobody. That is a smaller step than default-on — nobody
+spends battery without asking for it — so it is not held behind the gate above.
 
 Cadence is intentionally conservative. It rejects narrow 50/60 Hz hum and its
 first harmonics, rolls off only the highest hiss band, and lowers noise after a

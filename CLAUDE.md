@@ -132,7 +132,7 @@ OshoDiscoursesTests/
 - [x] Sleep timer — 5/10/15/30/45/60 min + "End of discourse" mode
 - [x] Listening stats dashboard + streak (My Activity tab)
 - [x] Noise reduction — RNNoise neural denoise with Light/Medium/Strong wet-dry mix
-- [x] Noise reduction — DeepFilterNet 3 (native Rust/tract, 48 kHz, strength = attenuation limit)
+- [x] Noise reduction — DeepFilterNet 3 (native Rust/tract, 48 kHz, strength = attenuation limit). Default mode when noise reduction is switched on; noise reduction itself still defaults off.
 - [x] Voice Focus — Focus/Lift/Strong presets that make Osho's voice sit forward over overlapping noise
 - [x] Resampling so the 48 kHz models actually run on the 22.05 kHz catalog
 - [x] Recently Played / Continue Listening + Recently Completed on Home
@@ -157,6 +157,10 @@ OshoDiscoursesTests/
 - **The catalog is 22.05 kHz, not 48 kHz** — the Hindi talks are 22,050 Hz 43 kbps MP3s (the archive.org mirror is byte-identical). Both neural denoisers are 48 kHz models, so without `PolyphaseResampler` DeepFilterNet was bypassed entirely and RNNoise ran on mis-mapped bands. This was the real reason noise reduction "did nothing".
 - **The denoise gate is slow to close, never fast** — Osho's sentences decay in level, so the model's local SNR collapses on his final words. A conventional fast-closing gate (the first attempt used 10 ms) mutes the end of every sentence. The gate now opens in 8 ms, holds ~220 ms after speech, then closes over 400 ms; levelling tracks running speech level rather than per-frame level, which otherwise boosts quiet noise in the gaps harder than the voice.
 - **Noise that overlaps speech is attacked in time, not frequency** — an aircraft at 40:20 of Maha Geeta #5 occupies the same 150-700 Hz as the voice, with only ~0.5% of energy above 3 kHz. So Voice Focus raises speech-to-pause contrast using the model's own local SNR instead of EQ. Downward compression was measured and rejected (it lifts pauses too); DSP without the model was worse than doing nothing.
+- **The chain must never add level** — this archive is already mastered into full scale (Maha Geeta #5 peaks at 0 dBFS), so the emphasis bell's +3.5 dB and up to 9 dB of speech lift simply clipped: measured +3.3 dBFS with Focus and +10.1 dBFS with Lift. The bell is now normalised to unity peak (a cut elsewhere, not a boost), the lift is capped by the frame's own peak, and a safety limiter catches the rest. Fixing the causes mattered: a limiter alone engaged on 44% of samples, which is a compressor, not a safety net.
+- **`reset()` must not re-init the model** — `dfb_reset` forwards to upstream's `DfTract::init()`, which never clears `rolling_spec_buf_x`, so every track change, seek or settings toggle added 5 hops of latency. It grew 103 → 153 → 203 → 253 → 303 ms and after ~8 resets the output FIFO overflowed and DeepFilterNet fell back to passthrough for the rest of the session. Stale spectra are now displaced with silence instead; latency is constant at 53 ms.
+- **DeepFilterNet runs on a mono mix, not per channel** — the downloads are joint stereo whose channels differ by only -18.4 dB, so per-channel inference cost twice as much to reproduce nearly the same signal, and two independent gates made the stereo image wander.
+- **Pre-rendering after download was built and removed** — it worked, but settings baked into each file (killing instant A/B), an ~85 minute discourse took ~20 minutes to render, and every copy doubled that discourse's storage. See `docs/noise-reduction-lab.md`.
 - **DeepFilterNet strength = attenuation limit, not dry/wet** — blending the untouched signal back in would reintroduce the very noise the model removed, and would need sample-alignment against the model's lookahead. Output is always fully wet.
 - **DeepFilterNet failures degrade to passthrough** — a panic-safe Rust bridge (`catch_unwind`) plus explicit UI status, so a bad model or frame never crashes playback and never silently substitutes another denoiser.
 - **No database** — catalog is static structs, downloads tracked by filesystem, settings in UserDefaults.
@@ -183,5 +187,5 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-07-09 (125 tests passing)
+- Build succeeds as of 2026-08-02 (178 tests passing; Release verified for device arm64 and simulator)
 - Dynamic Island / Live Activity was removed (was a Live Activity hosted by a now-deleted widget extension); standard lock-screen/Control-Center controls stay via MediaPlayer

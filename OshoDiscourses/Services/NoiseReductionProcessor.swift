@@ -31,6 +31,10 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     /// FIFOs below.
     let deepFilter = DeepFilterProcessor()
 
+    /// Scratch for the mono mix handed to DeepFilterNet. Allocated in `prepare`
+    /// because the render thread must not allocate.
+    private var monoScratch: UnsafeMutablePointer<Float>?
+
     private struct Biquad {
         var b0: Float = 1
         var b1: Float = 0
@@ -185,7 +189,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
                 resetRNNoiseChannel(ch)
             }
         }
-        let format = channels.first.map { ($0.sampleRate, self.maxFrames, channels.count) }
+        let format = channels.first.map { ($0.sampleRate, self.maxFrames) }
         // Capture before unlocking: reading these properties afterwards would be
         // an unsynchronized read from whatever thread called configure.
         let attenuation = self.attenuationLimitDb
@@ -195,9 +199,9 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         deepFilter.setAttenuationLimit(attenuation)
         deepFilter.setVoiceFocus(voiceFocus)
         if mode == .deepFilterNet {
-            if let (sampleRate, maxFrames, channelCount) = format, maxFrames > 0 {
+            if let (sampleRate, maxFrames) = format, maxFrames > 0 {
                 deepFilter.activate(
-                    channelCount: channelCount,
+                    channelCount: 1,
                     maxFrames: maxFrames,
                     sampleRate: sampleRate
                 )
@@ -233,12 +237,17 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             built.append(ch)
         }
         channels = built
+        monoScratch?.deallocate()
+        let scratch = UnsafeMutablePointer<Float>.allocate(capacity: max(maxFrames, 1))
+        scratch.initialize(repeating: 0, count: max(maxFrames, 1))
+        monoScratch = scratch
         let activeMode = mode
         lock.unlock()
 
         if activeMode == .deepFilterNet {
+            // One instance, not one per channel: the model is fed a mono mix.
             deepFilter.activate(
-                channelCount: max(channelCount, 1),
+                channelCount: 1,
                 maxFrames: maxFrames,
                 sampleRate: sampleRate
             )
@@ -274,6 +283,8 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
     private func teardownLocked() {
         channels.removeAll()   // Channel.deinit frees C state + buffers
+        monoScratch?.deallocate()
+        monoScratch = nil
     }
 
     // MARK: - Realtime processing
@@ -289,6 +300,14 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         guard !channels.isEmpty else { return }
 
         let bufferList = UnsafeMutableAudioBufferListPointer(buffer)
+
+        // DeepFilterNet works on one mono mix rather than each channel in turn,
+        // so it is handled as a whole buffer list instead of channel by channel.
+        if mode == .deepFilterNet {
+            processDeepFilterNet(bufferList, count: n)
+            return
+        }
+
         for bufIdx in 0..<bufferList.count {
             let audioBuffer = bufferList[bufIdx]
             // RNNoise is single-channel. Taps deliver deinterleaved float (one
@@ -305,11 +324,74 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             case .cadence:
                 processCadence(samples: samples, count: n, channel: channels[bufIdx])
             case .deepFilterNet:
-                // Owns its own state and lock. A false return means it is not
-                // ready (still loading, or unavailable) and left the audio
-                // untouched, which is the correct passthrough behaviour.
-                deepFilter.process(samples: samples, count: n, channelIndex: bufIdx)
+                break   // handled above
             }
+        }
+    }
+
+    /// Denoise a whole buffer list with DeepFilterNet, collapsing multi-channel
+    /// audio to a single mono mix first.
+    ///
+    /// The archive is spoken word delivered as 22,050 Hz joint stereo: measured on
+    /// Maha Geeta #5 the two channels differ by only -18.4 dB, so it is
+    /// near-dual-mono in a stereo container. Running the model per channel meant
+    /// two model instances and twice the inference — about 0.246 of real time —
+    /// to reproduce nearly the same signal twice.
+    ///
+    /// Collapsing also removes an artifact the per-channel version could produce:
+    /// two independent gates ducking at slightly different moments make the stereo
+    /// image wander, which is worse than having no width at all on a voice
+    /// recording.
+    ///
+    /// The mix is written back to every channel, so the output stays the shape the
+    /// tap handed us.
+    private func processDeepFilterNet(
+        _ bufferList: UnsafeMutableAudioBufferListPointer,
+        count n: Int
+    ) {
+        // Counted without building an array: this runs on the render thread.
+        var usable = 0
+        for index in 0..<bufferList.count
+        where bufferList[index].mNumberChannels == 1 && bufferList[index].mData != nil {
+            usable += 1
+        }
+        guard usable > 0 else { return }
+
+        // Already mono: nothing to mix, so hand it straight over.
+        if usable == 1 {
+            for index in 0..<bufferList.count {
+                let audioBuffer = bufferList[index]
+                guard audioBuffer.mNumberChannels == 1, let raw = audioBuffer.mData else { continue }
+                deepFilter.process(
+                    samples: raw.assumingMemoryBound(to: Float.self),
+                    count: n,
+                    channelIndex: 0
+                )
+                return
+            }
+            return
+        }
+
+        guard let scratch = monoScratch, n <= maxFrames else { return }
+        scratch.update(repeating: 0, count: n)
+        for index in 0..<bufferList.count {
+            let audioBuffer = bufferList[index]
+            guard audioBuffer.mNumberChannels == 1, let raw = audioBuffer.mData else { continue }
+            let samples = raw.assumingMemoryBound(to: Float.self)
+            for frame in 0..<n { scratch[frame] += samples[frame] }
+        }
+        let scale = 1 / Float(usable)
+        for frame in 0..<n { scratch[frame] *= scale }
+
+        // A false return means the model is not ready and left the mix alone. The
+        // original channels must then be left alone too, rather than replaced with
+        // an unprocessed downmix that would collapse the source's own width.
+        guard deepFilter.process(samples: scratch, count: n, channelIndex: 0) else { return }
+
+        for index in 0..<bufferList.count {
+            let audioBuffer = bufferList[index]
+            guard audioBuffer.mNumberChannels == 1, let raw = audioBuffer.mData else { continue }
+            raw.assumingMemoryBound(to: Float.self).update(from: scratch, count: n)
         }
     }
 
