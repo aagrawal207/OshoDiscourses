@@ -410,10 +410,52 @@ instead of a fixed delay, and two-pass loudness normalisation to recover the
 4. Fine-tune only after the baseline comparison. Use clean speech plus synthetic hum, hiss, traffic, and recording artifacts; use noise-only Osho pauses as noise material, not as clean targets.
 5. Gate turning noise reduction **on** by default on blind preference, preserved Hindi and English consonants, zero playback underruns, sustained thermal performance, and verified model/data licenses. None of the device-side items have been measured yet, so noise reduction still ships off.
 
+### Next measured micro-experiments
+
+Do not run DeepFilterNet twice or chain it with RNNoise. Both neural processors
+make independent speech/noise decisions; stacking them compounds latency,
+suppression floors and musical-noise artifacts instead of adding complementary
+information.
+
+Test these one variable at a time on the fixed listening set:
+
+1. Compare the static 1.6 kHz emphasis at 3.5, 2 and 0 dB. Measure breath-to-
+   adjacent-speech level, 1.5-8 kHz residual-blob exposure, sentence-tail gain
+   and blind clarity preference. This is the most direct test for the reported
+   prominent breaths.
+2. Compare DeepFilterNet's native post-filter at beta 0, 0.01, 0.02 and 0.05,
+   holding the attenuation limit at 12 dB. Upstream's command-line tool uses
+   0.02 when the optional filter is enabled and describes it as slightly over-
+   attenuating very noisy sections. Measure hiss reduction, consonant loss and
+   residual-blob exposure before adopting it.
+3. Detect stable 50/60 Hz hum and its harmonics from long pauses, then apply only
+   the detected narrow notches before DeepFilterNet. Do not always notch 50, 60,
+   100 and 120 Hz: Osho's fundamental occupies the same lower band. Test hum
+   attenuation and 80-250 Hz speech loss on both synthetic mixtures and real
+   excerpts.
+4. If breath handling still needs work, measure harmonicity alongside the model's
+   aligned local SNR. Only consider reducing emphasis on low-harmonicity frames
+   inside the hold window; never close the gate faster, because breaths and
+   unvoiced consonants can look alike and the earlier fast gate swallowed words.
+
+An Osho-specific speaker model would require a curated clean/noisy corpus and
+speaker-conditioned training or source separation. EQ alone cannot identify a
+person, and the available measurements show that aircraft noise overlaps the
+same 150-700 Hz band as his voice. Build the excerpt corpus and exhaust the
+low-risk tests above before taking on a new model.
+
 DeepFilterNet **is** now the mode you get when you switch noise reduction on: it
 was reached only by changing a setting most listeners never open, which meant the
 work above reached almost nobody. That is a smaller step than default-on — nobody
 spends battery without asking for it — so it is not held behind the gate above.
+
+Volume boost is intentionally available only while noise reduction is on. The
+unfiltered archive already peaks at full scale, so making it louder requires a
+limiter to spend speech crest factor. Listening showed that this damaged the raw
+recordings more than it helped. The filtered path has lost noise energy and about
+3.8 dB of overall RMS, so that is the only path where the trade is useful. Turning
+noise reduction off removes the processing tap entirely and restores untouched
+playback; the chosen boost is remembered for the next filtered session.
 
 Cadence is intentionally conservative. It rejects narrow 50/60 Hz hum and its
 first harmonics, rolls off only the highest hiss band, and lowers noise after a

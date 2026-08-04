@@ -85,14 +85,14 @@ struct VolumeBoostTests {
         // would put 12 dB of it past the ceiling; limiting the peaks is what turns
         // the gain into loudness instead of distortion.
         let signal = speech(seconds: 4, sampleRate: 22_050)
-        let reference = try run(signal: signal, gain: 1, denoise: false)
+        let reference = try run(signal: signal, gain: 1, denoise: true)
         let referenceLevel = rms(reference)
 
         print("boost ladder, crest factor of fixture: "
               + String(format: "%.1f dB", 20 * log10((signal.map(abs).max() ?? 1) / referenceLevel)))
         var lastLevel = referenceLevel
         for gain: Float in [1.5, 2.0, 3.0, 4.0] {
-            let boosted = try run(signal: signal, gain: gain, denoise: false)
+            let boosted = try run(signal: signal, gain: gain, denoise: true)
             let peak = boosted.map(abs).max() ?? 0
             #expect(peak <= 1.0, "boost of \(gain)x clipped at \(peak)")
 
@@ -108,7 +108,7 @@ struct VolumeBoostTests {
 
         // Worth having a floor on how much louder it actually gets: a limiter that
         // simply undid the gain would pass every check above.
-        let loudest = try run(signal: signal, gain: 4, denoise: false)
+        let loudest = try run(signal: signal, gain: 4, denoise: true)
         let gainDb = 20 * log10(rms(loudest) / referenceLevel)
         // The ceiling caps this: with peaks pinned at -1 dBFS the loudest a
         // signal can average is ceiling/sqrt(2) scaled by how much of the time it
@@ -118,18 +118,13 @@ struct VolumeBoostTests {
         #expect(gainDb > 3, "4x boost only achieved \(gainDb) dB, which is not worth the control")
     }
 
-    @Test func boostWorksWithNoiseReductionOff() throws {
-        // The boost used to ride on the audio mix's own volume, which is not
-        // dependable above 1.0 and existed only alongside the denoise tap. It now
-        // runs inside the tap, so the tap is installed for a boost by itself —
-        // this is the case that would silently do nothing otherwise.
+    @Test func boostLeavesRawPlaybackUntouched() throws {
+        // These full-scale recordings sound worse when gain spends their crest
+        // factor through a limiter without first removing noise. Noise Reduction
+        // off is therefore a hard passthrough boundary, even with stored gain.
         let signal = speech(seconds: 3, sampleRate: 22_050)
-        let plain = try run(signal: signal, gain: 1, denoise: false)
         let boosted = try run(signal: signal, gain: 3, denoise: false)
-        let gainDb = 20 * log10(rms(boosted) / rms(plain))
-        print(String(format: "boost with denoising off: %+.2f dB", gainDb))
-        #expect(gainDb > 2, "boost did nothing with denoising off (\(gainDb) dB)")
-        #expect((boosted.map(abs).max() ?? 0) <= 1.0)
+        #expect(boosted == signal)
     }
 
     @Test func unityBoostLeavesTheAudioExactlyAlone() throws {

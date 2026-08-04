@@ -37,8 +37,8 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
     /// Output gain above unity, applied after whichever denoiser ran.
     private var outputGain: Float = 1
-    /// Whether any denoising should happen. The tap is also installed for a
-    /// boost alone, and in that case it must not denoise.
+    /// Whether any processing should happen. Noise Reduction off is guaranteed
+    /// to leave the source untouched, including bypassing output boost.
     private var denoiseEnabled = true
     /// One limiter per channel, so a boost raises level instead of clipping.
     private var boostLimiters: [PeakLimiter] = []
@@ -328,14 +328,15 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         guard lock.try() else { return }
         defer { lock.unlock() }
         guard !channels.isEmpty else { return }
+        guard denoiseEnabled else { return }
 
         let bufferList = UnsafeMutableAudioBufferListPointer(buffer)
 
         // DeepFilterNet works on one mono mix rather than each channel in turn,
         // so it is handled as a whole buffer list instead of channel by channel.
-        if denoiseEnabled, mode == .deepFilterNet {
+        if mode == .deepFilterNet {
             processDeepFilterNet(bufferList, count: n)
-        } else if denoiseEnabled {
+        } else {
             for bufIdx in 0..<bufferList.count {
                 let audioBuffer = bufferList[bufIdx]
                 // RNNoise is single-channel. Taps deliver deinterleaved float (one
@@ -357,7 +358,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             }
         }
 
-        // Last, so the boost applies whichever denoiser ran — and when none did.
+        // Last, so the boost applies whichever denoiser ran.
         applyOutputBoost(bufferList, count: n)
     }
 
@@ -370,8 +371,8 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     /// carry roughly 14 dB of crest factor, and that is the headroom a boost is
     /// actually spending.
     ///
-    /// Applied here rather than in `VoiceFocusChain` so it works with every mode
-    /// and with noise reduction switched off entirely.
+    /// Applied here rather than in `VoiceFocusChain` so it works with every
+    /// denoiser. Raw playback deliberately bypasses this stage.
     private func applyOutputBoost(
         _ bufferList: UnsafeMutableAudioBufferListPointer,
         count n: Int

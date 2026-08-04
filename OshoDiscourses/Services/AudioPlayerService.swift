@@ -78,6 +78,7 @@ final class AudioPlayerService {
     var isNoiseReductionEnabled: Bool = false {
         didSet {
             UserSettings.shared.noiseReduction = isNoiseReductionEnabled
+            configureNoiseProcessor()
             rebuildAudioMix()
         }
     }
@@ -172,6 +173,7 @@ final class AudioPlayerService {
         noiseReductionMode = UserSettings.shared.noiseReductionMode
         denoiseStrength = DenoiseStrength(rawValue: UserSettings.shared.denoiseStrength) ?? .medium
         voiceFocusPreset = UserSettings.shared.voiceFocusPreset
+        volume = max(1.0, min(Float(UserSettings.shared.volumeBoost), Self.maximumBoost))
         configureNoiseProcessor()
         // Mirror the native runtime's state onto the main actor for the UI.
         noiseProcessor.deepFilter.observeStatus { status in
@@ -182,7 +184,6 @@ final class AudioPlayerService {
         // Restore the listener's preferred speed; clamp in case a stale/corrupt
         // value was stored outside the supported 0.5–2.0 range.
         playbackRate = max(0.5, min(Float(UserSettings.shared.defaultPlaybackRate), 2.0))
-        volume = max(1.0, min(Float(UserSettings.shared.volumeBoost), Self.maximumBoost))
         setupAudioSession()
         setupRemoteCommands()
     }
@@ -537,15 +538,12 @@ final class AudioPlayerService {
         updateNowPlayingInfo()
     }
 
-    private var volumeMixRebuildTask: Task<Void, Never>?
-
     /// Highest boost offered. Above unity the peaks are limited rather than
     /// clipped, which is what lets this go past the 2x a plain multiply allowed.
     static let maximumBoost: Float = 4.0
 
     func setVolume(_ vol: Float) {
         let clamped = max(0.0, min(vol, Self.maximumBoost))
-        let crossedBoostBoundary = (volume > 1.0) != (clamped > 1.0)
         volume = clamped
         UserSettings.shared.volumeBoost = Double(clamped)
         // Attenuation below unity is the player's job; gain above it is the tap's.
@@ -555,13 +553,6 @@ final class AudioPlayerService {
         // retires the debounce the old mix-based boost needed, since a rebuild
         // meant tearing down and recreating an MTAudioProcessingTap mid-render.
         noiseProcessor.setOutputGain(clamped > 1.0 ? clamped : 1.0)
-        guard let currentItem = player?.currentItem else { return }
-        // Only whether the tap exists at all can change here, and only when
-        // denoising is off — with it on, the tap is already installed.
-        if crossedBoostBoundary, !isNoiseReductionEnabled {
-            volumeMixRebuildTask?.cancel()
-            applyAudioMix(to: currentItem)
-        }
     }
 
     func stop() {
@@ -1051,12 +1042,11 @@ final class AudioPlayerService {
     private func applyAudioMix(to item: AVPlayerItem) {
         Task {
             guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
-            let boost = volume > 1.0 ? volume : Float(1.0)
 
-            // The tap carries both jobs now: denoising, and the boost that has to
-            // be limited rather than simply multiplied. So it is installed when
-            // either is wanted, and `denoiseEnabled` decides what it does.
-            if isNoiseReductionEnabled || boost > 1.0 {
+            // Boost is deliberately part of the filtered path. On an unfiltered,
+            // full-scale source its limiter changes speech dynamics and sounds
+            // worse than raw playback, so Noise Reduction off means no tap at all.
+            if isNoiseReductionEnabled {
                 guard let mix = noiseProcessor.createAudioMix(for: track) else { return }
                 await MainActor.run { item.audioMix = mix }
             } else {
