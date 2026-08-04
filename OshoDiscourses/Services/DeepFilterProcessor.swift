@@ -417,7 +417,16 @@ final class DeepFilterProcessor: @unchecked Sendable {
               sampleRate <= Self.maximumSourceRate,
               maxFrames > 0 else {
             Self.log.error("Refusing implausible source rate \(sampleRate, format: .fixed(precision: 0)) Hz")
-            updateStatus(.unsupportedSampleRate(sampleRate))
+            lock.lock()
+            // Record the latest request even when unsupported. Otherwise an
+            // older in-flight load can complete afterwards and publish Active
+            // with its stale, valid format.
+            sourceRate = sampleRate
+            self.maxFrames = maxFrames
+            let observer = setStatusLocked(.unsupportedSampleRate(sampleRate))
+            let value = status
+            lock.unlock()
+            observer?(value)
             return
         }
 
@@ -502,6 +511,20 @@ final class DeepFilterProcessor: @unchecked Sendable {
             self.lock.lock()
             self.isLoading = false
             self.hasCompletedLoadAttempt = true
+            // `activate` may have received a newer tap format while ONNX parsing
+            // was in flight. Fit the unpublished voices to the latest request,
+            // not the format captured when loading began.
+            let installedRate = self.sourceRate
+            let installedFrames = self.maxFrames
+            let latestFormatIsSupported = installedRate >= Self.minimumSourceRate
+                && installedRate <= Self.maximumSourceRate
+                && installedFrames > 0
+            if !failed, latestFormatIsSupported {
+                for voice in built
+                where !voice.matches(sourceRate: installedRate, maxFrames: installedFrames) {
+                    voice.reconfigure(sourceRate: installedRate, maxFrames: installedFrames)
+                }
+            }
             var observer: (@Sendable (Status) -> Void)?
             if failed || built.isEmpty {
                 observer = self.setStatusLocked(.initializationFailed)
@@ -511,15 +534,17 @@ final class DeepFilterProcessor: @unchecked Sendable {
                 } else {
                     self.voices.append(contentsOf: built)
                 }
-                observer = self.setStatusLocked(.active)
+                observer = self.setStatusLocked(
+                    latestFormatIsSupported ? .active : .unsupportedSampleRate(installedRate)
+                )
             }
             let value = self.status
             self.lock.unlock()
 
             if case .initializationFailed = value {
                 Self.log.error("DeepFilterNet failed to initialize from \(path, privacy: .public)")
-            } else {
-                Self.log.info("DeepFilterNet active on \(channelCount) channel(s) at \(rate, format: .fixed(precision: 0)) Hz")
+            } else if value.isActive {
+                Self.log.info("DeepFilterNet active on \(channelCount) channel(s) at \(installedRate, format: .fixed(precision: 0)) Hz")
             }
             observer?(value)
         }

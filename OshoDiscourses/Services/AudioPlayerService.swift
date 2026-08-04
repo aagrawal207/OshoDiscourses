@@ -78,7 +78,9 @@ final class AudioPlayerService {
     var isNoiseReductionEnabled: Bool = false {
         didSet {
             UserSettings.shared.noiseReduction = isNoiseReductionEnabled
-            configureNoiseProcessor()
+            // Do not activate DeepFilterNet against the previous tap's cached
+            // format. The replacement tap's prepare callback owns activation.
+            noiseProcessor.setDenoiseEnabled(isNoiseReductionEnabled)
             rebuildAudioMix()
         }
     }
@@ -108,12 +110,19 @@ final class AudioPlayerService {
     /// listener can tell actual denoising apart from silent passthrough (the
     /// model loads asynchronously and can be unavailable).
     private(set) var deepFilterStatus: DeepFilterProcessor.Status = .idle
+    private(set) var isAudioProcessingAttached = false
 
     /// Whether DeepFilterNet is selected but not currently processing audio.
     var isDeepFilterBypassing: Bool {
         isNoiseReductionEnabled
             && noiseReductionMode == .deepFilterNet
-            && deepFilterStatus.isBypassing
+            && !deepFilterStatus.isActive
+    }
+
+    /// Boost is useful only after a denoiser has actually produced output.
+    /// DeepFilterNet explicitly passes raw audio through while loading or failed.
+    var isBoostAvailable: Bool {
+        isNoiseReductionEnabled && isAudioProcessingAttached && !isDeepFilterBypassing
     }
 
     // MARK: - Playback State
@@ -129,6 +138,7 @@ final class AudioPlayerService {
     // MARK: - Private
 
     private var player: AVPlayer?
+    private var audioMixGeneration = 0
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
@@ -610,6 +620,7 @@ final class AudioPlayerService {
 
         player?.volume = min(volume, 1.0)
         noiseProcessor.reset()
+        isAudioProcessingAttached = false
         applyAudioMix(to: playerItem)
 
         // Observe when the item is ready to play
@@ -1040,17 +1051,25 @@ final class AudioPlayerService {
     // MARK: - Private: Audio Mix (Noise Reduction / Voice Filter + Volume Boost)
 
     private func applyAudioMix(to item: AVPlayerItem) {
+        audioMixGeneration &+= 1
+        let generation = audioMixGeneration
+        let shouldProcess = isNoiseReductionEnabled
+        isAudioProcessingAttached = false
         Task {
             guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
+            guard generation == audioMixGeneration,
+                  item === player?.currentItem else { return }
 
             // Boost is deliberately part of the filtered path. On an unfiltered,
             // full-scale source its limiter changes speech dynamics and sounds
             // worse than raw playback, so Noise Reduction off means no tap at all.
-            if isNoiseReductionEnabled {
+            if shouldProcess {
                 guard let mix = noiseProcessor.createAudioMix(for: track) else { return }
-                await MainActor.run { item.audioMix = mix }
+                item.audioMix = mix
+                isAudioProcessingAttached = true
             } else {
-                await MainActor.run { item.audioMix = nil }
+                item.audioMix = nil
+                isAudioProcessingAttached = false
             }
         }
     }
@@ -1058,6 +1077,13 @@ final class AudioPlayerService {
     private func rebuildAudioMix() {
         guard let item = player?.currentItem else { return }
         noiseProcessor.reset()
+        if !isNoiseReductionEnabled {
+            // Remove processing immediately and invalidate any pending mix build.
+            audioMixGeneration &+= 1
+            item.audioMix = nil
+            isAudioProcessingAttached = false
+            return
+        }
         applyAudioMix(to: item)
     }
 

@@ -127,6 +127,42 @@ struct VolumeBoostTests {
         #expect(boosted == signal)
     }
 
+    @Test func deepFilterBypassDoesNotBoostRawPlayback() throws {
+        // DeepFilterNet passes the source through while loading, unavailable, or
+        // unsupported. Stored boost must not turn that bypass into limited audio.
+        let sampleRate = 4_000.0
+        let signal = speech(seconds: 1, sampleRate: sampleRate)
+        let format = try #require(
+            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)
+        )
+        let block = try #require(
+            AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: AVAudioFrameCount(signal.count)
+            )
+        )
+        block.frameLength = AVAudioFrameCount(signal.count)
+        let data = try #require(block.floatChannelData)
+        for index in signal.indices {
+            data[0][index] = signal[index]
+            data[1][index] = signal[index] * 0.5
+        }
+        let expectedLeft = signal
+        let expectedRight = signal.map { $0 * 0.5 }
+
+        let processor = NoiseReductionProcessor()
+        processor.prepare(channelCount: 2, maxFrames: signal.count, sampleRate: sampleRate)
+        processor.configure(
+            mode: .deepFilterNet, wetMix: 0.5, intensity: 0.7,
+            attenuationLimitDb: 12, voiceFocus: .focus,
+            denoiseEnabled: true, outputGain: 3
+        )
+        processor.process(buffer: block.mutableAudioBufferList, frameCount: block.frameLength)
+
+        #expect(Array(UnsafeBufferPointer(start: data[0], count: signal.count)) == expectedLeft)
+        #expect(Array(UnsafeBufferPointer(start: data[1], count: signal.count)) == expectedRight)
+    }
+
     @Test func unityBoostLeavesTheAudioExactlyAlone() throws {
         // No limiter, no gain, no rounding: at 1x the boost stage must be inert, or
         // it would colour playback for everyone who never touches the control.

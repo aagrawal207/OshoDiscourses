@@ -232,7 +232,19 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     /// tick of a volume control would keep resetting the denoiser mid-sentence.
     func setOutputGain(_ gain: Float) {
         lock.lock()
-        outputGain = max(gain, 1)
+        let next = max(gain, 1)
+        if outputGain > 1, next <= 1 {
+            for index in boostLimiters.indices { boostLimiters[index].reset() }
+        }
+        outputGain = next
+        lock.unlock()
+    }
+
+    /// Update the hard passthrough boundary without activating a model against
+    /// a stale tap format. A newly installed tap activates from `prepare`.
+    func setDenoiseEnabled(_ enabled: Bool) {
+        lock.lock()
+        denoiseEnabled = enabled
         lock.unlock()
     }
 
@@ -291,6 +303,7 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             resetRNNoiseChannel(ch)
             ch.configureArchive(sampleRate: ch.sampleRate, intensity: intensity)
         }
+        for index in boostLimiters.indices { boostLimiters[index].reset() }
         lock.unlock()
         deepFilter.reset()
     }
@@ -334,8 +347,9 @@ final class NoiseReductionProcessor: @unchecked Sendable {
 
         // DeepFilterNet works on one mono mix rather than each channel in turn,
         // so it is handled as a whole buffer list instead of channel by channel.
+        var processed = true
         if mode == .deepFilterNet {
-            processDeepFilterNet(bufferList, count: n)
+            processed = processDeepFilterNet(bufferList, count: n)
         } else {
             for bufIdx in 0..<bufferList.count {
                 let audioBuffer = bufferList[bufIdx]
@@ -358,8 +372,9 @@ final class NoiseReductionProcessor: @unchecked Sendable {
             }
         }
 
-        // Last, so the boost applies whichever denoiser ran.
-        applyOutputBoost(bufferList, count: n)
+        // Never limit raw DeepFilterNet passthrough while the model is loading,
+        // unavailable or stopped after a runtime failure.
+        if processed { applyOutputBoost(bufferList, count: n) }
     }
 
     /// Raises level above the system maximum without clipping.
@@ -414,31 +429,30 @@ final class NoiseReductionProcessor: @unchecked Sendable {
     private func processDeepFilterNet(
         _ bufferList: UnsafeMutableAudioBufferListPointer,
         count n: Int
-    ) {
+    ) -> Bool {
         // Counted without building an array: this runs on the render thread.
         var usable = 0
         for index in 0..<bufferList.count
         where bufferList[index].mNumberChannels == 1 && bufferList[index].mData != nil {
             usable += 1
         }
-        guard usable > 0 else { return }
+        guard usable > 0 else { return false }
 
         // Already mono: nothing to mix, so hand it straight over.
         if usable == 1 {
             for index in 0..<bufferList.count {
                 let audioBuffer = bufferList[index]
                 guard audioBuffer.mNumberChannels == 1, let raw = audioBuffer.mData else { continue }
-                deepFilter.process(
+                return deepFilter.process(
                     samples: raw.assumingMemoryBound(to: Float.self),
                     count: n,
                     channelIndex: 0
                 )
-                return
             }
-            return
+            return false
         }
 
-        guard let scratch = monoScratch, n <= maxFrames else { return }
+        guard let scratch = monoScratch, n <= maxFrames else { return false }
         scratch.update(repeating: 0, count: n)
         for index in 0..<bufferList.count {
             let audioBuffer = bufferList[index]
@@ -452,13 +466,14 @@ final class NoiseReductionProcessor: @unchecked Sendable {
         // A false return means the model is not ready and left the mix alone. The
         // original channels must then be left alone too, rather than replaced with
         // an unprocessed downmix that would collapse the source's own width.
-        guard deepFilter.process(samples: scratch, count: n, channelIndex: 0) else { return }
+        guard deepFilter.process(samples: scratch, count: n, channelIndex: 0) else { return false }
 
         for index in 0..<bufferList.count {
             let audioBuffer = bufferList[index]
             guard audioBuffer.mNumberChannels == 1, let raw = audioBuffer.mData else { continue }
             raw.assumingMemoryBound(to: Float.self).update(from: scratch, count: n)
         }
+        return true
     }
 
     private func processRNNoise(samples: UnsafeMutablePointer<Float>, count n: Int, channel ch: Channel) {

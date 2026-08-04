@@ -417,23 +417,25 @@ struct PlayerView: View {
             )
 
             playerControlButton(
-                icon: player.isNoiseReductionEnabled && player.volume > 1.0
+                icon: player.isBoostAvailable && player.volume > 1.0
                     ? "speaker.wave.3.fill" : "speaker.wave.2",
-                label: player.isNoiseReductionEnabled && player.volume > 1.0
+                label: player.isBoostAvailable && player.volume > 1.0
                     ? boostLabel : "Boost",
-                isActive: player.isNoiseReductionEnabled && player.volume > 1.0
+                isActive: player.isBoostAvailable && player.volume > 1.0
             ) {
                 player.setVolume(nextBoostLevel)
             }
-            .disabled(!player.isNoiseReductionEnabled)
+            .disabled(!player.isBoostAvailable)
             .accessibilityLabel("Volume boost")
             .accessibilityValue(
-                player.isNoiseReductionEnabled && player.volume > 1.0 ? "\(boostLabel)" : "Off"
+                player.isBoostAvailable && player.volume > 1.0
+                    ? "\(boostLabel)"
+                    : (player.volume > 1.0 ? "\(boostLabel) paused" : "Off")
             )
             .accessibilityHint(
-                player.isNoiseReductionEnabled
+                player.isBoostAvailable
                     ? "Steps filtered audio above the system maximum, then back off"
-                    : "Available when Noise Reduction is on"
+                    : "Available when Noise Reduction is active"
             )
 
             playerControlButton(

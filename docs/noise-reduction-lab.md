@@ -222,8 +222,10 @@ Fixing the causes rather than leaning on the limiter mattered: with the limiter
 alone it engaged on **44% of samples**, which is a compressor, not a safety net.
 After both fixes it engages on 0.005% (Focus) to 0.04% (Lift/Strong).
 
-Cost: output RMS is ~3.8 dB below the source, part noise removal and part the
-emphasis normalisation. Level cannot be given back — the source has no headroom.
+On the measured Maha Geeta #5 passage, output RMS is ~3.8 dB below the source,
+part noise removal and part emphasis normalisation. This is not a catalog-wide
+loudness result; limited boost can recover some perceived level by spending
+speech crest factor, not by creating peak headroom.
 
 **Note the earlier listening tests were run at full attenuation**, as
 `VoiceFocusPreset`'s doc comment says. That is the Strong setting, not the
@@ -232,8 +234,8 @@ default install produces. Any future preset comparison must state its
 attenuation limit or it is not reproducible.
 
 Medium was chosen on that listen: Light still left audible noise. Medium is
-already the default, so no default changed. Note that the default *mode* is
-still `rnnoise`, so DeepFilterNet remains opt-in.
+already the default, so no strength default changed. DeepFilterNet is now the
+mode selected when a listener opts into noise reduction.
 
 Any future audition file must be written with shared headroom and checked for
 clipped samples before anyone is asked to judge it. That mistake cost two wrong
@@ -405,17 +407,16 @@ itself.
 
 If it is ever revisited, the argument for it is not CPU — it is that offline work
 can be non-causal, which allows a true look-ahead limiter, exact SNR alignment
-instead of a fixed delay, and two-pass loudness normalisation to recover the
-3.8 dB the ceiling fix costs.
+instead of a fixed delay, and two-pass loudness normalisation.
 4. Fine-tune only after the baseline comparison. Use clean speech plus synthetic hum, hiss, traffic, and recording artifacts; use noise-only Osho pauses as noise material, not as clean targets.
 5. Gate turning noise reduction **on** by default on blind preference, preserved Hindi and English consonants, zero playback underruns, sustained thermal performance, and verified model/data licenses. None of the device-side items have been measured yet, so noise reduction still ships off.
 
 ### Next measured micro-experiments
 
-Do not run DeepFilterNet twice or chain it with RNNoise. Both neural processors
-make independent speech/noise decisions; stacking them compounds latency,
-suppression floors and musical-noise artifacts instead of adding complementary
-information.
+Do not ship DeepFilterNet twice or chained with RNNoise without evidence. Both
+neural processors make independent speech/noise decisions, so a cascade adds
+latency and overlapping suppression; this repository has not measured a
+complementary benefit.
 
 Test these one variable at a time on the fixed listening set:
 
@@ -426,36 +427,45 @@ Test these one variable at a time on the fixed listening set:
 2. Compare DeepFilterNet's native post-filter at beta 0, 0.01, 0.02 and 0.05,
    holding the attenuation limit at 12 dB. Upstream's command-line tool uses
    0.02 when the optional filter is enabled and describes it as slightly over-
-   attenuating very noisy sections. Measure hiss reduction, consonant loss and
-   residual-blob exposure before adopting it.
+   attenuating very noisy sections. Compare both native-level and loudness-
+   matched output; measure hiss reduction, consonant loss and residual-blob
+   exposure before adopting it.
 3. Detect stable 50/60 Hz hum and its harmonics from long pauses, then apply only
-   the detected narrow notches before DeepFilterNet. Do not always notch 50, 60,
-   100 and 120 Hz: Osho's fundamental occupies the same lower band. Test hum
-   attenuation and 80-250 Hz speech loss on both synthetic mixtures and real
+   the detected narrow notches. Start after DeepFilterNet so the detector cannot
+   perturb model input, then compare before-model placement. Do not always notch
+   50, 60, 100 and 120 Hz: Osho's fundamental occupies the same lower band. Test
+   hum attenuation and 80-250 Hz speech loss on both synthetic mixtures and real
    excerpts.
-4. If breath handling still needs work, measure harmonicity alongside the model's
-   aligned local SNR. Only consider reducing emphasis on low-harmonicity frames
-   inside the hold window; never close the gate faster, because breaths and
-   unvoiced consonants can look alike and the earlier fast gate swallowed words.
+4. If breath handling still needs work, do not classify it from harmonicity alone.
+   Measure pitch confidence and spectral/temporal context alongside the model's
+   aligned local SNR, and alter only the optional emphasis tilt. Never close the
+   gate faster: breaths and unvoiced consonants can look alike, and the earlier
+   fast gate swallowed words.
 
-An Osho-specific speaker model would require a curated clean/noisy corpus and
-speaker-conditioned training or source separation. EQ alone cannot identify a
-person, and the available measurements show that aircraft noise overlaps the
-same 150-700 Hz band as his voice. Build the excerpt corpus and exhaust the
-low-risk tests above before taking on a new model.
+The current chain is archive-tuned, not Osho-selective. A custom model would need
+representative, rights-cleared targets and mixtures; pretrained target-speaker
+extraction could instead use enrollment audio, but adds model, licensing,
+identity-preservation and runtime risk. EQ alone cannot identify a person, and
+the available measurements show that aircraft noise overlaps the same 150-700 Hz
+band as his voice. Establish that competing speech is a material failure mode and
+exhaust the low-risk tests above before taking on a new model.
 
 DeepFilterNet **is** now the mode you get when you switch noise reduction on: it
 was reached only by changing a setting most listeners never open, which meant the
 work above reached almost nobody. That is a smaller step than default-on — nobody
 spends battery without asking for it — so it is not held behind the gate above.
 
-Volume boost is intentionally available only while noise reduction is on. The
-unfiltered archive already peaks at full scale, so making it louder requires a
-limiter to spend speech crest factor. Listening showed that this damaged the raw
-recordings more than it helped. The filtered path has lost noise energy and about
-3.8 dB of overall RMS, so that is the only path where the trade is useful. Turning
-noise reduction off removes the processing tap entirely and restores untouched
-playback; the chosen boost is remembered for the next filtered session.
+Volume boost is intentionally available only while noise reduction is actually
+producing output. The unfiltered archive already peaks at full scale, so making it
+louder requires a limiter to spend speech crest factor; listening showed that
+this damaged the raw recordings more than it helped. On one Maha Geeta #5 render,
+Medium/Focus measured about 3.8 dB lower in full-segment RMS, including removed
+noise and the normalised emphasis tilt. That is not catalog-wide loudness or
+guaranteed peak headroom; restricting boost remains a listening-policy choice
+pending representative LUFS, true-peak, limiter-reduction and blind-preference
+measurements. Turning noise reduction off removes the processing tap entirely;
+DeepFilterNet loading/failure bypasses boost; the chosen level is remembered for
+the next active filtered session.
 
 Cadence is intentionally conservative. It rejects narrow 50/60 Hz hum and its
 first harmonics, rolls off only the highest hiss band, and lowers noise after a

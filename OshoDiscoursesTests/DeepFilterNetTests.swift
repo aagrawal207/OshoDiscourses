@@ -120,6 +120,26 @@ struct DeepFilterNetTests {
         #expect(samples == original)
     }
 
+    @Test func unsupportedFormatWinsOverAnOlderInFlightLoad() async throws {
+        let processor = DeepFilterProcessor()
+        processor.activate(channelCount: 1, maxFrames: 1024, sampleRate: 48_000)
+        processor.activate(channelCount: 1, maxFrames: 1024, sampleRate: 1_000)
+
+        #expect(processor.currentStatus == .unsupportedSampleRate(1_000))
+        // Model parsing finishes asynchronously. Its older valid request must not
+        // overwrite the newer unsupported format with a stale Active status.
+        try await Task.sleep(for: .seconds(2))
+        #expect(processor.currentStatus == .unsupportedSampleRate(1_000))
+
+        var samples = [Float](repeating: 0.25, count: 480)
+        let original = samples
+        let handled = samples.withUnsafeMutableBufferPointer { pointer in
+            processor.process(samples: pointer.baseAddress!, count: pointer.count, channelIndex: 0)
+        }
+        #expect(handled == false)
+        #expect(samples == original)
+    }
+
     /// The catalog is 22,050 Hz, so this is the path that actually matters:
     /// without resampling the 48 kHz model could never run on these recordings.
     @Test func processorRunsOn22kHzCatalogAudioByResampling() async throws {
