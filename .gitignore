@@ -33,3 +33,6 @@ native/deepfilter-bridge/.cargo/
 
 # Misc
 *.log
+
+# Python
+__pycache__/
