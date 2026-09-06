@@ -501,7 +501,9 @@ struct TranscriptAlignerTests {
     @Test func gluedStopsAndUnterminatedTailsAreHandled() {
         let text = "Version 3.5 is out. See e.g. the notes"
         let parts = TranscriptSentences.ranges(in: text).map { String(text[$0]) }
-        #expect(parts == ["Version 3.5 is out.", "See e.g.", "the notes"])
+        #expect(parts == ["Version 3.5 is out.", "See e.g. the notes"])
+        let quoted = "If a man is asking \"What is light?\" it shows he is blind. Really? yes."
+        #expect(TranscriptSentences.ranges(in: quoted).map { String(quoted[$0]) } == ["If a man is asking \"What is light?\" it shows he is blind.", "Really? yes."])
         #expect(TranscriptSentences.ranges(in: "").isEmpty)
         #expect(TranscriptSentences.ranges(in: "no stop").count == 1)
     }
@@ -513,6 +515,72 @@ struct TranscriptAlignerTests {
         #expect(TranscriptSentences.index(atFraction: 0.99, in: text) == 2)
         #expect(TranscriptSentences.index(atFraction: 1.5, in: text) == 2)
         #expect(TranscriptSentences.index(atFraction: 0.5, in: "One sentence only") == 0)
+    }
+}
+
+@Suite struct TranscriptBlocksTests {
+
+    private let sentence = "This is one sentence of roughly sixty characters for the test. "
+
+    @Test func shortParagraphsStayWhole() {
+        let text = String(repeating: sentence, count: 5).trimmingCharacters(in: .whitespaces)   // ~310 chars
+        #expect(TranscriptBlocks.ranges(in: text).count == 1)
+        #expect(TranscriptBlocks.ranges(in: "").isEmpty)
+        // One giant sentence cannot be split.
+        #expect(TranscriptBlocks.ranges(in: String(repeating: "word ", count: 200)).count == 1)
+    }
+
+    @Test func longParagraphsSplitIntoEvenSentenceAlignedBlocks() {
+        let text = String(repeating: sentence, count: 15).trimmingCharacters(in: .whitespaces)   // ~900 chars
+        let ranges = TranscriptBlocks.ranges(in: text)
+        #expect(ranges.count == 3)
+        for r in ranges {
+            #expect(text[r].hasSuffix("."))
+            #expect(text[r].hasPrefix("This"))
+        }
+        // Contiguous and covering.
+        #expect(ranges.first?.lowerBound == text.startIndex)
+        #expect(ranges.last?.upperBound == text.endIndex)
+        for (a, b) in zip(ranges, ranges.dropFirst()) {
+            let gap = String(text[a.upperBound..<b.lowerBound])
+            #expect(gap.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        let shares = TranscriptBlocks.fractions(of: ranges, in: text)
+        #expect(shares.first?.start == 0)
+        #expect(shares.last?.end == 1)
+        #expect(abs(shares[1].start - 1.0 / 3) < 0.05)
+    }
+
+    @Test func noTinyRemainderBlock() {
+        let text = String(repeating: sentence, count: 8) + "Short end."
+        let ranges = TranscriptBlocks.ranges(in: text)
+        let lengths = ranges.map { text[$0].count }
+        #expect(lengths.allSatisfy { $0 > 100 })
+    }
+
+    @Test func anchorsOnBlocksOfOneParagraphCoexistWhenOrdered() {
+        let early = TranscriptAnchor(paragraph: 4, time: 100, createdAt: Date(), fraction: 0.2)
+        let late = TranscriptAnchor(paragraph: 4, time: 130, createdAt: Date(), fraction: 0.8)
+        let both = TranscriptSyncModel.inserting(late, into: [early])
+        #expect(both == [early, late])
+        // A later block at an earlier time contradicts; the newest wins.
+        let wrong = TranscriptAnchor(paragraph: 4, time: 90, createdAt: Date(), fraction: 0.8)
+        #expect(TranscriptSyncModel.inserting(wrong, into: [early]) == [wrong])
+        // Legacy whole-paragraph anchor replaces one at the same (middle) spot.
+        let legacy = TranscriptAnchor(paragraph: 4, time: 115, createdAt: Date())
+        #expect(TranscriptSyncModel.inserting(legacy, into: [TranscriptAnchor(paragraph: 4, time: 100, createdAt: Date(), fraction: 0.5)]) == [legacy])
+        // Old JSON without the field still decodes.
+        let decoded = try? JSONDecoder().decode(TranscriptAnchor.self, from: Data(#"{"paragraph":1,"time":5,"createdAt":0}"#.utf8))
+        #expect(decoded?.fraction == nil)
+    }
+
+    @Test func fractionMapsThroughTheModel() {
+        let base = TranscriptSyncModel(paragraphs: (0..<4).map { Transcript.Paragraph(index: $0, text: String(repeating: "a", count: 100), isEmphasis: false) }, duration: 400)
+        #expect(base.time(paragraph: 1, fraction: 0.5) == 150)
+        #expect(base.fraction(atTime: 150, inParagraph: 1) == 0.5)
+        #expect(base.fraction(atTime: 350, inParagraph: 1) == 1)
+        let anchored = base.with(knots: [base.knot(for: TranscriptAnchor(paragraph: 1, time: 250, createdAt: Date(), fraction: 0.25))!])
+        #expect(anchored.knots[1].position == 125)
     }
 }
 

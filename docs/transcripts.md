@@ -86,6 +86,18 @@ interpolated by character share (`TranscriptSentences`), so this is not
 shown for the estimate, where a sentence marker would suggest a precision
 the timing does not have.
 
+### Display blocks
+
+oshoworld's paragraphs run to 900 characters. Paragraphs over ~360 letters
+are shown as blocks of roughly 240 letters cut at sentence boundaries
+(`TranscriptBlocks`), with blocks of one paragraph spaced closer than
+paragraph breaks. Blocks are presentation only: alignment, read positions
+and anchors stay keyed by source paragraph, so shipped timings and synced
+state are unaffected. A block's time is interpolated from its character
+share of the paragraph; "Play from here" seeks to the block start and
+"Audio is here" on a block records `fraction` (the block's midpoint) on the
+anchor, which older app versions ignore and read as the paragraph middle.
+
 ### Recognisers
 
 English uses `SpeechTranscriber` in `en_IN` (30 locales, no Hindi). Hindi

@@ -112,9 +112,9 @@ final class TranscriptStateService {
 
     // MARK: - Writes
 
-    func addAnchor(discourseID: String, paragraph: Int, time: TimeInterval, paragraphCount: Int) {
+    func addAnchor(discourseID: String, paragraph: Int, time: TimeInterval, fraction: Double? = nil, paragraphCount: Int) {
         var s = state(for: discourseID, paragraphCount: paragraphCount)
-        let anchor = TranscriptAnchor(paragraph: paragraph, time: time, createdAt: Date())
+        let anchor = TranscriptAnchor(paragraph: paragraph, time: time, createdAt: Date(), fraction: fraction)
         s.anchors = Self.cap(TranscriptSyncModel.inserting(anchor, into: s.anchors))
         s.paragraphCount = paragraphCount
         states[discourseID] = s

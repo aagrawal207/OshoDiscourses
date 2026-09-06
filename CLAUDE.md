@@ -35,7 +35,7 @@ OshoDiscourses/
 │   ├── Library/LibraryView.swift       # Full series list with dynamic filter chips + sort
 │   ├── Series/SeriesDetailView.swift   # Hero header, discourse list, download/play actions
 │   ├── Player/PlayerView.swift         # Full-screen player — artwork, slider, controls, speed, sleep timer, transcript button
-│   ├── Player/TranscriptView.swift     # Lyrics-style transcript sheet — highlight, auto-follow, anchors, search, font size
+│   ├── Player/TranscriptView.swift     # Lyrics-style transcript sheet — display blocks, highlight, auto-follow, anchors, search, font size
 │   ├── Player/MiniPlayerView.swift     # Floating mini-player bar (ultraThinMaterial)
 │   ├── Downloads/DownloadsView.swift   # "My Activity" tab — downloads + stats/bookmarks links + storage meter
 │   ├── BookmarksView.swift             # Bookmark list (built) — filter chips, swipe-delete, play/redownload
@@ -136,7 +136,12 @@ OshoDiscoursesTests/
   text-length estimate (share of characters = share of duration, 50-character
   floor). The user's "Audio is here" anchors bend all three and win over
   aligned starts they contradict. With aligned timing the reader also marks
-  the sentence being spoken (interpolated within the paragraph). Anchors +
+  the sentence being spoken (interpolated within the paragraph). Paragraphs
+  longer than ~360 letters are shown as several blocks cut at sentence
+  boundaries (`TranscriptBlocks`, ~240 letters each); the highlight, "Play
+  from here" and "Audio is here" act on a block, and a block anchor stores
+  its position in the paragraph (`TranscriptAnchor.fraction`, nil = middle
+  for anchors from older versions). Anchors +
   last-read paragraph live in `transcript_state.json` and sync via iCloud;
   device alignments stay local. A shipped entry is used only when its
   paragraph count matches the parsed transcript and its duration is within
@@ -192,6 +197,7 @@ OshoDiscoursesTests/
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
 - [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
 - [x] Transcript timing shipped for every aligned discourse (AlignmentCatalog, iOS 18+, both languages) + sentence-level highlight
+- [x] Long transcript paragraphs shown as sentence-aligned blocks of 4-8 lines (state stays per source paragraph)
 - [x] Transcript speech sync on device (iOS 26) for discourses the catalog lacks — English via SpeechTranscriber, Hindi via DictationTranscriber
 - [x] Home > Continue Listening: series name is a link to the series page (Downloads-header style)
 
@@ -250,9 +256,9 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-09-06 (238 tests passing; Release verified for device arm64 and simulator)
+- Build succeeds as of 2026-09-06 (243 tests passing; Release verified for device arm64 and simulator)
 - Regenerate shipped timings: `Tools/AlignTranscripts/build.sh` then `build/AlignTranscripts/AlignTranscripts align --parallel 4` (resumable; per-discourse results in `build/alignments/`), `... merge` writes `AlignmentCatalog.json`, `... report` prints coverage. Needs macOS 26; the first run downloads the hi_IN and en_IN speech assets.
-- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
+- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptFollow` to ignore a saved read position. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
 - Small screens: verified on an iPhone SE (3rd gen) simulator (create one with `xcrun simctl create`; none ships by default). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.
 - Transcript reader keeps the screen awake (`isIdleTimerDisabled`) only while its discourse is playing and the app is active.
 - Seed a simulator download for testing: copy an mp3 to `Documents/Osho Discourses/<Series>/<Series> - #N.mp3` and write `{"<discourseID>": "<relative path>"}` to `Library/Application Support/.download_manifest.json`.

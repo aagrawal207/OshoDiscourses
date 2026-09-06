@@ -26,14 +26,36 @@ struct TranscriptView: View {
     @State private var model: TranscriptSyncModel?
     /// Shipped timing for this transcript's paragraph split, if any.
     @State private var shippedAlignment: AlignmentCatalog.Entry?
+    /// The transcript cut into display blocks, in reading order.
+    @State private var blocks: [Block] = []
     @State private var currentParagraph = 0
-    /// Sentence within `currentParagraph` being spoken; only meaningful with
+    @State private var currentBlock: Block.ID?
+    /// Sentence within the current block being spoken; only meaningful with
     /// aligned timing, where the paragraph boundaries are trustworthy.
     @State private var currentSentence: Int?
     @State private var isFollowing = true
-    @State private var scrolledID: Int?
+    @State private var scrolledID: Block.ID?
     @State private var interactionStartOffset: CGFloat?
-    @State private var selectedParagraph: Int?
+    @State private var selectedBlock: Block.ID?
+
+    /// One piece of a paragraph as shown on screen. Long paragraphs are split
+    /// at sentence boundaries (`TranscriptBlocks`); most are a single block.
+    struct Block: Identifiable, Equatable {
+        struct ID: Hashable { let paragraph: Int; let index: Int }
+        let id: ID
+        /// Position in reading order across the whole transcript.
+        let ordinal: Int
+        let text: String
+        /// Character share of the paragraph this block covers.
+        let start: Double
+        let end: Double
+        let isEmphasis: Bool
+        let isLastInParagraph: Bool
+
+        var paragraph: Int { id.paragraph }
+        var isFirstInParagraph: Bool { id.index == 0 }
+        var midpoint: Double { (start + end) / 2 }
+    }
     @State private var isSearching = false
     @State private var searchText = ""
     @State private var searchCursor = 0
@@ -82,11 +104,20 @@ struct TranscriptView: View {
 
     private var alignmentInUse: Bool { alignedStarts != nil }
 
-    private var searchMatches: [Int] {
-        guard isSearching, let transcript else { return [] }
+    private var searchMatches: [Block.ID] {
+        guard isSearching else { return [] }
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard query.count >= 2 else { return [] }
-        return transcript.paragraphs.filter { $0.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }.map(\.index)
+        return blocks.filter { $0.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }.map(\.id)
+    }
+
+    private func block(_ id: Block.ID?) -> Block? {
+        guard let id else { return nil }
+        return blocks.first { $0.id == id }
+    }
+
+    private func firstBlock(ofParagraph paragraph: Int) -> Block.ID? {
+        blocks.first { $0.paragraph == paragraph }?.id
     }
 
     // MARK: - Body
@@ -143,7 +174,7 @@ struct TranscriptView: View {
         .onChange(of: player.duration) { _, _ in rebuildModel() }
         .onChange(of: player.currentTrackId) { _, _ in
             rebuildModel()
-            if isPlayingThis, isFollowing { withAnimation { scrolledID = currentParagraph } }
+            if isPlayingThis, isFollowing { withAnimation { scrolledID = currentBlock } }
         }
         .onChange(of: discourseState?.anchors) { _, _ in rebuildModel() }
         .onChange(of: discourseState?.alignment) { _, _ in rebuildModel() }
@@ -170,7 +201,7 @@ struct TranscriptView: View {
             // Only a manual scroll changes the saved read position; following
             // the audio is the default and needs no bookmark.
             guard let id, !isFollowing, let transcript else { return }
-            stateService.setReadPosition(discourseID: discourseID, paragraph: id, paragraphCount: transcript.paragraphs.count)
+            stateService.setReadPosition(discourseID: discourseID, paragraph: id.paragraph, paragraphCount: transcript.paragraphs.count)
         }
     }
 
@@ -209,9 +240,9 @@ struct TranscriptView: View {
     private func reader(_ transcript: Transcript) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 4) {
-                ForEach(transcript.paragraphs) { paragraph in
-                    paragraphRow(paragraph)
-                        .id(paragraph.index)
+                ForEach(blocks) { block in
+                    blockRow(block)
+                        .id(block.id)
                 }
                 // Room to bring the last paragraphs up to the highlight line.
                 Color.clear.frame(height: 240)
@@ -240,32 +271,34 @@ struct TranscriptView: View {
         }
         .scrollDismissesKeyboard(.immediately)
         .contentMargins(.bottom, 8, for: .scrollContent)
-        .onTapGesture { withAnimation { selectedParagraph = nil } }
+        .onTapGesture { withAnimation { selectedBlock = nil } }
     }
 
-    private func paragraphRow(_ paragraph: Transcript.Paragraph) -> some View {
-        let isCurrent = isPlayingThis && paragraph.index == currentParagraph
-        let isSelected = selectedParagraph == paragraph.index
-        let isPast = isPlayingThis && paragraph.index < currentParagraph
+    private func blockRow(_ block: Block) -> some View {
+        let isCurrent = isPlayingThis && block.id == currentBlock
+        let isSelected = selectedBlock == block.id
+        let isPast = isPlayingThis && (self.block(currentBlock)?.ordinal ?? 0) > block.ordinal
         return VStack(alignment: .leading, spacing: 10) {
-            Text(attributedText(for: paragraph))
-                .font(.system(size: fontSize, weight: isCurrent ? .semibold : .regular, design: paragraph.isEmphasis ? .serif : .default))
-                .italic(paragraph.isEmphasis)
+            Text(attributedText(for: block, isCurrent: isCurrent))
+                .font(.system(size: fontSize, weight: isCurrent ? .semibold : .regular, design: block.isEmphasis ? .serif : .default))
+                .italic(block.isEmphasis)
                 .lineSpacing(fontSize * 0.28)
                 .foregroundStyle(isCurrent || isSelected ? Color.primary : Color.primary.opacity(isPast ? 0.45 : 0.6))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedParagraph = isSelected ? nil : paragraph.index
+                        selectedBlock = isSelected ? nil : block.id
                     }
                 }
             if isSelected {
-                actionBar(for: paragraph)
+                actionBar(for: block)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.vertical, 10)
+        // Cuts within one paragraph sit closer than real paragraph breaks.
+        .padding(.top, block.isFirstInParagraph ? 10 : 4)
+        .padding(.bottom, block.isLastInParagraph ? 10 : 4)
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -285,10 +318,10 @@ struct TranscriptView: View {
         .accessibilityHint(isSelected ? "" : "Tap for play, sync, copy and share")
     }
 
-    private func attributedText(for paragraph: Transcript.Paragraph) -> AttributedString {
-        var text = AttributedString(paragraph.text)
-        if isPlayingThis, paragraph.index == currentParagraph, let currentSentence {
-            let ranges = TranscriptSentences.ranges(in: paragraph.text)
+    private func attributedText(for block: Block, isCurrent: Bool) -> AttributedString {
+        var text = AttributedString(block.text)
+        if isCurrent, let currentSentence {
+            let ranges = TranscriptSentences.ranges(in: block.text)
             if ranges.count > 1 {
                 for (i, range) in ranges.enumerated() where i != currentSentence {
                     if let lower = AttributedString.Index(range.lowerBound, within: text),
@@ -300,39 +333,39 @@ struct TranscriptView: View {
         }
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard isSearching, query.count >= 2 else { return text }
-        var searchRange = paragraph.text.startIndex..<paragraph.text.endIndex
-        while let found = paragraph.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange) {
+        var searchRange = block.text.startIndex..<block.text.endIndex
+        while let found = block.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange) {
             if let lower = AttributedString.Index(found.lowerBound, within: text),
                let upper = AttributedString.Index(found.upperBound, within: text) {
                 text[lower..<upper].backgroundColor = .yellow.opacity(0.45)
             }
-            searchRange = found.upperBound..<paragraph.text.endIndex
+            searchRange = found.upperBound..<block.text.endIndex
         }
         return text
     }
 
     // MARK: - Action bar
 
-    private func actionBar(for paragraph: Transcript.Paragraph) -> some View {
+    private func actionBar(for block: Block) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 if isPlayingThis, let model {
                     actionChip("Play from here", systemImage: "play.fill") {
-                        player.seekWithHistory(to: model.startTime(ofParagraph: paragraph.index))
+                        player.seekWithHistory(to: model.time(paragraph: block.paragraph, fraction: block.start))
                         if !player.isPlaying { player.togglePlayPause() }
                         resumeFollowing()
-                        withAnimation { selectedParagraph = nil }
+                        withAnimation { selectedBlock = nil }
                     }
                     actionChip("Audio is here", systemImage: "scope") {
-                        anchor(paragraph)
+                        anchor(block)
                     }
                 }
                 actionChip("Copy", systemImage: "doc.on.doc") {
-                    UIPasteboard.general.string = paragraph.text
+                    UIPasteboard.general.string = block.text
                     showToast("Copied")
-                    withAnimation { selectedParagraph = nil }
+                    withAnimation { selectedBlock = nil }
                 }
-                ShareLink(item: shareText(for: paragraph)) {
+                ShareLink(item: shareText(for: block)) {
                     chipLabel("Share", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.plain)
@@ -354,22 +387,25 @@ struct TranscriptView: View {
             .foregroundStyle(accent)
     }
 
-    private func shareText(for paragraph: Transcript.Paragraph) -> String {
-        guard let entry else { return paragraph.text }
-        return "\(paragraph.text)\n\n— Osho, \(entry.series.name) #\(entry.discourse.number)"
+    private func shareText(for block: Block) -> String {
+        guard let entry else { return block.text }
+        return "\(block.text)\n\n— Osho, \(entry.series.name) #\(entry.discourse.number)"
     }
 
-    /// Pin the paragraph to the current playback time and follow from there.
-    private func anchor(_ paragraph: Transcript.Paragraph) {
+    /// Pin the block to the current playback time and follow from there. A
+    /// whole-paragraph block keeps the plain anchor older app versions read.
+    private func anchor(_ block: Block) {
         guard let transcript else { return }
+        let isWholeParagraph = block.start == 0 && block.end == 1
         stateService.addAnchor(
             discourseID: discourseID,
-            paragraph: paragraph.index,
+            paragraph: block.paragraph,
             time: player.currentTime,
+            fraction: isWholeParagraph ? nil : block.midpoint,
             paragraphCount: transcript.paragraphs.count
         )
         rebuildModel()
-        withAnimation { selectedParagraph = nil }
+        withAnimation { selectedBlock = nil }
         resumeFollowing()
         showToast("Synced to this paragraph")
     }
@@ -378,7 +414,7 @@ struct TranscriptView: View {
 
     private var nowPlayingPill: some View {
         Button(action: resumeFollowing) {
-            Label("Now playing", systemImage: currentParagraph > (scrolledID ?? 0) ? "arrow.down" : "arrow.up")
+            Label("Now playing", systemImage: (block(currentBlock)?.ordinal ?? 0) > (block(scrolledID)?.ordinal ?? 0) ? "arrow.down" : "arrow.up")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -393,30 +429,30 @@ struct TranscriptView: View {
     private func resumeFollowing() {
         isFollowing = true
         stateService.clearReadPosition(discourseID: discourseID)
-        withAnimation(.easeInOut(duration: 0.4)) { scrolledID = currentParagraph }
+        withAnimation(.easeInOut(duration: 0.4)) { scrolledID = currentBlock }
     }
 
     private func updateCurrentParagraph(for time: TimeInterval) {
         guard isPlayingThis, let model else { return }
         let paragraph = model.paragraph(at: time)
-        currentSentence = sentence(in: paragraph, at: time, model: model)
-        guard paragraph != currentParagraph else { return }
+        let fraction = model.fraction(atTime: time, inParagraph: paragraph)
         currentParagraph = paragraph
+        let block = blocks.last { $0.paragraph == paragraph && $0.start <= fraction } ?? blocks.first { $0.paragraph == paragraph }
+        currentSentence = block.flatMap { sentence(in: $0, atFraction: fraction) }
+        guard block?.id != currentBlock else { return }
+        currentBlock = block?.id
         if isFollowing {
-            withAnimation(.easeInOut(duration: 0.45)) { scrolledID = paragraph }
+            withAnimation(.easeInOut(duration: 0.45)) { scrolledID = currentBlock }
         }
     }
 
-    /// Sentence being spoken, from how far through the paragraph's span `time`
-    /// is. Nil without aligned timing: an estimate can be minutes out, and a
-    /// sentence marker would lend it a precision it does not have.
-    private func sentence(in paragraph: Int, at time: TimeInterval, model: TranscriptSyncModel) -> Int? {
-        guard alignmentInUse, let transcript, paragraph < transcript.paragraphs.count,
-              paragraph + 1 < model.starts.count else { return nil }
-        let span = model.starts[paragraph + 1] - model.starts[paragraph]
-        guard span > 0 else { return nil }
-        let fraction = (model.position(atTime: time) - model.starts[paragraph]) / span
-        return TranscriptSentences.index(atFraction: fraction, in: transcript.paragraphs[paragraph].text)
+    /// Sentence being spoken within a block, from how far through the
+    /// paragraph the audio is. Nil without aligned timing: an estimate can be
+    /// minutes out, and a sentence marker would lend it a precision it does
+    /// not have.
+    private func sentence(in block: Block, atFraction fraction: Double) -> Int? {
+        guard alignmentInUse, block.end > block.start else { return nil }
+        return TranscriptSentences.index(atFraction: (fraction - block.start) / (block.end - block.start), in: block.text)
     }
 
     private func rebuildModel() {
@@ -430,8 +466,7 @@ struct TranscriptView: View {
             knots = anchors.compactMap { base.knot(for: $0) }
         }
         model = base.with(knots: knots)
-        currentParagraph = model?.paragraph(at: player.currentTime) ?? 0
-        currentSentence = model.flatMap { sentence(in: currentParagraph, at: player.currentTime, model: $0) }
+        updateCurrentParagraph(for: player.currentTime)
     }
 
     // MARK: - Loading
@@ -441,7 +476,8 @@ struct TranscriptView: View {
         loadError = nil
         model = nil
         shippedAlignment = nil
-        selectedParagraph = nil
+        selectedBlock = nil
+        blocks = []
         guard transcripts.availability(for: discourseID) != .unavailable else { return }
         isLoading = true
         defer { isLoading = false }
@@ -451,16 +487,17 @@ struct TranscriptView: View {
             let id = discourseID
             let shipped = await Task.detached(priority: .userInitiated) { AlignmentCatalog.entry(for: id) }.value
             transcript = loaded
+            blocks = Self.blocks(for: loaded)
             shippedAlignment = shipped?.paragraphCount == loaded.paragraphs.count ? shipped : nil
             rebuildModel()
             // Land where the reader left off, or on the audio.
             let state = stateService.state(for: discourseID, paragraphCount: loaded.paragraphs.count)
             if let read = state.readPosition, !read.isFollowing, read.paragraph < loaded.paragraphs.count {
                 isFollowing = false
-                scrolledID = read.paragraph
+                scrolledID = firstBlock(ofParagraph: read.paragraph)
             } else {
                 isFollowing = true
-                scrolledID = isPlayingThis ? currentParagraph : 0
+                scrolledID = isPlayingThis ? currentBlock : blocks.first?.id
             }
             startAlignmentIfWanted(loaded)
             applyDebugArguments()
@@ -471,7 +508,8 @@ struct TranscriptView: View {
 
     /// DEBUG launch arguments for layout checks in a simulator:
     /// `-debugTranscriptSearch <query>` opens search with the query typed,
-    /// `-debugTranscriptSelect <index>` shows a paragraph's action bar.
+    /// `-debugTranscriptSelect <index>` shows a paragraph's action bar,
+    /// `-debugTranscriptFollow` ignores any saved read position.
     private func applyDebugArguments() {
         #if DEBUG
         let args = ProcessInfo.processInfo.arguments
@@ -479,13 +517,34 @@ struct TranscriptView: View {
             isSearching = true
             searchText = args[i + 1]
         }
+        if args.contains("-debugTranscriptFollow") { resumeFollowing() }
         if let i = args.firstIndex(of: "-debugTranscriptSelect"), args.indices.contains(i + 1),
            let index = Int(args[i + 1]) {
             isFollowing = false
-            selectedParagraph = index
-            scrolledID = index
+            selectedBlock = firstBlock(ofParagraph: index)
+            scrolledID = selectedBlock
         }
         #endif
+    }
+
+    static func blocks(for transcript: Transcript) -> [Block] {
+        var result: [Block] = []
+        for paragraph in transcript.paragraphs {
+            let ranges = TranscriptBlocks.ranges(in: paragraph.text)
+            let shares = TranscriptBlocks.fractions(of: ranges, in: paragraph.text)
+            for (i, range) in ranges.enumerated() {
+                result.append(Block(
+                    id: Block.ID(paragraph: paragraph.index, index: i),
+                    ordinal: result.count,
+                    text: String(paragraph.text[range]),
+                    start: shares[i].start,
+                    end: shares[i].end,
+                    isEmphasis: paragraph.isEmphasis,
+                    isLastInParagraph: i == ranges.count - 1
+                ))
+            }
+        }
+        return result
     }
 
     private func startAlignmentIfWanted(_ transcript: Transcript) {

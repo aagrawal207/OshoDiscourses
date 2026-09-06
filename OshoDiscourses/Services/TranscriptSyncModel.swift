@@ -6,6 +6,17 @@ struct TranscriptAnchor: Codable, Equatable, Hashable, Sendable {
     let paragraph: Int
     let time: TimeInterval
     let createdAt: Date
+    /// Where inside the paragraph the listener was (0...1 of its characters),
+    /// when they anchored one display block of a long paragraph rather than
+    /// the whole thing. Absent for older anchors, which mean the middle.
+    var fraction: Double?
+
+    init(paragraph: Int, time: TimeInterval, createdAt: Date, fraction: Double? = nil) {
+        self.paragraph = paragraph
+        self.time = time
+        self.createdAt = createdAt
+        self.fraction = fraction
+    }
 }
 
 /// Maps playback time to a paragraph and back for a transcript that carries no
@@ -56,11 +67,31 @@ struct TranscriptSyncModel: Sendable {
         self.knots = Self.frame(interior, total: total, duration: self.duration)
     }
 
-    /// Knot for a user anchor: the middle of the paragraph maps to the time.
+    /// Knot for a user anchor: the anchored point of the paragraph (its middle
+    /// unless the anchor says otherwise) maps to the time.
     func knot(for anchor: TranscriptAnchor) -> Knot? {
         guard anchor.paragraph >= 0, anchor.paragraph < paragraphCount else { return nil }
-        let mid = (starts[anchor.paragraph] + starts[anchor.paragraph + 1]) / 2
-        return Knot(position: mid, time: anchor.time)
+        return Knot(position: position(paragraph: anchor.paragraph, fraction: anchor.fraction ?? 0.5), time: anchor.time)
+    }
+
+    /// Character position `fraction` (0...1) of the way through a paragraph.
+    func position(paragraph: Int, fraction: Double) -> Double {
+        let i = min(max(paragraph, 0), paragraphCount - 1)
+        return starts[i] + min(max(fraction, 0), 1) * (starts[i + 1] - starts[i])
+    }
+
+    /// Time at which `fraction` of paragraph `paragraph` has been spoken.
+    func time(paragraph: Int, fraction: Double) -> TimeInterval {
+        guard paragraphCount > 0 else { return 0 }
+        return time(atPosition: position(paragraph: paragraph, fraction: fraction))
+    }
+
+    /// How far through paragraph `paragraph` the audio is at `time`, 0...1.
+    func fraction(atTime time: TimeInterval, inParagraph paragraph: Int) -> Double {
+        guard paragraph >= 0, paragraph < paragraphCount else { return 0 }
+        let span = starts[paragraph + 1] - starts[paragraph]
+        guard span > 0 else { return 0 }
+        return min(max((position(atTime: time) - starts[paragraph]) / span, 0), 1)
     }
 
     /// Knot for an aligned paragraph start.
@@ -174,12 +205,17 @@ struct TranscriptSyncModel: Sendable {
     /// as the truth because the listener just heard it.
     static func inserting(_ anchor: TranscriptAnchor, into anchors: [TranscriptAnchor]) -> [TranscriptAnchor] {
         var kept = anchors.filter { existing in
-            if existing.paragraph == anchor.paragraph { return false }
+            if existing.paragraph == anchor.paragraph {
+                // Two blocks of one paragraph may both be pinned, in order.
+                let a = existing.fraction ?? 0.5, b = anchor.fraction ?? 0.5
+                if a == b { return false }
+                return a < b ? existing.time < anchor.time : existing.time > anchor.time
+            }
             if existing.paragraph < anchor.paragraph { return existing.time < anchor.time }
             return existing.time > anchor.time
         }
         kept.append(anchor)
-        return kept.sorted { $0.paragraph < $1.paragraph }
+        return kept.sorted { ($0.paragraph, $0.fraction ?? 0.5) < ($1.paragraph, $1.fraction ?? 0.5) }
     }
 
     /// Order-independent merge for sync: replay the union oldest-first through
@@ -220,8 +256,13 @@ enum TranscriptSentences {
             guard terminators.contains(text[i]) else { i = text.index(after: i); continue }
             var j = i
             while j < text.endIndex, terminators.contains(text[j]) || trailing.contains(text[j]) { j = text.index(after: j) }
-            // A stop glued to the next word ("e.g.", "3.5") does not end anything.
+            // A stop glued to the next word ("e.g.", "3.5") does not end anything,
+            // nor does one followed by a lowercase word: `asking "What is
+            // light?" it shows...` is one sentence.
             if j < text.endIndex, !text[j].isWhitespace { i = j; continue }
+            var k = j
+            while k < text.endIndex, text[k].isWhitespace, text[k] != "\n" { k = text.index(after: k) }
+            if k < text.endIndex, text[k].isLowercase { i = k; continue }
             close(at: j)
         }
         if start < text.endIndex { result.append(start..<text.endIndex) }
@@ -253,5 +294,66 @@ enum TranscriptSentences {
             if target < accumulated { return i }
         }
         return ranges.count - 1
+    }
+}
+
+/// Splits a long paragraph into display blocks at sentence boundaries, so the
+/// reader can follow a five-line block instead of hunting through a 900-
+/// character wall of text. Blocks are a presentation detail: anchors,
+/// alignment and read positions still refer to the source paragraph.
+enum TranscriptBlocks {
+
+    /// Non-whitespace characters a block aims for: four or five lines at the
+    /// default text size on an iPhone, seven or eight at the largest.
+    static let targetLength = 240
+    /// Paragraphs up to this long stay whole.
+    static let splitThreshold = 360
+
+    static func ranges(in text: String) -> [Range<String.Index>] {
+        let sentences = TranscriptSentences.ranges(in: text)
+        let weights = sentences.map { weight(text[$0]) }
+        let total = weights.reduce(0, +)
+        guard sentences.count > 1, total > splitThreshold else {
+            return text.isEmpty ? [] : [text.startIndex..<text.endIndex]
+        }
+        // Aim for equal blocks rather than filling each to the target and
+        // leaving a one-line remainder.
+        let blockCount = max(2, Int((Double(total) / Double(targetLength)).rounded()))
+        let ideal = Double(total) / Double(blockCount)
+        var result: [Range<String.Index>] = []
+        var blockStart = sentences[0].lowerBound
+        var accumulated = 0
+        for (i, sentence) in sentences.enumerated() {
+            accumulated += weights[i]
+            let isLast = i == sentences.count - 1
+            let blocksLeft = blockCount - result.count
+            // Close when at or past the ideal, unless that would leave more
+            // blocks than sentences to fill them.
+            if !isLast, blocksLeft > 1, Double(accumulated) >= ideal * 0.85, sentences.count - i - 1 >= blocksLeft - 1 {
+                result.append(blockStart..<sentence.upperBound)
+                blockStart = sentences[i + 1].lowerBound
+                accumulated = 0
+            }
+        }
+        result.append(blockStart..<text.endIndex)
+        return result
+    }
+
+    private static func weight(_ text: Substring) -> Int {
+        text.unicodeScalars.reduce(0) { $0 + ($1.properties.isWhitespace ? 0 : 1) }
+    }
+
+    /// Character share (0...1, whitespace ignored) of each block's start and
+    /// end within the paragraph, matching how the sync model weighs text.
+    static func fractions(of ranges: [Range<String.Index>], in text: String) -> [(start: Double, end: Double)] {
+        let weights = ranges.map { weight(text[$0]) }
+        let total = Double(weights.reduce(0, +))
+        guard total > 0 else { return ranges.map { _ in (0, 1) } }
+        var acc = 0.0
+        return weights.map { w in
+            let start = acc / total
+            acc += Double(w)
+            return (start, acc / total)
+        }
     }
 }
