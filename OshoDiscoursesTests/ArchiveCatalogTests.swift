@@ -12,10 +12,10 @@ import Foundation
 struct ArchiveCatalogTests {
 
     @Test func mappingLoadsAndCoversMostOfTheCatalog() {
-        // 3,946 of 4,361 mapped at generation time. Assert a floor, not the
+        // 4,876 of 5,481 mapped at generation time. Assert a floor, not the
         // exact number, so regenerating the mapping doesn't break the test.
-        #expect(ArchiveCatalog.mappedSeriesCount >= 230)
-        #expect(ArchiveCatalog.mappedDiscourseCount >= 3900)
+        #expect(ArchiveCatalog.mappedSeriesCount >= 320)
+        #expect(ArchiveCatalog.mappedDiscourseCount >= 4800)
     }
 
     @Test func ashtavakraMahaGeetaResolvesToKnownURL() throws {

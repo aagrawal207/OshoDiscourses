@@ -43,6 +43,9 @@ struct SeriesInfo: Identifiable, Hashable, Sendable {
         case underscore
         case slug
         case oshoPrefix = "osho-prefix"
+        /// No naming pattern fits (numbering gaps, several volumes in one
+        /// folder); every path comes from OshoworldCatalog.json.
+        case catalog
     }
 }
 
@@ -66,7 +69,20 @@ private let englishNewAudioBase = "https://www.oshoworld.com/wp-content/uploads/
 private let englishOshoBase = "https://www.oshoworld.com/wp-content/uploads/2020/11/English Audio"
 private let hindiBase = "https://www.oshoworld.com/wp-content/uploads/2020/11/Hindi Audio"
 
+private let oshoworldHost = "https://www.oshoworld.com"
+
 func buildAudioURL(series: SeriesInfo, discourseNumber: Int) -> String {
+    // oshoworld.com has renamed files inside many upload folders since these
+    // patterns were written; the crawled catalog carries the real path for
+    // every discourse the patterns get wrong.
+    if let path = OshoworldCatalog.path(forSeriesID: series.id, number: discourseNumber) {
+        return oshoworldHost + path
+    }
+    return patternAudioURL(series: series, discourseNumber: discourseNumber)
+}
+
+/// The URL the series' naming pattern predicts, ignoring the crawled overrides.
+func patternAudioURL(series: SeriesInfo, discourseNumber: Int) -> String {
     let padWidth = series.count >= 100 ? 3 : 2
     let num = String(format: "%0\(padWidth)d", discourseNumber)
 
@@ -90,6 +106,9 @@ func buildAudioURL(series: SeriesInfo, discourseNumber: Int) -> String {
         let base = series.language == .hindi ? hindiBase : englishOshoBase
         let file = "OSHO-\(series.filePrefix)_\(num).mp3"
         return "\(base)/\(file)"
+
+    case .catalog:
+        return ""
     }
 }
 
@@ -417,6 +436,28 @@ private let englishSlugSeries: [SeriesInfo] = [
 
     // Meditation
     SeriesInfo(name: "Yaa Hoo The Mystic Rose", filePrefix: "Yaa_Hoo_The_Mystic_Rose", count: 30, language: .english, urlType: .slug, slug: "yaa-hoo-the-mystic-rose-series", fileTitle: "Yaa Hoo The Mystic Rose"),
+
+    // Added from the oshoworld.com catalog crawl (2026-09)
+    SeriesInfo(name: "From Death to Deathlessness", filePrefix: "From_Death_To_Deathlessness", count: 40, language: .english, urlType: .slug, slug: "from-death-to-deathlessness-series", fileTitle: "From Death To Deathlessness"),
+    SeriesInfo(name: "My Way: The Way of White Clouds", filePrefix: "My_Way_The_Way_Of_White_Clouds", count: 15, language: .english, urlType: .slug, slug: "my-way-way-of-white-clouds-series", fileTitle: "My Way The Way Of White Clouds"),
+    SeriesInfo(name: "The Sun Rises in the Evening", filePrefix: "Sun_Rises_In_The_Evening", count: 10, language: .english, urlType: .slug, slug: "sun-rises-in-the-evening-series", fileTitle: "Sun Rises In The Evening"),
+    SeriesInfo(name: "The Great Zen Master Ta Hui", filePrefix: "The_Great_Zen_Master_Ta_Hui", count: 38, language: .english, urlType: .slug, slug: "ta-hui-great-zen-master-series", fileTitle: "The Great Zen Maste Ta Hui"),
+    SeriesInfo(name: "The Book of Nothing: Hsin Hsin Ming", filePrefix: "The_Book_Of_Nothing_Hsin_Hsin_Ming", count: 10, language: .english, urlType: .slug, slug: "the-book-of-nothing-hsin-hsin-ming-series", fileTitle: "The Book Of Nothing Hsin Hsin Ming"),
+    SeriesInfo(name: "The Buddha: The Emptiness of the Heart", filePrefix: "Buddha_The_Emptiness_Of_The_Heart", count: 8, language: .english, urlType: .slug, slug: "the-buddha-the-emptiness-of-the-heart-series", fileTitle: "Buddha The Emptiness Of The Heart"),
+    SeriesInfo(name: "The Discipline of Transcendence Vol 3", filePrefix: "The_Discipline_Of_Transcendence_Vol_3", count: 10, language: .english, urlType: .slug, slug: "the-discipline-of-transcendence-vol-3-series", fileTitle: "The Discipline Of Transcendence Vol 3"),
+    SeriesInfo(name: "The Discipline of Transcendence Vol 4", filePrefix: "The_Discipline_Of_Transcendence_Vol_4", count: 11, language: .english, urlType: .slug, slug: "the-discipline-of-transcendence-vol-4-series", fileTitle: "The Discipline Of Transcendence Vol 4"),
+    SeriesInfo(name: "The White Lotus", filePrefix: "The_White_Lotus", count: 11, language: .english, urlType: .slug, slug: "the-white-lotus-series", fileTitle: "The White Lotus"),
+    SeriesInfo(name: "This, This, A Thousand Times This", filePrefix: "This_This_A_Thousand_Times_This", count: 15, language: .english, urlType: .slug, slug: "this-this-a-thousand-times-this-series", fileTitle: "This, This, A Thousand Times This"),
+    SeriesInfo(name: "This Very Body the Buddha", filePrefix: "This_Very_Body_The_Buddha", count: 10, language: .english, urlType: .slug, slug: "this-very-body-the-buddha-series", fileTitle: "This Very Body The Buddha"),
+    SeriesInfo(name: "The Zen Manifesto: Freedom From Oneself", filePrefix: "The_Zen_Manifesto_Freedom_From_Oneself", count: 11, language: .english, urlType: .slug, slug: "zen-manifesto-freedom-from-oneself-series", fileTitle: "The Zen Manifesto Freedom From Oneself"),
+    SeriesInfo(name: "Zen: The Mystery and the Poetry of the Beyond", filePrefix: "Zen_Mystery_And_The_Poetry_Of_The_Beyond", count: 5, language: .english, urlType: .slug, slug: "zen-mystery-and-the-poetry-of-the-beyond-series", fileTitle: "Zen Mystery And The Poetry Of The Beyond"),
+    SeriesInfo(name: "Zen: The Quantum Leap From Mind to No Mind", filePrefix: "Zen_The_Quantum_Leap_From_Mind_To_No_Mind", count: 15, language: .english, urlType: .slug, slug: "zen-the-quantum-leap-from-mind-to-no-mind-series", fileTitle: "Zen The Quantum Leap From Mind To No Mind"),
+    SeriesInfo(name: "Zen: The Solitary Bird, Cuckoo of the Forest", filePrefix: "Zen_The_Solitary_Bird_Cockoo_Of_The_Forest", count: 15, language: .english, urlType: .slug, slug: "zen-the-solitary-bird-cockoo-of-the-forest-series", fileTitle: "Zen The Solitary Bird Cockoo Of The Forest"),
+    SeriesInfo(name: "Jesus Crucified Again", filePrefix: "Jesus_Crucified_Again", count: 1, language: .english, urlType: .catalog),
+    SeriesInfo(name: "Press Conference", filePrefix: "Press_Conference", count: 8, language: .english, urlType: .catalog),
+    SeriesInfo(name: "The Path of Paradox", filePrefix: "The_Path_of_Paradox", count: 30, language: .english, urlType: .catalog),
+    SeriesInfo(name: "The Psychology of the Esoteric", filePrefix: "The_Psychology_of_the_Esoteric", count: 7, language: .english, urlType: .catalog),
+    SeriesInfo(name: "The Search", filePrefix: "The_Search", count: 9, language: .english, urlType: .catalog),
 ]
 
 // MARK: - English OSHO Prefix Series
@@ -598,4 +639,78 @@ private let hindiSeriesList: [SeriesInfo] = [
     SeriesInfo(name: "Apne Mahin Tatol", filePrefix: "Apne_Mahin_Tatol", count: 8, language: .hindi, urlType: .oshoPrefix),
     SeriesInfo(name: "Apui Gai Hiray", filePrefix: "Apui_Gai_Hiray", count: 10, language: .hindi, urlType: .oshoPrefix),
     SeriesInfo(name: "Athato Bhakti Jigyasa", filePrefix: "Athato_Bhakti_Jigyasa", count: 40, language: .hindi, urlType: .oshoPrefix),
+
+    // Added from the oshoworld.com catalog crawl (2026-09)
+    SeriesInfo(name: "Bhaj Govindam", filePrefix: "Bhaj_Govindam", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Bin Ghan Parat Phuhar", filePrefix: "Bin_Ghan_Parat_Phuhar", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Cheti Sake To Cheti", filePrefix: "Cheti_Sake_To_Chet", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Chit Chakmak Lage Nahin", filePrefix: "Chit_Chakmak_Lage_Nahin", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Dharam Aur Anand", filePrefix: "Dharam_Aur_Anand", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Dharam Ki Yatra", filePrefix: "Dharam_Ki_Yatra", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Dhyan Darshan", filePrefix: "Dhyan_Darshan", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Dhyan Ke Kamal", filePrefix: "Dhyan_Ke_Kamal", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Ek Ek Kadam", filePrefix: "Ek_Ek_Kadam", count: 7, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Ek Naya Dwar", filePrefix: "Ek_Naya_Dwar", count: 5, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Es Dhammo Sanantano", filePrefix: "Es_Dhammo_Sanantano", count: 122, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Hasiba Kheliba Dhariba Dhyanam", filePrefix: "Hasiba_Kheliba_Dhariba_Dhyanam", count: 3, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Jeevan Darshan", filePrefix: "Jeevan_Darshan", count: 7, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Jeevan Ki Khoj", filePrefix: "Jeevan_Ki_Khoj", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Jeevan Sangeet", filePrefix: "Jeevan_Sangeet", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Jin Khoja Tin Paiyan", filePrefix: "Jin_Khoja_Tin_Paiyan", count: 19, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Jo Ghar Bare Aapna", filePrefix: "Jo_Ghar_Bare_Aapna", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Jyon Ki Tyon", filePrefix: "Jyon_Ki_Tyon", count: 13, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Kaha Kahun Us Desh Ki", filePrefix: "Kaha_Kahun_Us_Desh_Ki", count: 2, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Kahe Hot Adheer", filePrefix: "Kahe_Hot_Adheer", count: 19, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Karuna Aur Kranti", filePrefix: "Karuna_Aur_Kranti", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Krishna Smriti", filePrefix: "Krishna_Smriti", count: 22, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Kya Ishwar Mar Gaya Hai", filePrefix: "Kya_Ishwar_Mar_Gaya_Hai", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Kya Sove Tu Bavri", filePrefix: "Kya_Sove_Tu_Bavri", count: 4, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Mahaveer Ya Mahavinash", filePrefix: "Mahaveer_Ya_Mahavinash", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Main Kaun Hun", filePrefix: "Main_Kaun_Hun", count: 11, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Mati Kahe Kumhar Su", filePrefix: "Mati_Kahe_Kumhar_Su", count: 12, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Na Kano Suna", filePrefix: "Na_Kano_Suna", count: 20, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Nanak Dukhya Sab Sansar", filePrefix: "Nanak_Dukhya_Sab_Sansar", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Nari Aur Kranti", filePrefix: "Nari_Aur_Kranti", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Naye Bharat Ka Janm", filePrefix: "Naye_Bharat_Ka_Janm", count: 11, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Naye Manushya Ka Dharam", filePrefix: "Naye_Manushya_Ka_Dharam", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Neti Neti Sambhavnaon Ki Aahat", filePrefix: "Sambhavnaon_Ki_Aahat", count: 7, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Neti Neti Satya Ki Khoj", filePrefix: "Satya_Ki_Khoj", count: 5, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Pad Gungharoo Bandh", filePrefix: "Pad_Gungharoo_Bandh", count: 20, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Panth Prem Ko Atpato", filePrefix: "Panth_Prem_Ko_Atpato", count: 3, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Phir Amrit Ki Boond Padi", filePrefix: "Phir_Amrit_Ki_Boond_Padi", count: 5, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Prem Darshan", filePrefix: "Prem_Darshan", count: 4, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Prem Ganga", filePrefix: "Prem_Ganga", count: 5, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Prem Hai Dwar Prabhu Ka", filePrefix: "Prem_Nadi_Ke_Teera", count: 16, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Rom Rom Ras Peejiye", filePrefix: "Rom_Rom_Ras_Peejiye", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Sahaj Mile Avinashi", filePrefix: "Sahaj_Mile_Avinashi", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Saheb Mil Saheb Bhave", filePrefix: "Saheb_Mil_Saheb_Bhave", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Sakshi Ki Sadhana", filePrefix: "Sakshi_Ki_Sadhana", count: 13, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Samadhi Kamal", filePrefix: "Samadhi_Kamal", count: 15, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Samadhi Ke Dwar Par", filePrefix: "Samadhi_Ke_Dwar_Par", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Sambhog Se Samadhi Ki Aur", filePrefix: "Sambhog_Se_Samadhi_Ki_Aur", count: 16, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Sambodhi Ke Kshan", filePrefix: "Sambodhi_Ke_Kshan", count: 5, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Samund Samana Bund Main", filePrefix: "Samund_Samana_Bund_Main", count: 7, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Sapna Yeh Sansar", filePrefix: "Sapna_Yeh_Sansar", count: 20, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Satya Ki Pyas", filePrefix: "Satya_Ki_Pyas", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Shiksha Aur Dharam", filePrefix: "Shiksha_Aur_Dharam", count: 5, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Shunya Ke Par", filePrefix: "Shunya_Ke_Par", count: 4, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Shunya Samadhi", filePrefix: "Shunya_Samadhi", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Sukh Aur Shanti", filePrefix: "Sukh_Aur_Shanti", count: 9, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Swayam Ki Satta", filePrefix: "Swayam_Ki_Satta", count: 7, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Tamso Ma Jyotirgamaya", filePrefix: "Tamso_Ma_Jyotirgamaya", count: 8, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Trisha Gai Ek Bund Se", filePrefix: "Trisha_Gai_Ek_Bund_Se", count: 7, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Udio Pankh Pasar", filePrefix: "Udio_Pankh_Pasar", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Upasana Ke Kshan", filePrefix: "Upasana_Ke_Kshan", count: 12, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Utsav Amar Jati Anand Amar Gotar", filePrefix: "Utsav_Amar_Jati_Anand_Amar_Gotar", count: 10, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Vigyan Dharam Aur Kala", filePrefix: "Vigyan_Dharam_Aur_Kala", count: 11, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Vysat Jeevan Main Ishwar Ki Khoj", filePrefix: "Vysat_Jeevan_Main_Ishwar_Ki_Khoj", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Yog Naye Aayam", filePrefix: "Yog_Naye_Aayam", count: 6, language: .hindi, urlType: .oshoPrefix),
+    SeriesInfo(name: "Dekh Kabira Roya", filePrefix: "Dekh_Kabira_Roya", count: 25, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Naye Bharat Ki Khoj", filePrefix: "Naye_Bharat_Ki_Khoj", count: 7, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Neti Neti Shunya Ki Naon", filePrefix: "Neti_Neti_Shunya_Ki_Naon", count: 5, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Sadhana Path", filePrefix: "Sadhana_Path", count: 16, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Sadhana Sutra", filePrefix: "Sadhana_Sutra", count: 20, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Samadhi Ke Sapat Dwar", filePrefix: "Samadhi_Ke_Sapat_Dwar", count: 19, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Shiksha Main Kranti", filePrefix: "Shiksha_Main_Kranti", count: 22, language: .hindi, urlType: .catalog),
+    SeriesInfo(name: "Swarn Pakhi Tha Jo Kabhi", filePrefix: "Swarn_Pakhi_Tha_Jo_Kabhi", count: 22, language: .hindi, urlType: .catalog),
 ]

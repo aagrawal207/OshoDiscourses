@@ -32,7 +32,7 @@ There are no ads, accounts, subscriptions, or tracking.
 
 ## Features
 
-- Browse and search 4,361 discourses across 261 English and Hindi series
+- Browse and search 5,481 discourses across 351 English and Hindi series
 - Download talks for offline listening, including background downloads
 - Continue from the exact position where you stopped
 - Listen in the background with Lock Screen, Control Center, AirPods, and AirPlay controls

@@ -20,19 +20,22 @@ The markup is a flat run of text: `<br>` and CRLF line breaks, `<strong>`,
 `<q>` or the site's own `<cr>` tag around the quoted question or sutra, an
 occasional inline `<i>`, and a trailing `<hr>`. No timestamps, no entities.
 
-`scripts/build-transcript-catalog.py` maps the app's 4,361 discourses onto
+`scripts/build-transcript-catalog.py` maps the app's 5,481 discourses onto
 the 5,522 audios the site lists:
 
-1. exact mp3 path (3,644)
+1. exact mp3 path (4,558)
 2. same upload folder + discourse index, only when the folder holds a single
-   series (569) — the site renamed files inside many English folders
+   series (584) — the site renamed files inside many English folders
    ("The Perfect Master Vol 1 01.mp3")
-3. normalised series title + index (148) — Hindi spelling drift such as
+3. normalised series title + index (148), or title + position for `.catalog`
+   series whose site numbering has gaps (191) — Hindi spelling drift such as
    Diya/Diye, plus a manual override for "Jyotish"
 
-All 4,361 map to a page. Probing every page's word count found 217 blank
-ones (44 English, 173 Hindi), so `TranscriptCatalog.json` lists 4,144
-discourses across 247 series. The shortest real transcript is 481 words; the
+All 5,481 map to a page (the 2026-09 crawl also added the 92 series the app
+lacked, 1,120 discourses). Probing every page's word count found 535 blank
+ones (52 English, 483 Hindi), so `TranscriptCatalog.json` lists 4,946
+discourses across 317 series. The same run writes `OshoworldCatalog.json`:
+the site's mp3 path for every discourse the app's URL patterns get wrong. The shortest real transcript is 481 words; the
 median is 8,647.
 
 Nothing else on the web offers per-discourse text in a structured form:

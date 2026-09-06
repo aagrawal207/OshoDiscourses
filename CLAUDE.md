@@ -65,11 +65,13 @@ OshoDiscourses/
 ├── RNNoise/                            # Vendored RNNoise C sources + bridging header
 ├── Bridging/                           # Single Obj-C bridging header (RNNoise + DeepFilter)
 ├── Resources/
-│   ├── Catalog.swift                   # 259 series, 4,361 discourses — static data + URL builder
-│   ├── TranscriptCatalog.swift/.json   # discourse id -> oshoworld audio id/slug for the 4,144 discourses with a transcript
+│   ├── Catalog.swift                   # 351 series, 5,481 discourses — static data + URL builder
+│   ├── OshoworldCatalog.swift/.json    # crawled oshoworld mp3 paths for the 923 discourses the URL patterns get wrong
+│   ├── TranscriptCatalog.swift/.json   # discourse id -> oshoworld audio id/slug for the 4,946 discourses with a transcript
 │   ├── DeepFilterNet3_onnx.tar.gz      # Bundled DFN3 model (48 kHz, 480-sample hop)
 │   └── Assets.xcassets/                # App icon placeholder
-scripts/build-transcript-catalog.py     # Regenerates TranscriptCatalog.json from the oshoworld API (~20 min, cached)
+scripts/build-transcript-catalog.py     # Regenerates TranscriptCatalog.json (+ --audio-out OshoworldCatalog.json, --list-missing) from the oshoworld API
+scripts/extend-archive-catalog.py       # Adds ArchiveCatalog.json entries for app series the archive mirrors but the JSON lacks
 native/deepfilter-bridge/               # Rust crate + build-xcframework.sh (pinned upstream commit)
 Vendor/DeepFilterBridge.xcframework     # Committed static lib: ios-arm64 + arm64/x86_64 simulator
 OshoDiscoursesTests/
@@ -90,17 +92,23 @@ OshoDiscoursesTests/
 ## Data
 
 ### Catalog (static, not in database)
-- 259 series (155 English, 104 Hindi)
-- 4,361 total discourses
-- Source: oshoworld.com (3 URL patterns: underscore, slug, OSHO-prefix)
-- Archive.org mirror: `Resources/ArchiveCatalog.json` maps ~90% of discourses
-  (3,946 across 238 series) to the archive item
+- 351 series (175 English, 176 Hindi)
+- 5,481 total discourses — everything oshoworld.com lists (its "Geeta Darshan" placeholder has no audio)
+- Source: oshoworld.com (3 URL patterns: underscore, slug, OSHO-prefix, plus `.catalog` for
+  series no pattern fits). `buildAudioURL` first consults `OshoworldCatalog.json`, the crawled
+  path for each discourse whose pattern URL is wrong — the site renamed files inside ~57 folders
+  ("The Perfect Master Vol 1 01.mp3"), and some series skip numbers or mix volumes. Regenerate
+  with `scripts/build-transcript-catalog.py --audio-out`; `--list-missing` prints SeriesInfo
+  lines for any series the site has added since.
+- Archive.org mirror: `Resources/ArchiveCatalog.json` maps ~89% of discourses
+  (4,876 across 325 series) to the archive item
   `osho-audio-discourses-collection` — ~12x faster downloads. Downloads try
   archive first, fall back to oshoworld (see `DownloadService.downloadSources`).
   Mirror also provides per-series cover art (first track's extracted PNG),
-  shown in thumbnails via `ArchiveCatalog.coverURL`. Mapping generated offline
-  from the archive metadata API; regenerate by re-running the matcher against
-  a fresh `archive.org/metadata/osho-audio-discourses-collection` dump.
+  shown in thumbnails via `ArchiveCatalog.coverURL`. The original mapping was
+  generated offline; `scripts/extend-archive-catalog.py` adds entries for
+  series the JSON lacks (folder matched by title; files paired by sorted order
+  when the counts agree, or by volume number).
 - Curated lists: Popular English/Hindi, Beginner English/Hindi
 - All in `Resources/Catalog.swift` — `Catalog.allSeries`, `Catalog.allDiscourses()`
 
@@ -110,8 +118,9 @@ OshoDiscoursesTests/
   transcript as light HTML (`<br>`/CRLF breaks; `<strong>`, `<q>`, `<cr>`
   mark the quoted question or sutra). No timestamps.
 - `Resources/TranscriptCatalog.json` maps discourse id -> oshoworld audio
-  `_id` + page `slug` for the **4,144 of 4,361** discourses whose page has
-  real text (English 2,697/2,741, Hindi 1,447/1,620; 247 series). Generated
+  `_id` + page `slug` for the **4,946 of 5,481** discourses whose page has
+  real text (English 2,968/3,020, Hindi 1,978/2,461; 317 series). Most of the
+  Hindi series added in 2026-09 have blank pages on the site. Generated
   by `scripts/build-transcript-catalog.py`: matches by mp3 path, then by
   upload folder + index, then by normalised series title, and probes every
   page's word count so blanks are excluded. Re-run it to pick up new text.
@@ -145,7 +154,7 @@ OshoDiscoursesTests/
 
 ## What's built (MVP)
 
-- [x] Browse 261 series with search + language filters
+- [x] Browse 351 series with search + language filters
 - [x] Curated sections (Popular/Beginner for English and Hindi)
 - [x] Series detail with hero header and discourse list
 - [x] Download with progress tracking (background URLSession — continues when app is backgrounded/locked/killed)
@@ -192,8 +201,9 @@ OshoDiscoursesTests/
 - **Transcripts have no timestamps, so sync is an estimate the listener can correct** — oshoworld publishes plain paragraphs. The highlight assumes speech moves through the text at a constant rate and lets "Audio is here" pin a paragraph to the current time; the map is linear between pins. Measured against speech alignment on A Bird on the Wing #1, the raw estimate drifts up to ~45 s mid-talk (the opening question is read slowly), which one or two anchors remove.
 - **Hindi cannot be speech-aligned on device** — `SpeechTranscriber` (iOS 26) ships no Hindi model and `SFSpeechRecognizer` `hi-IN` is server-only in one-minute requests. English alignment runs on device (a 98-min talk recognised in ~40 s on an M-series Mac, 89 of 93 paragraphs matched) and is gated behind an experimental toggle; the alternative for Hindi would be vendoring whisper.cpp or shipping pre-aligned timestamps as data.
 - **`AssetInventory.reserve(locale:)` before any asset call** — without a reservation `assetInstallationRequest` fails with "not subscribed to transcription.en". The simulator reports no supported speech locales at all; test alignment on a device or via the macOS harness.
-- **Transcript matching is by mp3 path, never by folder alone** — every Hindi series shares one upload folder, so folder+index is only trusted when the folder holds a single series. All 4,361 discourses map to a page; 217 pages are blank and are left out of the catalog.
-- **Static catalog, not fetched** — 4,361 discourses hardcoded. Updates via app releases. No server needed.
+- **Transcript matching is by mp3 path, never by folder alone** — every Hindi series shares one upload folder, so folder+index is only trusted when the folder holds a single series. All 5,481 discourses map to a page; 535 pages are blank and are left out of the catalog.
+- **Static catalog, not fetched** — 5,481 discourses hardcoded. Updates via app releases. No server needed.
+- **The pattern URLs are a fallback; the crawled paths are the truth** — 717 of the original 4,361 discourses had oshoworld URLs that 404 (the site renamed files in 57 folders); the archive mirror hid most of it, but 74 were undownloadable. Storing only the differing paths keeps the JSON at ~110 KB while the scripts stay the single place that knows the site.
 - **Almost no third-party deps** — everything from Apple frameworks except the vendored RNNoise C sources and the DeepFilterNet Rust/tract bridge, both linked statically with no package manager. Adding DeepFilterNet was a deliberate trade: it is the only option that removes steady tape hiss and noise overlapping speech.
 - **The catalog is 22.05 kHz, not 48 kHz** — the Hindi talks are 22,050 Hz 43 kbps MP3s (the archive.org mirror is byte-identical). Both neural denoisers are 48 kHz models, so without `PolyphaseResampler` DeepFilterNet was bypassed entirely and RNNoise ran on mis-mapped bands. This was the real reason noise reduction "did nothing".
 - **The denoise gate is slow to close, never fast** — Osho's sentences decay in level, so the model's local SNR collapses on his final words. A conventional fast-closing gate (the first attempt used 10 ms) mutes the end of every sentence. The gate now opens in 8 ms, holds ~220 ms after speech, then closes over 400 ms; levelling tracks running speech level rather than per-frame level, which otherwise boosts quiet noise in the gaps harder than the voice.
@@ -229,8 +239,8 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-09-05 (221 tests passing; Release verified for device arm64 and simulator)
-- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
+- Build succeeds as of 2026-09-06 (227 tests passing; Release verified for device arm64 and simulator)
+- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
 - Small screens: verified on an iPhone SE (3rd gen) simulator (create one with `xcrun simctl create`; none ships by default). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.
 - Transcript reader keeps the screen awake (`isIdleTimerDisabled`) only while its discourse is playing and the app is active.
 - Seed a simulator download for testing: copy an mp3 to `Documents/Osho Discourses/<Series>/<Series> - #N.mp3` and write `{"<discourseID>": "<relative path>"}` to `Library/Application Support/.download_manifest.json`.

@@ -16,6 +16,13 @@ Matching happens in three tiers, most exact first:
 
 Usage:
   scripts/build-transcript-catalog.py [--cache-dir DIR] [--workers N] [--out PATH]
+      [--audio-out PATH] [--list-missing] [--skip-descriptions]
+
+--audio-out also writes Resources/OshoworldCatalog.json: the oshoworld mp3
+path for every discourse whose path the app's pattern builder gets wrong
+(the site has renamed files inside many folders). --list-missing prints the
+site series the app catalog does not have yet, as ready-to-paste SeriesInfo
+lines.
 
 Descriptions are cached under --cache-dir so re-runs only fetch what is new.
 Stdlib only; takes ~20 minutes on the first run (~4,300 description requests).
@@ -39,6 +46,8 @@ import urllib.request
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CATALOG_SWIFT = os.path.join(REPO, "OshoDiscourses", "Resources", "Catalog.swift")
 DEFAULT_OUT = os.path.join(REPO, "OshoDiscourses", "Resources", "TranscriptCatalog.json")
+DEFAULT_AUDIO_OUT = os.path.join(REPO, "OshoDiscourses", "Resources", "OshoworldCatalog.json")
+OSHOWORLD_UPLOADS = "/wp-content/uploads"
 API = "https://oshoworld.com/api/server"
 USER_AGENT = "OshoDiscourses-catalog-builder/1.0 (+https://github.com/agraabhi)"
 # Pages whose description is shorter than this are blank or a stray "Osho".
@@ -82,6 +91,9 @@ def app_audio_path(s: dict, n: int) -> str:
     if t == "oshoPrefix":
         lang = "Hindi Audio" if s["language"] == "hindi" else "English Audio"
         return f"/wp-content/uploads/2020/11/{lang}/OSHO-{s['filePrefix']}_{num}.mp3"
+    if t == "catalog":
+        # No pattern fits this series; every path comes from OshoworldCatalog.json.
+        return ""
     raise ValueError(t)
 
 
@@ -182,6 +194,14 @@ def match(app_series: list[dict], site_series: dict, audios: list) -> tuple[dict
             by_folder_index.setdefault((folder, idx), a)
         by_series_index.setdefault((a["series_id"], idx), a)
 
+    # `.catalog` series number their discourses by position: the site's own
+    # index can skip values there (Neti Neti Shunya Ki Naon runs 1,2,3,5,6).
+    by_series_position: dict[str, list] = {}
+    for sid_ in {a["series_id"] for a in audios}:
+        by_series_position[sid_] = sorted(
+            (a for a in audios if a["series_id"] == sid_ and str(a.get("index", "")).isdigit()),
+            key=lambda a: int(a["index"]))
+
     titles: dict[str, list[str]] = collections.defaultdict(list)
     for sid, s in site_series.items():
         titles[norm_title(s["title"])].append(sid)
@@ -203,8 +223,13 @@ def match(app_series: list[dict], site_series: dict, audios: list) -> tuple[dict
             if a is None:
                 cands = titles.get(norm_title(s["name"]), [])
                 if len(cands) == 1:
-                    a = by_series_index.get((cands[0], n))
-                    tier = "title"
+                    if s["urlType"] == "catalog":
+                        ordered = by_series_position.get(cands[0], [])
+                        a = ordered[n - 1] if n <= len(ordered) else None
+                        tier = "position"
+                    else:
+                        a = by_series_index.get((cands[0], n))
+                        tier = "title"
             if a is None:
                 tiers["unmatched"] += 1
                 continue
@@ -212,9 +237,77 @@ def match(app_series: list[dict], site_series: dict, audios: list) -> tuple[dict
                 tiers["language-mismatch"] += 1
                 continue
             tiers[tier] += 1
-            mapping[discourse_id(s, n)] = {"id": a["_id"], "slug": a["slug"], "tier": tier}
+            mapping[discourse_id(s, n)] = {
+                "id": a["_id"], "slug": a["slug"], "tier": tier,
+                "path": urllib.parse.unquote(a["file"]),
+                "appPath": app_audio_path(s, n),
+            }
         report.append((s["name"], s["language"], count, dict(tiers)))
     return mapping, report
+
+
+# --- Missing series ------------------------------------------------------------
+
+def clean_site_title(title: str) -> str:
+    """Site titles carry Devanagari in parentheses and a discourse range."""
+    t = re.sub(r"\([^)]*\)", " ", title)
+    t = re.sub(r"#?\s*\d+\s*-\s*\d+\s*$", " ", t)
+    t = re.sub(r"\s+", " ", t).strip(" #-")
+    return t
+
+
+def series_info_line(site_series: dict, audios: list, app_ids: set) -> str | None:
+    """A SeriesInfo(...) line for a site series the app lacks, or None if it
+    has no audios. Uses a URL pattern when every file follows one, else
+    `.catalog` so all paths come from OshoworldCatalog.json."""
+    al = sorted(audios, key=lambda a: int(a["index"]))
+    if not al:
+        return None
+    lang = site_series["lang"]
+    name = clean_site_title(site_series["title"]).replace('"', "")
+    paths = [urllib.parse.unquote(a["file"]) for a in al]
+    folders = {os.path.dirname(p) for p in paths}
+    stems = set()
+    for p in paths:
+        m = re.match(r"^(.*?)[ _-](\d{2,3})\.mp3$", os.path.basename(p))
+        stems.add(m.group(1) if m else os.path.basename(p))
+    count = len(al)
+    candidate = None
+    if len(folders) == 1 and len(stems) == 1:
+        folder = next(iter(folders))
+        stem = next(iter(stems))
+        if folder.endswith(("/Hindi Audio", "/English Audio")) and stem.startswith("OSHO-"):
+            candidate = {"name": name, "filePrefix": stem[5:], "count": count, "language": lang, "urlType": "oshoPrefix"}
+        elif folder.startswith(f"{OSHOWORLD_UPLOADS}/newAudios/"):
+            prefix = re.sub(r"[^A-Za-z0-9]+", "_", stem).strip("_")
+            candidate = {"name": name, "filePrefix": prefix, "count": count, "language": lang,
+                         "urlType": "slug", "slug": os.path.basename(folder), "fileTitle": stem}
+    if candidate:
+        # Only trust the pattern when it reproduces every site path exactly.
+        ok = all(norm_path(app_audio_path(candidate, i + 1)) == norm_path(p) for i, p in enumerate(paths))
+        if not ok:
+            candidate = None
+    if candidate is None:
+        prefix = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_")
+        candidate = {"name": name, "filePrefix": prefix, "count": count, "language": lang, "urlType": "catalog"}
+    sid = f"{lang}-{candidate['filePrefix']}"
+    if sid in app_ids:
+        candidate["filePrefix"] += "_2"
+    parts = [f'name: "{candidate["name"]}"', f'filePrefix: "{candidate["filePrefix"]}"',
+             f"count: {candidate['count']}", f"language: .{lang}", f"urlType: .{candidate['urlType']}"]
+    if candidate["urlType"] == "slug":
+        parts += [f'slug: "{candidate["slug"]}"', f'fileTitle: "{candidate["fileTitle"]}"']
+    return f"    SeriesInfo({', '.join(parts)}),"
+
+
+def write_audio_overrides(mapping: dict, out: str) -> int:
+    """Site paths for discourses the pattern builder gets wrong."""
+    overrides = {did: m["path"] for did, m in mapping.items()
+                 if norm_path(m["path"]) != norm_path(m["appPath"])}
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(overrides, f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        f.write("\n")
+    return len(overrides)
 
 
 # --- Main ----------------------------------------------------------------------
@@ -226,6 +319,10 @@ def main() -> int:
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--skip-descriptions", action="store_true",
                     help="only match; assume every matched page has a transcript")
+    ap.add_argument("--audio-out", nargs="?", const=DEFAULT_AUDIO_OUT, default=None,
+                    help="also write the oshoworld path overrides JSON (default path if no value)")
+    ap.add_argument("--list-missing", action="store_true",
+                    help="print SeriesInfo lines for site series the app lacks, then exit")
     args = ap.parse_args()
     os.makedirs(args.cache_dir, exist_ok=True)
 
@@ -234,8 +331,32 @@ def main() -> int:
     print(f"app series: {len(app_series)}, discourses: {total}", file=sys.stderr)
 
     site_series, audios = fetch_site_audios(args.cache_dir, args.workers)
+    for lang in ("english", "hindi"):
+        for s in json.load(open(os.path.join(args.cache_dir, f"catalog-{lang}.json"), encoding="utf-8"))["series"]:
+            site_series[s["_id"]]["lang"] = lang
     mapping, report = match(app_series, site_series, audios)
     print(f"matched pages: {len(mapping)}/{total}", file=sys.stderr)
+
+    if args.list_missing:
+        by_series = collections.defaultdict(list)
+        for a in audios:
+            by_series[a["series_id"]].append(a)
+        by_audio_id = {a["_id"]: a for a in audios}
+        covered = {by_audio_id[m["id"]]["series_id"] for m in mapping.values()}
+        app_ids = {f"{s['language']}-{s['filePrefix']}" for s in app_series}
+        for lang in ("english", "hindi"):
+            print(f"\n// {lang}")
+            for sid, s in sorted(site_series.items(), key=lambda kv: kv[1]["title"]):
+                if sid in covered or s["lang"] != lang:
+                    continue
+                line = series_info_line(s, by_series.get(sid, []), app_ids)
+                if line:
+                    print(line)
+        return 0
+
+    if args.audio_out:
+        n = write_audio_overrides(mapping, args.audio_out)
+        print(f"wrote {args.audio_out}: {n} path overrides", file=sys.stderr)
     print("  by tier:", dict(collections.Counter(m["tier"] for m in mapping.values())), file=sys.stderr)
     for name, lang, count, tiers in report:
         if tiers.get("unmatched") or tiers.get("language-mismatch"):

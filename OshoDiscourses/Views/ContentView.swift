@@ -77,6 +77,21 @@ struct ContentView: View {
         #if DEBUG
         .task {
             let args = ProcessInfo.processInfo.arguments
+            // `-debugDownload <discourseID>` starts a real download through the
+            // normal source chain (archive first, then oshoworld) and logs it.
+            if let flag = args.firstIndex(of: "-debugDownload"), args.indices.contains(flag + 1),
+               let entry = Catalog.discourseLookup[args[flag + 1]] {
+                print("[debugDownload] \(entry.discourse.id) oshoworld=\(entry.discourse.audioURL) archive=\(ArchiveCatalog.audioURL(for: entry.discourse)?.absoluteString ?? "none")")
+                Task {
+                    do {
+                        let url = try await downloads.download(entry.discourse)
+                        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+                        print("[debugDownload] saved \(size) bytes to \(url.lastPathComponent)")
+                    } catch {
+                        print("[debugDownload] failed: \(error)")
+                    }
+                }
+            }
             guard let flag = args.firstIndex(of: "-debugTranscript"), args.indices.contains(flag + 1) else { return }
             let id = args[flag + 1]
             try? await Task.sleep(for: .seconds(1.5))

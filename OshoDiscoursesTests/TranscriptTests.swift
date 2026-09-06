@@ -325,8 +325,8 @@ struct TranscriptServiceTests {
 struct TranscriptCatalogTests {
 
     @Test func mappingCoversMostOfTheCatalog() {
-        #expect(TranscriptCatalog.mappedDiscourseCount >= 3800)
-        #expect(TranscriptCatalog.mappedSeriesCount >= 240)
+        #expect(TranscriptCatalog.mappedDiscourseCount >= 4800)
+        #expect(TranscriptCatalog.mappedSeriesCount >= 300)
     }
 
     @Test func knownDiscoursesResolveToTheirOshoworldPages() throws {
