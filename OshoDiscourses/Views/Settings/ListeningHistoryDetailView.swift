@@ -12,20 +12,15 @@ struct ListeningHistoryDetailView: View {
     }
 
     private var items: [HistoryItem] {
-        playbackState.recentlyPlayed.compactMap { discourseID in
+        playbackState.allPlayedDiscourseIDs.compactMap { discourseID in
             let position = playbackState.getPosition(discourseId: discourseID)
-            for series in Catalog.allSeries {
-                let discs = Catalog.discourses(for: series)
-                if let disc = discs.first(where: { $0.id == discourseID }) {
-                    return HistoryItem(
-                        id: discourseID,
-                        title: disc.displayTitle,
-                        series: series.name,
-                        position: position
-                    )
-                }
-            }
-            return nil
+            guard let entry = Catalog.discourseLookup[discourseID] else { return nil }
+            return HistoryItem(
+                id: discourseID,
+                title: entry.discourse.displayTitle,
+                series: entry.series.name,
+                position: position
+            )
         }
     }
 

@@ -10,6 +10,7 @@ final class PlaybackStateService {
     private let durationKeyPrefix = "playbackDuration_"
     private let recentKey = "recentlyPlayed"
     private let completedKey = "completedDiscourseIDs"
+    private let playedKey = "allPlayedDiscourseIDs"
     private let maxRecent = 20
 
     private var autoSaveTask: Task<Void, Never>?
@@ -21,6 +22,7 @@ final class PlaybackStateService {
     private(set) var recentlyPlayed: [String] = []
     private(set) var completedDiscourseIDs: Set<String> = []
     private(set) var listenedCompleted: [String] = []
+    private(set) var allPlayedDiscourseIDs: [String] = []
 
     private let listenedCompletedKey = "listenedCompletedIDs"
 
@@ -30,6 +32,11 @@ final class PlaybackStateService {
             completedDiscourseIDs = Set(saved)
         }
         listenedCompleted = defaults.stringArray(forKey: listenedCompletedKey) ?? []
+        if defaults.object(forKey: playedKey) != nil {
+            allPlayedDiscourseIDs = defaults.stringArray(forKey: playedKey) ?? []
+        } else {
+            migratePlayedHistory()
+        }
     }
 
     /// Attach to an AudioPlayerService to enable auto-save every 10 seconds.
@@ -75,6 +82,7 @@ final class PlaybackStateService {
             recentlyPlayed = Array(recentlyPlayed.prefix(maxRecent))
         }
         defaults.set(recentlyPlayed, forKey: recentKey)
+        recordInPlayedHistory(discourseId)
     }
 
     // MARK: - Completion Tracking
@@ -82,6 +90,7 @@ final class PlaybackStateService {
     func markCompleted(discourseId: String) {
         completedDiscourseIDs.insert(discourseId)
         defaults.set(Array(completedDiscourseIDs), forKey: completedKey)
+        recordInPlayedHistory(discourseId)
     }
 
     func markListenedComplete(discourseId: String) {
@@ -93,6 +102,7 @@ final class PlaybackStateService {
             listenedCompleted = Array(listenedCompleted.prefix(20))
         }
         defaults.set(listenedCompleted, forKey: listenedCompletedKey)
+        recordInPlayedHistory(discourseId)
     }
 
     func dismissListenedComplete(discourseId: String) {
@@ -141,7 +151,8 @@ final class PlaybackStateService {
             durations: durations,
             recentlyPlayed: recentlyPlayed,
             completed: Array(completedDiscourseIDs),
-            listenedCompleted: listenedCompleted
+            listenedCompleted: listenedCompleted,
+            played: allPlayedDiscourseIDs
         )
     }
 
@@ -186,6 +197,18 @@ final class PlaybackStateService {
             changed = true
         }
 
+        let cloudPlayed = snapshot.played ?? snapshot.recentlyPlayed + snapshot.completed
+        let mergedPlayed = Self.mergeList(
+            cloud: cloudPlayed,
+            local: allPlayedDiscourseIDs,
+            cap: Int.max
+        )
+        if mergedPlayed != allPlayedDiscourseIDs {
+            allPlayedDiscourseIDs = mergedPlayed
+            defaults.set(allPlayedDiscourseIDs, forKey: playedKey)
+            changed = true
+        }
+
         if changed { onCloudMerge?() }
         return changed
     }
@@ -202,6 +225,33 @@ final class PlaybackStateService {
     }
 
     // MARK: - Private
+
+    private func recordInPlayedHistory(_ discourseId: String) {
+        allPlayedDiscourseIDs.removeAll { $0 == discourseId }
+        allPlayedDiscourseIDs.insert(discourseId, at: 0)
+        defaults.set(allPlayedDiscourseIDs, forKey: playedKey)
+    }
+
+    /// Older versions retained only 20 recent IDs, but kept positions for every
+    /// discourse. Rebuild the uncapped history once, preserving known recency
+    /// first and then recovering older positioned/completed catalog entries.
+    private func migratePlayedHistory() {
+        var seen = Set<String>()
+        var migrated: [String] = []
+        let knownRecent = recentlyPlayed + listenedCompleted
+        for id in knownRecent where seen.insert(id).inserted {
+            migrated.append(id)
+        }
+        for discourse in Catalog.allDiscourses() {
+            let wasPlayed = defaults.double(forKey: keyPrefix + discourse.id) > 0
+                || completedDiscourseIDs.contains(discourse.id)
+            if wasPlayed && seen.insert(discourse.id).inserted {
+                migrated.append(discourse.id)
+            }
+        }
+        allPlayedDiscourseIDs = migrated
+        defaults.set(migrated, forKey: playedKey)
+    }
 
     private func saveCurrentPosition() {
         guard let player = audioPlayer,

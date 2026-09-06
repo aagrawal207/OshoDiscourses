@@ -14,7 +14,13 @@ struct PlaybackStateTests {
         for key in allKeys where key.hasPrefix("playbackPosition_") {
             defaults.removeObject(forKey: key)
         }
+        for key in allKeys where key.hasPrefix("playbackDuration_") {
+            defaults.removeObject(forKey: key)
+        }
         defaults.removeObject(forKey: "recentlyPlayed")
+        defaults.removeObject(forKey: "allPlayedDiscourseIDs")
+        defaults.removeObject(forKey: "completedDiscourseIDs")
+        defaults.removeObject(forKey: "listenedCompletedIDs")
         return PlaybackStateService()
     }
 
@@ -90,6 +96,30 @@ struct PlaybackStateTests {
         }
         #expect(service.recentlyPlayed.count == 20)
         #expect(service.recentlyPlayed.first == "item-25")
+        #expect(service.allPlayedDiscourseIDs.count == 25)
+        #expect(service.allPlayedDiscourseIDs.first == "item-25")
+    }
+
+    @Test func playedHistorySurvivesDismissFromRecent() {
+        let service = makeFreshService()
+        service.recordPlay(discourseId: "test-1")
+
+        service.dismissFromRecent(discourseId: "test-1")
+
+        #expect(!service.recentlyPlayed.contains("test-1"))
+        #expect(service.allPlayedDiscourseIDs.contains("test-1"))
+    }
+
+    @Test func migratesPlayedHistoryFromSavedPositions() {
+        _ = makeFreshService()
+        let discourseID = Catalog.allDiscourses()[25].id
+        let defaults = UserDefaults.standard
+        defaults.set(90.0, forKey: "playbackPosition_" + discourseID)
+        defaults.removeObject(forKey: "allPlayedDiscourseIDs")
+
+        let service = PlaybackStateService()
+
+        #expect(service.allPlayedDiscourseIDs.contains(discourseID))
     }
 
     @Test func zeroPositionNotSaved() {
