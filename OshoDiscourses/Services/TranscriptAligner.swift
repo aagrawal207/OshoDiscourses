@@ -132,14 +132,28 @@ enum TranscriptAligner {
 
     // MARK: - Normalisation
 
-    /// Lowercased ASCII letters and digits only; punctuation, diacritics and
-    /// case differences between the edited text and the recogniser vanish.
+    /// Lowercased letters and digits of any script; punctuation, Latin accents
+    /// and case differences between the edited text and the recogniser vanish.
+    ///
+    /// Devanagari vowel signs, virama and nukta are combining marks that carry
+    /// meaning (कि vs की, क vs क्), so marks are kept except the Latin
+    /// diacritics block, which is what turns "café" into "cafe".
     static func normalizedTokens(_ text: String) -> [String] {
         text.lowercased()
             .decomposedStringWithCanonicalMapping
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "'" })
-            .map { piece in piece.unicodeScalars.filter { $0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains($0)) }.map { Character($0) } }
+            .map { piece in piece.unicodeScalars.filter(keepsInToken).map { Character($0) } }
             .map { String($0) }
             .filter { !$0.isEmpty }
+    }
+
+    private static func keepsInToken(_ scalar: Unicode.Scalar) -> Bool {
+        if (0x0300...0x036F).contains(scalar.value) { return false }
+        let properties = scalar.properties
+        if properties.isAlphabetic || properties.numericType != nil { return true }
+        switch properties.generalCategory {
+        case .nonspacingMark, .spacingMark: return true
+        default: return false
+        }
     }
 }

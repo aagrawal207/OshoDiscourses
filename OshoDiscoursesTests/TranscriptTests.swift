@@ -134,6 +134,21 @@ struct TranscriptSyncModelTests {
         }
     }
 
+    @Test func anchorsOverrideTheAlignedStartsTheyContradict() {
+        let base = TranscriptSyncModel(paragraphs: paragraphs([100, 100, 100, 100]), duration: 400)
+        // Alignment says paragraphs start at 0/100/200/300; the listener says
+        // paragraph 1 is playing at t=250, so paragraph 2 cannot have started
+        // at 200. Paragraph 1 starting at 100 is still consistent and stays.
+        let anchor = TranscriptAnchor(paragraph: 1, time: 250, createdAt: Date())
+        let knots = base.knots(alignedStarts: [0, 100, 200, 300], anchors: [anchor])
+        #expect(knots.map(\.position) == [0, 100, 300, 150])   // anchor sits at the midpoint of paragraph 1
+        let model = base.with(knots: knots)
+        #expect(model.paragraph(at: 250) == 1)
+        #expect(model.startTime(ofParagraph: 3) == 300)
+        // Without anchors the aligned starts pass straight through, skipping nils.
+        #expect(base.knots(alignedStarts: [nil, 100, nil, 300], anchors: []).map(\.time) == [100, 300])
+    }
+
     @Test func degenerateInputsDoNotTrap() {
         let empty = TranscriptSyncModel(paragraphs: [], duration: 100)
         #expect(empty.paragraph(at: 50) == 0)
@@ -391,6 +406,26 @@ struct TranscriptAlignerTests {
         #expect(TranscriptAligner.normalizedTokens("BELOVED MASTER,") == ["beloved", "master"])
     }
 
+    @Test func normalisationKeepsDevanagariWithItsMarks() {
+        // Danda and hyphen split; matras, virama and nukta stay, because
+        // dropping them would merge distinct words (कि / की, क / क्).
+        #expect(TranscriptAligner.normalizedTokens("रामकृष्ण के जीवन में। बार-बार ज़रा") == ["रामकृष्ण", "के", "जीवन", "में", "बार", "बार", "ज़रा"])
+        #expect(TranscriptAligner.normalizedTokens("कि की क क्") == ["कि", "की", "क", "क्"])
+        #expect(TranscriptAligner.normalizedTokens("‘मैं बोध-रूप हूं’ १०८") == ["मैं", "बोध", "रूप", "हूं", "१०८"])
+    }
+
+    @Test func hindiParagraphsAlignLikeEnglishOnes() {
+        let ps = paragraphs([
+            "रामकृष्ण के जीवन में ऐसा उल्लेख है कि जीवन भर तो उन्होंने मां का ही ध्यान किया। काली की मूर्ति के सामने नाचते रहे।",
+            "तोतापुरी ने कहा, यह भी कल्पना है। इसे भी छोड़ो। जब तक मूर्ति है तब तक मन है।",
+            "अष्टावक्र कहते हैं, तू निर्दोष है, इसलिए तू भूलकर भी यह मत मानना कि तू बंधा हुआ है।",
+            "एक मनोवैज्ञानिक हारवर्ड विश्वविद्यालय में प्रयोग कर रहा था। उसने विद्यार्थियों को सम्मोहित किया।",
+        ])
+        let starts = TranscriptAligner.paragraphStarts(paragraphs: ps, words: speak(ps, misheard: ["काली", "छोड़ो।"]))
+        #expect(starts.compactMap { $0 }.count == ps.count)
+        #expect(starts.map { $0 ?? -1 } == starts.map { $0 ?? -1 }.sorted())
+    }
+
     @Test func longestIncreasingChainDropsOutOfOrderMatches() {
         let marks = [
             TranscriptAligner.Landmark(transcriptToken: 0, wordIndex: 0),
@@ -444,5 +479,80 @@ struct TranscriptAlignerTests {
         ])
         let starts = TranscriptAligner.paragraphStarts(paragraphs: ps, words: speak(other))
         #expect(starts.allSatisfy { $0 == nil })
+    }
+}
+
+@Suite struct TranscriptSentencesTests {
+
+    @Test func splitsOnTerminatorsAndKeepsClosingQuotes() {
+        let text = "He said: \"Wait!\" Then he left... Really? Yes."
+        let parts = TranscriptSentences.ranges(in: text).map { String(text[$0]) }
+        #expect(parts == ["He said: \"Wait!\"", "Then he left...", "Really?", "Yes."])
+    }
+
+    @Test func devanagariDandasAndVerseLinesSplit() {
+        let text = "अष्टावक्र उवाच।\nतू निर्दोष है॥ यह सूत्र कहता है।"
+        let parts = TranscriptSentences.ranges(in: text).map { String(text[$0]) }
+        #expect(parts == ["अष्टावक्र उवाच।", "तू निर्दोष है॥", "यह सूत्र कहता है।"])
+        let numbered = "बोधोऽहं सुखी भव।। 14।। निःसंगो निष्क्रियोऽसि।"
+        #expect(TranscriptSentences.ranges(in: numbered).map { String(numbered[$0]) } == ["बोधोऽहं सुखी भव।। 14।।", "निःसंगो निष्क्रियोऽसि।"])
+    }
+
+    @Test func gluedStopsAndUnterminatedTailsAreHandled() {
+        let text = "Version 3.5 is out. See e.g. the notes"
+        let parts = TranscriptSentences.ranges(in: text).map { String(text[$0]) }
+        #expect(parts == ["Version 3.5 is out.", "See e.g.", "the notes"])
+        #expect(TranscriptSentences.ranges(in: "").isEmpty)
+        #expect(TranscriptSentences.ranges(in: "no stop").count == 1)
+    }
+
+    @Test func indexFollowsCharacterShare() {
+        let text = "Short. A much much much longer second sentence here. End."
+        #expect(TranscriptSentences.index(atFraction: 0, in: text) == 0)
+        #expect(TranscriptSentences.index(atFraction: 0.5, in: text) == 1)
+        #expect(TranscriptSentences.index(atFraction: 0.99, in: text) == 2)
+        #expect(TranscriptSentences.index(atFraction: 1.5, in: text) == 2)
+        #expect(TranscriptSentences.index(atFraction: 0.5, in: "One sentence only") == 0)
+    }
+}
+
+@Suite struct AlignmentCatalogTests {
+
+    @Test func wireFormatRoundTripsWithGapsAndTenths() {
+        let entry = AlignmentCatalog.Entry(paragraphCount: 5, duration: 5125.04, starts: [0, nil, 12.34, 12.4, nil])
+        let encoded = AlignmentCatalog.encode(entry)
+        #expect(encoded == "5;51250;0,-,123,1,-")
+        let decoded = try? #require(AlignmentCatalog.decode(encoded))
+        #expect(decoded?.paragraphCount == 5)
+        #expect(decoded?.duration == 5125.0)
+        #expect(decoded?.starts == [0, nil, 12.3, 12.4, nil])
+        #expect(decoded?.matchedCount == 3)
+    }
+
+    @Test func malformedStringsDecodeToNil() {
+        #expect(AlignmentCatalog.decode("") == nil)
+        #expect(AlignmentCatalog.decode("3;100;0,5") == nil)        // count mismatch
+        #expect(AlignmentCatalog.decode("2;100;0,x") == nil)        // bad token
+        #expect(AlignmentCatalog.decode("0;100;") != nil)           // empty transcript is still valid
+    }
+
+    @Test func entryAppliesOnlyToTheSameSplitAndRecording() {
+        let entry = AlignmentCatalog.Entry(paragraphCount: 3, duration: 600, starts: [0, 200, 400])
+        #expect(entry.matches(paragraphCount: 3, duration: 601.5))
+        #expect(!entry.matches(paragraphCount: 4, duration: 600))
+        #expect(!entry.matches(paragraphCount: 3, duration: 610))
+    }
+
+    @Test func bundledCatalogEntriesDecodeAndPointAtTranscripts() {
+        // Empty until the batch tool has run; every entry it does contain must
+        // be for a discourse that exists and has a transcript.
+        var checked = 0
+        for (id, _) in Catalog.discourseLookup where AlignmentCatalog.hasAlignment(id) {
+            let entry = try? #require(AlignmentCatalog.entry(for: id))
+            #expect(TranscriptCatalog.hasTranscript(id), Comment(rawValue: id))
+            #expect((entry?.matchedCount ?? 0) > 0, Comment(rawValue: id))
+            checked += 1
+            if checked >= 200 { break }
+        }
     }
 }

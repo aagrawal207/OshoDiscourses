@@ -1,13 +1,14 @@
 import Foundation
 
-/// Experimental: recovers paragraph start times for a transcript by running
-/// Apple's on-device speech recogniser over the downloaded audio and aligning
-/// the recognised words to the text.
+/// Recovers paragraph start times for a transcript by running Apple's
+/// on-device speech recogniser over the downloaded audio and aligning the
+/// recognised words to the text. Used for discourses the shipped
+/// `AlignmentCatalog` does not cover.
 ///
-/// English only. `SpeechTranscriber` (iOS 26) has no Hindi model, and the older
-/// `SFSpeechRecognizer` supports Hindi only via Apple's servers in one-minute
-/// requests, which is neither private nor practical for 100-minute talks. Hindi
-/// stays on the text-fraction estimate plus manual anchors.
+/// iOS 26 only: it is the first release with an offline recogniser that
+/// accepts a whole file. Below it, `SFSpeechRecognizer` transcribes Hindi only
+/// through Apple's servers in one-minute requests, which is neither private nor
+/// practical for 100-minute talks.
 @Observable
 @MainActor
 final class SpeechAlignmentService {
@@ -39,9 +40,9 @@ final class SpeechAlignmentService {
 
     private init() {}
 
-    /// Whether this device can align transcripts in `language` at all.
+    /// Whether this device can align transcripts in `language` at all. Both
+    /// catalog languages have an on-device model on iOS 26.
     nonisolated static func isSupported(for language: SeriesInfo.Language) -> Bool {
-        guard language == .english else { return false }
         if #available(iOS 26.0, *) { return true }
         return false
     }
@@ -49,7 +50,7 @@ final class SpeechAlignmentService {
     /// Start (or restart) alignment for a discourse. Results land in
     /// `TranscriptStateService` as a `TranscriptAlignment`; status reports
     /// progress meanwhile. A run already going for the same discourse is kept.
-    func align(discourseID: String, transcript: Transcript, audioURL: URL) {
+    func align(discourseID: String, transcript: Transcript, language: SeriesInfo.Language, audioURL: URL) {
         if self.discourseID == discourseID, status.isActive { return }
         cancel()
         self.discourseID = discourseID
@@ -58,14 +59,12 @@ final class SpeechAlignmentService {
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                guard #available(iOS 26.0, *) else { throw AlignmentError.unsupported }
-                // Whichever English the installed model speaks; the recordings
-                // are Indian English but the acoustic model is shared.
-                guard let locale = await SpeechWordRecognizer.preferredLocale() else {
-                    throw AlignmentError.assetsUnavailable
+                guard #available(iOS 26.0, *) else { throw SpeechRecognitionError.unsupported }
+                guard let engine = await SpeechWordRecognizer.preferredEngine(for: language) else {
+                    throw SpeechRecognitionError.assetsUnavailable
                 }
                 let started = Date()
-                let words = try await SpeechWordRecognizer.recognizeWords(in: audioURL, locale: locale) { [weak self] progress in
+                let words = try await SpeechWordRecognizer.recognizeWords(in: audioURL, engine: engine) { [weak self] progress in
                     Task { @MainActor [weak self] in
                         guard let self, self.discourseID == discourseID, !Task.isCancelled else { return }
                         self.status = .listening(progress: progress)
@@ -78,7 +77,7 @@ final class SpeechAlignmentService {
                     TranscriptAligner.paragraphStarts(paragraphs: transcript.paragraphs, words: words)
                 }.value
                 try Task.checkCancellation()
-                let alignment = TranscriptAlignment(starts: starts, createdAt: Date(), engine: "SpeechTranscriber/\(locale.identifier)")
+                let alignment = TranscriptAlignment(starts: starts, createdAt: Date(), engine: engine.name)
                 TranscriptStateService.shared.setAlignment(discourseID: discourseID, alignment: alignment, paragraphCount: transcript.paragraphs.count)
                 status = .done(matched: alignment.matchedCount, total: starts.count)
                 print("[SpeechAlignment] done: \(alignment.matchedCount)/\(starts.count) paragraphs matched")
@@ -95,19 +94,5 @@ final class SpeechAlignmentService {
         task?.cancel()
         task = nil
         if status.isActive { status = .idle }
-    }
-
-    enum AlignmentError: LocalizedError {
-        case unsupported
-        case assetsUnavailable
-        case noSpeechRecognized
-
-        var errorDescription: String? {
-            switch self {
-            case .unsupported: return "Speech sync needs iOS 26 and an English discourse."
-            case .assetsUnavailable: return "The English speech model could not be installed on this device."
-            case .noSpeechRecognized: return "No speech could be recognised in this recording."
-            }
-        }
     }
 }

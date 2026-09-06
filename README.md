@@ -38,7 +38,7 @@ There are no ads, accounts, subscriptions, or tracking.
 - Listen in the background with Lock Screen, Control Center, AirPods, and AirPlay controls
 - Change playback speed from 0.5x to 2x and use voice boost
 - Reduce recording noise with the optional RNNoise filter, currently in beta
-- Read along with the transcript, lyrics-style: the paragraph being spoken is highlighted and kept in view, and where you left off is remembered per discourse
+- Read along with the transcript, lyrics-style: the paragraph and sentence being spoken are highlighted and kept in view (timing pre-computed from the speech itself for both languages), and where you left off is remembered per discourse
 - Save timestamped bookmarks with notes and categories
 - Use a countdown sleep timer or stop at the end of the current discourse
 - Automatically download the next talk and delete completed talks when enabled

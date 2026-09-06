@@ -59,47 +59,71 @@ alignment: the raw estimate is early by up to ~45 s through the first
 quarter, because the opening question is read slowly, and within ~15 s from
 the middle on. One anchor around paragraph 3 removes most of the drift.
 
-## Speech alignment (experimental)
+## Timing
 
-`SpeechAlignmentService` runs Apple's on-device `SpeechTranscriber` (iOS 26)
-over the downloaded mp3 and aligns the recognised words to the transcript:
+Paragraph start times come from three sources, in order of preference:
 
-- tokens are lowercased ASCII letters and digits only
+1. `AlignmentCatalog.json`, shipped with the app. `Tools/AlignTranscripts`
+   downloads every transcribed discourse (archive mirror first, then
+   oshoworld, the same order as the app), runs Apple's on-device recogniser
+   over it and aligns the words to the paragraphs with the app's own
+   `TranscriptAligner`. One string per discourse:
+   `"<paragraphs>;<duration in tenths>;<start deltas in tenths, '-' for none>"`.
+   An entry is used only when its paragraph count matches the transcript on
+   screen and its duration is within 2.5 s of the file being played, so an
+   edited page or a different recording falls back rather than mis-syncs.
+2. On iOS 26, `SpeechAlignmentService` running the same recogniser on the
+   device, for discourses the catalog does not cover.
+3. The text-length estimate above.
+
+"Audio is here" anchors apply on top of all three: an aligned start that
+contradicts an anchor (earlier paragraph at a later time, or the reverse) is
+dropped and the map bends to the anchor between its surviving neighbours.
+
+With aligned timing the reader also dims every sentence of the current
+paragraph except the one being spoken. Position within the paragraph is
+interpolated by character share (`TranscriptSentences`), so this is not
+shown for the estimate, where a sentence marker would suggest a precision
+the timing does not have.
+
+### Recognisers
+
+English uses `SpeechTranscriber` in `en_IN` (30 locales, no Hindi). Hindi
+uses `DictationTranscriber` in `hi_IN`, the keyboard-dictation model family
+in the same framework (54 locales), with the `.farField` content hint. Both
+return words with audio time ranges. Measured on this Mac:
+
+| talk | recogniser | words heard / in text | paragraphs aligned | time |
+|---|---|---|---|---|
+| A Bird on the Wing #1 (98 min) | SpeechTranscriber en_IN | 8,799 / 9,204 | 89 / 93 | 41 s |
+| Ashtavakra Maha Geeta #5 (85 min) | DictationTranscriber hi_IN | 9,754 / 10,386 | 176 / 218 | 57 s |
+
+The unmatched Hindi paragraphs are the opening Sanskrit sutras (recited,
+not spoken Hindi) and one-line paragraphs; both are interpolated between
+their neighbours. The text-length estimate drifted up to 148 s on that
+talk against 45 s for the English one, so Hindi gains most from alignment.
+
+### Aligner
+
+- tokens are lowercased letters and digits of any script; Latin diacritics
+  (U+0300–036F) are dropped, other combining marks (Devanagari matras,
+  virama, nukta) are kept because they distinguish words
 - word trigrams that occur exactly once in both sequences are landmarks
 - the longest chain of landmarks that advances through both sequences
   (patience sort LIS) drops coincidences
 - each paragraph's start is the first landmark inside it, walked back to
   the paragraph's first word at the local speaking rate; paragraphs with no
-  landmark stay nil and are interpolated by the sync model
+  landmark within 40 words stay unmatched and are interpolated
+- fewer than 12 landmarks means the recording is not this transcript, and
+  nothing is returned
 
-On an M-series Mac the 98-min recording was recognised in 39 s (8,799 words)
-and 89 of 93 paragraphs matched with zero ordering violations. Alignment
-results stay device-local (derived data, a few KB each, and the iCloud KVS is
-capped at 1 MB).
-
-Two traps:
+Notes:
 
 - `AssetInventory.reserve(locale:)` must be called before
-  `assetInstallationRequest`, otherwise the framework reports
-  "not subscribed to transcription.en".
-- The iOS simulator reports no supported locales. Test on a device, or with
-  a macOS command-line harness compiled from the same sources.
-
-Hindi is not possible with Apple frameworks: `SpeechTranscriber` has no Hindi
-model and `SFSpeechRecognizer` `hi-IN` is server-side only in one-minute
-requests. Options if it matters later: vendor whisper.cpp (150–500 MB models)
-or align offline and ship timestamps as data.
-
-## Storage and sync
-
-- Text: `Application Support/transcripts/<discourseID>.json`, ~50–60 KB each,
-  excluded from backup, fetched behind each committed download and deleted
-  with it. Existing downloads are backfilled a few seconds after launch, one
-  at a time, stopping after three consecutive network failures.
-- State: `transcript_state.json` holds anchors, the last-read paragraph, the
-  alignment, and the paragraph count the data refers to. A re-fetched
-  transcript with a different split drops anchors and alignment.
-- iCloud: anchors and read positions for the 300 most recently active
-  discourses ride in `CloudSnapshot.transcripts`. "Following the audio again"
-  is stored as a timestamped tombstone (`paragraph = -1`) so it beats a stale
-  position from another device instead of being resurrected by it.
+  `assetInstallationRequest`, or it fails with "not subscribed to
+  transcription.en". The simulator reports no supported speech locales at
+  all; test on a device or through the macOS tool.
+- Batch throughput on an M-series Mac: ~42 s per discourse sequentially,
+  ~18 s with four parallel analyzers; the full catalog takes about a day.
+  `align` is resumable (one JSON per discourse in `build/alignments/`),
+  `report` summarises, `merge` writes the catalog.

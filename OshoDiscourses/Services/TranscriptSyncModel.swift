@@ -69,6 +69,25 @@ struct TranscriptSyncModel: Sendable {
         return Knot(position: starts[paragraph], time: time)
     }
 
+    /// Knots for aligned paragraph starts corrected by the listener's anchors.
+    ///
+    /// An anchor is the listener saying the alignment is wrong here, so it wins:
+    /// aligned starts that contradict it (an earlier paragraph at a later time,
+    /// a later paragraph at an earlier time) are dropped, and the map bends to
+    /// the anchor between the surviving neighbours.
+    func knots(alignedStarts: [TimeInterval?], anchors: [TranscriptAnchor]) -> [Knot] {
+        let anchorKnots = anchors.compactMap { knot(for: $0) }
+        var result: [Knot] = []
+        for (index, start) in alignedStarts.enumerated() {
+            guard let start, let k = knot(paragraph: index, startingAt: start) else { continue }
+            let contradicted = anchorKnots.contains { a in
+                (k.position < a.position && k.time >= a.time) || (k.position > a.position && k.time <= a.time)
+            }
+            if !contradicted { result.append(k) }
+        }
+        return result + anchorKnots
+    }
+
     /// Same transcript and duration, with different knots.
     func with(knots interior: [Knot]) -> TranscriptSyncModel {
         TranscriptSyncModel(starts: starts, duration: duration, knots: Self.frame(interior, total: starts[starts.count - 1], duration: duration))
@@ -173,5 +192,66 @@ struct TranscriptSyncModel: Sendable {
             return $0.time < $1.time
         }
         return union.reduce(into: [TranscriptAnchor]()) { $0 = inserting($1, into: $0) }
+    }
+}
+
+/// Splits a paragraph into sentences so the reader can mark the one being
+/// spoken. Timing inside a paragraph is interpolated from character share, so
+/// this is only shown when the paragraph boundaries themselves are aligned.
+enum TranscriptSentences {
+
+    /// Full stops, Devanagari dandas and line breaks end a sentence; a run of
+    /// terminators ("...", "?!") and any closing quotes after it stay attached.
+    private static let terminators: Set<Character> = [".", "!", "?", "।", "॥", "…"]
+    private static let trailing: Set<Character> = ["\"", "'", "’", "”", ")", "]", "»"]
+
+    static func ranges(in text: String) -> [Range<String.Index>] {
+        var result: [Range<String.Index>] = []
+        var start = text.startIndex
+        var i = text.startIndex
+        func close(at end: String.Index) {
+            if start < end { result.append(start..<end) }
+            i = end
+            while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
+            start = i
+        }
+        while i < text.endIndex {
+            if text[i] == "\n" { close(at: i); continue }
+            guard terminators.contains(text[i]) else { i = text.index(after: i); continue }
+            var j = i
+            while j < text.endIndex, terminators.contains(text[j]) || trailing.contains(text[j]) { j = text.index(after: j) }
+            // A stop glued to the next word ("e.g.", "3.5") does not end anything.
+            if j < text.endIndex, !text[j].isWhitespace { i = j; continue }
+            close(at: j)
+        }
+        if start < text.endIndex { result.append(start..<text.endIndex) }
+        // A verse number or stray punctuation ("।। 18 ।।") is not a sentence;
+        // it belongs to the line before it.
+        var merged: [Range<String.Index>] = []
+        for range in result {
+            if let last = merged.last, !text[range].contains(where: \.isLetter) {
+                merged[merged.count - 1] = last.lowerBound..<range.upperBound
+            } else {
+                merged.append(range)
+            }
+        }
+        return merged
+    }
+
+    /// Which sentence is being spoken when `fraction` (0...1) of the paragraph's
+    /// time has elapsed, assuming speech moves through its letters evenly.
+    static func index(atFraction fraction: Double, in text: String) -> Int {
+        let ranges = ranges(in: text)
+        guard ranges.count > 1 else { return 0 }
+        let weights = ranges.map { Double(text[$0].unicodeScalars.filter { !$0.properties.isWhitespace }.count) }
+        let total = weights.reduce(0, +)
+        guard total > 0 else { return 0 }
+        let target = min(max(fraction, 0), 1) * total
+        var accumulated = 0.0
+        for (i, w) in weights.enumerated() {
+            accumulated += w
+            if target < accumulated { return i }
+        }
+        return ranges.count - 1
     }
 }

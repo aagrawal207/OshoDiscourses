@@ -3,9 +3,10 @@ import SwiftUI
 /// Full-screen transcript reader that behaves like lyrics: the paragraph being
 /// spoken is highlighted and kept in view, the listener can scroll away to read
 /// (a pill brings them back), and where they left off is remembered per
-/// discourse. Transcripts carry no timestamps, so the highlight is an estimate
-/// corrected by the listener's own "Audio is here" anchors or, for English on
-/// iOS 26, by on-device speech alignment.
+/// discourse. Transcripts carry no timestamps of their own; paragraph timing
+/// comes from the shipped `AlignmentCatalog`, or on iOS 26 from on-device
+/// speech alignment, or failing both from a text-length estimate. The
+/// listener's own "Audio is here" anchors correct any of the three.
 struct TranscriptView: View {
     /// The discourse to read. Playback controls and the highlight only engage
     /// when this is what the player is playing.
@@ -23,7 +24,12 @@ struct TranscriptView: View {
     @State private var loadError: Error?
     @State private var isLoading = false
     @State private var model: TranscriptSyncModel?
+    /// Shipped timing for this transcript's paragraph split, if any.
+    @State private var shippedAlignment: AlignmentCatalog.Entry?
     @State private var currentParagraph = 0
+    /// Sentence within `currentParagraph` being spoken; only meaningful with
+    /// aligned timing, where the paragraph boundaries are trustworthy.
+    @State private var currentSentence: Int?
     @State private var isFollowing = true
     @State private var scrolledID: Int?
     @State private var interactionStartOffset: CGFloat?
@@ -58,10 +64,23 @@ struct TranscriptView: View {
         return SpeechAlignmentService.isSupported(for: entry.series.language)
     }
 
-    /// Speech alignment is in force when the toggle is on and a result exists.
-    private var alignmentInUse: Bool {
-        settings.transcriptSpeechSync && speechSyncSupported && discourseState?.alignment != nil
+    /// The shipped alignment when it describes the recording being played.
+    private var shippedAlignmentInUse: AlignmentCatalog.Entry? {
+        guard let shippedAlignment, let transcript, isPlayingThis, player.duration > 0,
+              shippedAlignment.matches(paragraphCount: transcript.paragraphs.count, duration: player.duration)
+        else { return nil }
+        return shippedAlignment
     }
+
+    /// Paragraph starts in force: shipped first, else the device's own result
+    /// while the speech-sync toggle is on.
+    private var alignedStarts: [TimeInterval?]? {
+        if let shipped = shippedAlignmentInUse { return shipped.starts }
+        if settings.transcriptSpeechSync, speechSyncSupported, let alignment = discourseState?.alignment { return alignment.starts }
+        return nil
+    }
+
+    private var alignmentInUse: Bool { alignedStarts != nil }
 
     private var searchMatches: [Int] {
         guard isSearching, let transcript else { return [] }
@@ -268,6 +287,17 @@ struct TranscriptView: View {
 
     private func attributedText(for paragraph: Transcript.Paragraph) -> AttributedString {
         var text = AttributedString(paragraph.text)
+        if isPlayingThis, paragraph.index == currentParagraph, let currentSentence {
+            let ranges = TranscriptSentences.ranges(in: paragraph.text)
+            if ranges.count > 1 {
+                for (i, range) in ranges.enumerated() where i != currentSentence {
+                    if let lower = AttributedString.Index(range.lowerBound, within: text),
+                       let upper = AttributedString.Index(range.upperBound, within: text) {
+                        text[lower..<upper].foregroundColor = .primary.opacity(0.55)
+                    }
+                }
+            }
+        }
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard isSearching, query.count >= 2 else { return text }
         var searchRange = paragraph.text.startIndex..<paragraph.text.endIndex
@@ -293,10 +323,8 @@ struct TranscriptView: View {
                         resumeFollowing()
                         withAnimation { selectedParagraph = nil }
                     }
-                    if !alignmentInUse {
-                        actionChip("Audio is here", systemImage: "scope") {
-                            anchor(paragraph)
-                        }
+                    actionChip("Audio is here", systemImage: "scope") {
+                        anchor(paragraph)
                     }
                 }
                 actionChip("Copy", systemImage: "doc.on.doc") {
@@ -371,6 +399,7 @@ struct TranscriptView: View {
     private func updateCurrentParagraph(for time: TimeInterval) {
         guard isPlayingThis, let model else { return }
         let paragraph = model.paragraph(at: time)
+        currentSentence = sentence(in: paragraph, at: time, model: model)
         guard paragraph != currentParagraph else { return }
         currentParagraph = paragraph
         if isFollowing {
@@ -378,20 +407,31 @@ struct TranscriptView: View {
         }
     }
 
+    /// Sentence being spoken, from how far through the paragraph's span `time`
+    /// is. Nil without aligned timing: an estimate can be minutes out, and a
+    /// sentence marker would lend it a precision it does not have.
+    private func sentence(in paragraph: Int, at time: TimeInterval, model: TranscriptSyncModel) -> Int? {
+        guard alignmentInUse, let transcript, paragraph < transcript.paragraphs.count,
+              paragraph + 1 < model.starts.count else { return nil }
+        let span = model.starts[paragraph + 1] - model.starts[paragraph]
+        guard span > 0 else { return nil }
+        let fraction = (model.position(atTime: time) - model.starts[paragraph]) / span
+        return TranscriptSentences.index(atFraction: fraction, in: transcript.paragraphs[paragraph].text)
+    }
+
     private func rebuildModel() {
         guard let transcript, isPlayingThis else { model = nil; return }
         let base = TranscriptSyncModel(paragraphs: transcript.paragraphs, duration: player.duration)
-        let state = discourseState
-        var knots: [TranscriptSyncModel.Knot] = []
-        if alignmentInUse, let alignment = state?.alignment {
-            for (index, start) in alignment.starts.enumerated() {
-                if let start, let knot = base.knot(paragraph: index, startingAt: start) { knots.append(knot) }
-            }
+        let anchors = discourseState?.anchors ?? []
+        let knots: [TranscriptSyncModel.Knot]
+        if let alignedStarts {
+            knots = base.knots(alignedStarts: alignedStarts, anchors: anchors)
         } else {
-            knots = (state?.anchors ?? []).compactMap { base.knot(for: $0) }
+            knots = anchors.compactMap { base.knot(for: $0) }
         }
         model = base.with(knots: knots)
         currentParagraph = model?.paragraph(at: player.currentTime) ?? 0
+        currentSentence = model.flatMap { sentence(in: currentParagraph, at: player.currentTime, model: $0) }
     }
 
     // MARK: - Loading
@@ -400,13 +440,18 @@ struct TranscriptView: View {
         transcript = nil
         loadError = nil
         model = nil
+        shippedAlignment = nil
         selectedParagraph = nil
         guard transcripts.availability(for: discourseID) != .unavailable else { return }
         isLoading = true
         defer { isLoading = false }
         do {
             let loaded = try await transcripts.transcript(for: discourseID)
+            // First access parses the whole catalog; keep it off the main thread.
+            let id = discourseID
+            let shipped = await Task.detached(priority: .userInitiated) { AlignmentCatalog.entry(for: id) }.value
             transcript = loaded
+            shippedAlignment = shipped?.paragraphCount == loaded.paragraphs.count ? shipped : nil
             rebuildModel()
             // Land where the reader left off, or on the audio.
             let state = stateService.state(for: discourseID, paragraphCount: loaded.paragraphs.count)
@@ -444,10 +489,10 @@ struct TranscriptView: View {
     }
 
     private func startAlignmentIfWanted(_ transcript: Transcript) {
-        guard settings.transcriptSpeechSync, speechSyncSupported, isPlayingThis,
-              discourseState?.alignment == nil,
+        guard settings.transcriptSpeechSync, speechSyncSupported, isPlayingThis, let entry,
+              shippedAlignment == nil, discourseState?.alignment == nil,
               let url = player.downloadService?.localFileURL(for: discourseID) else { return }
-        aligner.align(discourseID: discourseID, transcript: transcript, audioURL: url)
+        aligner.align(discourseID: discourseID, transcript: transcript, language: entry.series.language, audioURL: url)
     }
 
     // MARK: - Toolbar
@@ -492,8 +537,10 @@ struct TranscriptView: View {
                         .disabled(settings.transcriptFontSize >= UserSettings.transcriptFontSizes.last!)
                 }
                 if isPlayingThis {
-                    Section("Sync") {
-                        if speechSyncSupported {
+                    Section("Timing") {
+                        if let shipped = shippedAlignmentInUse {
+                            Text("Synced from speech: \(shipped.matchedCount) of \(shipped.paragraphCount) paragraphs")
+                        } else if speechSyncSupported {
                             Toggle(isOn: Binding(
                                 get: { settings.transcriptSpeechSync },
                                 set: { on in
@@ -501,16 +548,19 @@ struct TranscriptView: View {
                                     if on, let transcript { startAlignmentIfWanted(transcript) } else { aligner.cancel() }
                                 }
                             )) {
-                                Label("Sync from speech (Experimental)", systemImage: "waveform.badge.magnifyingglass")
+                                Label("Sync from speech on this device", systemImage: "waveform.badge.magnifyingglass")
                             }
-                            if discourseState?.alignment != nil {
+                            if let alignment = discourseState?.alignment {
+                                if settings.transcriptSpeechSync {
+                                    Text("Synced from speech: \(alignment.matchedCount) of \(alignment.starts.count) paragraphs")
+                                }
                                 Button(role: .destructive) {
                                     stateService.clearAlignment(discourseID: discourseID)
                                     if settings.transcriptSpeechSync, let transcript { startAlignmentIfWanted(transcript) }
                                 } label: { Label("Redo speech sync", systemImage: "arrow.clockwise") }
                             }
-                        } else if entry?.series.language == .hindi {
-                            Text("Speech sync is not available for Hindi on this device.")
+                        } else {
+                            Text("Estimated from text length. Tap a paragraph and choose “Audio is here” to correct it.")
                         }
                         if let anchors = discourseState?.anchors, !anchors.isEmpty {
                             Button(role: .destructive) {
@@ -653,7 +703,7 @@ struct TranscriptView: View {
             switch aligner.status {
             case .preparingAssets:
                 ProgressView()
-                Text("Preparing the English speech model…")
+                Text("Preparing the \(entry?.series.language == .hindi ? "Hindi" : "English") speech model…")
             case .listening(let progress):
                 ProgressView(value: progress)
                     .frame(maxWidth: 140)
