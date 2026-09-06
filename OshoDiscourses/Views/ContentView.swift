@@ -13,6 +13,14 @@ struct ContentView: View {
     @State private var showFullPlayer = false
     @State private var selectedTab = 0
     @Bindable private var settings = UserSettings.shared
+    #if DEBUG
+    /// `-debugTranscript <discourseID>` on the launch arguments plays that
+    /// (already downloaded) discourse and opens its transcript (or the full
+    /// player with `-debugPlayer`), so the reader can be exercised in a
+    /// simulator without tapping through the UI.
+    @State private var debugTranscriptID: String?
+    @State private var showDebugTranscript = false
+    #endif
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -66,6 +74,25 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .navigateToSeries)) { _ in
             selectedTab = 0
         }
+        #if DEBUG
+        .task {
+            let args = ProcessInfo.processInfo.arguments
+            guard let flag = args.firstIndex(of: "-debugTranscript"), args.indices.contains(flag + 1) else { return }
+            let id = args[flag + 1]
+            try? await Task.sleep(for: .seconds(1.5))
+            if let entry = Catalog.discourseLookup[id], let url = downloads.localFileURL(for: id) {
+                player.play(localURL: url, id: id, title: entry.discourse.displayTitle, series: entry.series.name)
+            }
+            debugTranscriptID = id
+            if args.contains("-debugPlayer") { showFullPlayer = true } else { showDebugTranscript = true }
+        }
+        .sheet(isPresented: $showDebugTranscript) {
+            if let debugTranscriptID {
+                TranscriptView(discourseID: debugTranscriptID)
+                    .environment(player)
+            }
+        }
+        #endif
         .preferredColorScheme(colorSchemeForAppearance(settings.appearance))
     }
 

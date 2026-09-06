@@ -77,6 +77,18 @@ struct SeriesDetailView: View {
                         .foregroundStyle(.green)
                 }
 
+                let transcriptCount = TranscriptCatalog.transcriptCount(forSeriesID: seriesInfo.id)
+                if transcriptCount > 0 {
+                    Label(
+                        transcriptCount == seriesInfo.count
+                            ? "Transcripts for every discourse"
+                            : "Transcripts for \(transcriptCount) of \(seriesInfo.count)",
+                        systemImage: "doc.plaintext"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
                 if let meta = SeriesMetadata.description(for: seriesInfo.name) {
                     VStack(spacing: 8) {
                         Text(meta.sourceText)
@@ -191,6 +203,11 @@ private struct DiscourseRowView: View {
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
     @State private var showDownloadHint = false
+    @State private var showTranscript = false
+
+    private var hasTranscript: Bool {
+        TranscriptCatalog.hasTranscript(discourse.id)
+    }
 
     private var isCurrentlyPlaying: Bool {
         player.currentTrackId == discourse.id && player.isPlaying
@@ -225,10 +242,18 @@ private struct DiscourseRowView: View {
                 // No per-discourse titles exist in the catalog, and the series
                 // name is already in the hero header, so a plain "Discourse N"
                 // reads clearly without repeating (and truncating) the series name.
-                Text("Discourse \(discourse.number)")
-                    .font(.body)
-                    .lineLimit(1)
-                    .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
+                HStack(spacing: 6) {
+                    Text("Discourse \(discourse.number)")
+                        .font(.body)
+                        .lineLimit(1)
+                        .foregroundStyle(isCurrentlyPlaying ? .blue : .primary)
+                    if hasTranscript {
+                        Image(systemName: "doc.plaintext")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .accessibilityLabel("Transcript available")
+                    }
+                }
 
                 if let failureMessage {
                     Text(failureMessage)
@@ -256,12 +281,19 @@ private struct DiscourseRowView: View {
         // The row plays on tap of a plain HStack, which VoiceOver can't
         // discover on its own — expose it as a button with the same action.
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("Discourse \(discourse.number)\(isCompleted ? ", completed" : "")")
+        .accessibilityLabel("Discourse \(discourse.number)\(isCompleted ? ", completed" : "")\(hasTranscript ? ", transcript available" : "")")
         .accessibilityHint(isDownloaded ? "Plays this discourse" : "Downloads this discourse")
         .accessibilityAction {
             playDiscourse()
         }
         .contextMenu {
+            if hasTranscript {
+                Button {
+                    showTranscript = true
+                } label: {
+                    Label("Read Transcript", systemImage: "doc.plaintext")
+                }
+            }
             if playbackState.isCompleted(discourse.id) {
                 Button {
                     playbackState.unmarkCompleted(discourseId: discourse.id)
@@ -275,6 +307,13 @@ private struct DiscourseRowView: View {
                     Label("Mark as Complete", systemImage: "checkmark.circle")
                 }
             }
+        }
+        .sheet(isPresented: $showTranscript) {
+            // Re-injected like every other sheet in the app (see ContentView).
+            TranscriptView(discourseID: discourse.id)
+                .environment(player)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 

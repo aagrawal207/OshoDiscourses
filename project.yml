@@ -56,6 +56,9 @@ targets:
         UIBackgroundModes: [audio]
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        # Experimental transcript speech sync runs Apple's on-device recogniser
+        # over downloaded English audio; nothing leaves the device.
+        NSSpeechRecognitionUsageDescription: Osho Talks can listen to a downloaded discourse on this device to line its transcript up with the audio. Nothing is sent anywhere.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

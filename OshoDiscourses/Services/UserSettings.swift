@@ -170,6 +170,19 @@ final class UserSettings {
     var volumeBoost: Double {
         didSet { defaults.set(volumeBoost, forKey: Keys.volumeBoost) }
     }
+    /// Point size of transcript body text, stepped from the reader.
+    var transcriptFontSize: Double {
+        didSet { defaults.set(transcriptFontSize, forKey: Keys.transcriptFontSize) }
+    }
+    /// Experimental: derive paragraph timings from on-device speech recognition
+    /// instead of the text-fraction estimate. English only (Apple ships no
+    /// on-device Hindi recogniser).
+    var transcriptSpeechSync: Bool {
+        didSet { defaults.set(transcriptSpeechSync, forKey: Keys.transcriptSpeechSync) }
+    }
+
+    static let transcriptFontSizes: [Double] = [15, 17, 19, 21, 24, 28]
+    static let defaultTranscriptFontSize: Double = 19
 
     // Computed helpers for backward compat with views
     var hideHindi: Bool { languageFilter == .english }
@@ -227,6 +240,8 @@ final class UserSettings {
         static let voiceFocusPreset = "settings.voiceFocusPreset"
         static let defaultPlaybackRate = "settings.defaultPlaybackRate"
         static let volumeBoost = "settings.volumeBoost"
+        static let transcriptFontSize = "settings.transcriptFontSize"
+        static let transcriptSpeechSync = "settings.transcriptSpeechSync"
     }
 
     private init() {
@@ -244,6 +259,8 @@ final class UserSettings {
             Keys.defaultPlaybackRate: 1.0,
             Keys.volumeBoost: 2.0,
             Keys.dailyAccentShuffle: false,
+            Keys.transcriptFontSize: Self.defaultTranscriptFontSize,
+            Keys.transcriptSpeechSync: false,
         ])
 
         // Default to light on first launch; a stored value always wins.
@@ -265,6 +282,8 @@ final class UserSettings {
         ) ?? .focus
         self.defaultPlaybackRate = d.double(forKey: Keys.defaultPlaybackRate)
         self.volumeBoost = d.double(forKey: Keys.volumeBoost)
+        self.transcriptFontSize = d.double(forKey: Keys.transcriptFontSize)
+        self.transcriptSpeechSync = d.bool(forKey: Keys.transcriptSpeechSync)
 
         // Seed today's shuffled color now that all stored props are set.
         self.shuffledThemeToday = Self.shuffledTheme(forDaysSinceEpoch: Self.daysSinceEpoch())

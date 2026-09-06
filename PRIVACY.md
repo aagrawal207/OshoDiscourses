@@ -5,6 +5,7 @@
 ## What the app does
 
 - Downloads audio files from oshoworld.com or an Internet Archive mirror to your device
+- Fetches discourse transcripts from oshoworld.com and caches them on your device
 - Stores your settings, bookmarks, and playback progress on your device
 - Syncs your playback progress, bookmarks, and listening stats across your own devices through your personal iCloud (Apple's iCloud Key-Value storage). This data goes only to your iCloud account. The developer has no server and never receives it. There is no account to create and no sign-in.
 
@@ -22,7 +23,7 @@ Your playback progress, bookmarks, and listening stats sync across devices signe
 
 ## Network access
 
-The app connects to oshoworld.com and archive.org to stream or download audio discourse files. iCloud sync is handled by the operating system. No analytics, no tracking pixels, no advertising SDKs.
+The app connects to oshoworld.com and archive.org to download audio discourse files and transcripts. The experimental "Sync from speech" option runs Apple's on-device speech recogniser over a downloaded English recording to line up its transcript; the audio is not sent anywhere. iCloud sync is handled by the operating system. No analytics, no tracking pixels, no advertising SDKs.
 
 ## Third-party services
 

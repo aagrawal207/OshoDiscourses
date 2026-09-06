@@ -65,7 +65,21 @@ struct OshoDiscoursesApp: App {
                     playbackState.onProgressSaved = { CloudSyncService.shared.push() }
                     BookmarkService.shared.onBookmarksChanged = { CloudSyncService.shared.push() }
                     downloadService.onDownloadHistoryChanged = { CloudSyncService.shared.push() }
+                    TranscriptStateService.shared.onChanged = { CloudSyncService.shared.push() }
                     CloudSyncService.shared.start(playbackState: playbackState, downloadService: downloadService)
+                    // Transcripts travel with the audio: fetched behind each
+                    // committed download, dropped with a deleted one, and
+                    // backfilled for downloads that predate the feature.
+                    downloadService.onDownloadCommitted = { TranscriptService.shared.prefetch($0.id) }
+                    downloadService.onDownloadDeleted = { TranscriptService.shared.remove($0) }
+                    Task {
+                        // Let launch settle first; the backfill is not urgent.
+                        try? await Task.sleep(for: .seconds(5))
+                        TranscriptService.shared.backfill(
+                            downloadedIDs: Array(downloadService.downloadedIDs),
+                            allowsCellular: UserSettings.shared.allowCellularDownloads
+                        )
+                    }
                 }
 
             // A one-shot launch splash laid over ContentView (which mounts

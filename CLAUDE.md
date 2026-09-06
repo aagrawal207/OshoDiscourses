@@ -31,10 +31,11 @@ OshoDiscourses/
 ├── App/OshoDiscoursesApp.swift         # @main entry, environment injection
 ├── Views/
 │   ├── ContentView.swift               # TabView: Home, Library, My Activity, Settings
-│   ├── Home/HomeView.swift             # Browse screen — search, curated sections, all series list
+│   ├── Home/HomeView.swift             # Home — Continue Listening (series name links to series), curated sections
 │   ├── Library/LibraryView.swift       # Full series list with dynamic filter chips + sort
 │   ├── Series/SeriesDetailView.swift   # Hero header, discourse list, download/play actions
-│   ├── Player/PlayerView.swift         # Full-screen player — artwork, slider, controls, speed, sleep timer
+│   ├── Player/PlayerView.swift         # Full-screen player — artwork, slider, controls, speed, sleep timer, transcript button
+│   ├── Player/TranscriptView.swift     # Lyrics-style transcript sheet — highlight, auto-follow, anchors, search, font size
 │   ├── Player/MiniPlayerView.swift     # Floating mini-player bar (ultraThinMaterial)
 │   ├── Downloads/DownloadsView.swift   # "My Activity" tab — downloads + stats/bookmarks links + storage meter
 │   ├── BookmarksView.swift             # Bookmark list (built) — filter chips, swipe-delete, play/redownload
@@ -52,13 +53,23 @@ OshoDiscourses/
 │   ├── DeepFilterProcessor.swift       # DeepFilterNet 3 via native Rust/tract bridge (resample, async load, status)
 │   ├── PolyphaseResampler.swift        # 22.05kHz catalog <-> 48kHz model rate (streaming, allocation-free)
 │   ├── VoiceFocusChain.swift           # Voice-forward presets: SNR ducking + quiet-speech lift + emphasis
+│   ├── TranscriptService.swift         # Fetch + disk cache of transcripts; prefetch behind downloads, backfill, delete-with-audio
+│   ├── TranscriptFetcher.swift         # oshoworld JSON API with __NEXT_DATA__ page-scrape fallback
+│   ├── TranscriptParser.swift          # Transcript model + oshoworld HTML -> paragraphs (emphasis blocks = question/sutra)
+│   ├── TranscriptSyncModel.swift       # Time <-> paragraph map: text-fraction estimate bent by anchors/aligned knots
+│   ├── TranscriptStateService.swift    # Per-discourse anchors, read position, alignment; transcript_state.json; cloud merge
+│   ├── SpeechAlignmentService.swift    # Experimental: on-device SpeechTranscriber (iOS 26, English) -> paragraph timings
+│   ├── SpeechWordRecognizer.swift      # SpeechAnalyzer wrapper: asset reservation, words with time ranges
+│   ├── TranscriptAligner.swift         # Unique-trigram landmarks + LIS chain -> paragraph start times
 │   └── UserSettings.swift              # @Observable singleton over UserDefaults
 ├── RNNoise/                            # Vendored RNNoise C sources + bridging header
 ├── Bridging/                           # Single Obj-C bridging header (RNNoise + DeepFilter)
 ├── Resources/
-│   ├── Catalog.swift                   # 261 series, 4,361 discourses — static data + URL builder
+│   ├── Catalog.swift                   # 259 series, 4,361 discourses — static data + URL builder
+│   ├── TranscriptCatalog.swift/.json   # discourse id -> oshoworld audio id/slug for the 4,144 discourses with a transcript
 │   ├── DeepFilterNet3_onnx.tar.gz      # Bundled DFN3 model (48 kHz, 480-sample hop)
 │   └── Assets.xcassets/                # App icon placeholder
+scripts/build-transcript-catalog.py     # Regenerates TranscriptCatalog.json from the oshoworld API (~20 min, cached)
 native/deepfilter-bridge/               # Rust crate + build-xcframework.sh (pinned upstream commit)
 Vendor/DeepFilterBridge.xcframework     # Committed static lib: ios-arm64 + arm64/x86_64 simulator
 OshoDiscoursesTests/
@@ -72,13 +83,14 @@ OshoDiscoursesTests/
 ├── SleepTimerTests.swift               # Countdown + end-of-discourse mode tests
 ├── CloudSyncTests.swift                # Convergent merge rules + snapshot round-trip
 ├── AudioSessionInterruptionTests.swift # Resume-after-interruption decision
-└── SyncMergeTests.swift                # Bookmark union + daily-stats max merge
+├── SyncMergeTests.swift                # Bookmark union + daily-stats max merge
+└── TranscriptTests.swift               # Parser, sync model, state merge, fetcher payloads, service cache, catalog, aligner
 ```
 
 ## Data
 
 ### Catalog (static, not in database)
-- 261 series (155 English, 106 Hindi)
+- 259 series (155 English, 104 Hindi)
 - 4,361 total discourses
 - Source: oshoworld.com (3 URL patterns: underscore, slug, OSHO-prefix)
 - Archive.org mirror: `Resources/ArchiveCatalog.json` maps ~90% of discourses
@@ -92,6 +104,27 @@ OshoDiscoursesTests/
 - Curated lists: Popular English/Hindi, Beginner English/Hindi
 - All in `Resources/Catalog.swift` — `Catalog.allSeries`, `Catalog.allDiscourses()`
 
+### Transcripts
+- Source: oshoworld.com. Each discourse page is rendered from a JSON API
+  (`/api/server/audio/get-description/{audioId}`) that returns the full
+  transcript as light HTML (`<br>`/CRLF breaks; `<strong>`, `<q>`, `<cr>`
+  mark the quoted question or sutra). No timestamps.
+- `Resources/TranscriptCatalog.json` maps discourse id -> oshoworld audio
+  `_id` + page `slug` for the **4,144 of 4,361** discourses whose page has
+  real text (English 2,697/2,741, Hindi 1,447/1,620; 247 series). Generated
+  by `scripts/build-transcript-catalog.py`: matches by mp3 path, then by
+  upload folder + index, then by normalised series title, and probes every
+  page's word count so blanks are excluded. Re-run it to pick up new text.
+- Text is fetched behind each committed audio download (and backfilled for
+  existing downloads), cached in `Application Support/transcripts/` excluded
+  from backup, and deleted with the audio. Opening a transcript that isn't
+  cached fetches it on demand.
+- Sync: the highlight is an estimate (paragraph share of characters = share
+  of duration, with a 50-character floor per paragraph) bent by the user's
+  "Audio is here" anchors, or by on-device speech alignment when enabled.
+  Anchors + last-read paragraph live in `transcript_state.json` and sync via
+  iCloud; alignments stay device-local.
+
 ### URL patterns
 - English underscore: `https://www.oshoworld.com/wp-content/uploads/newAudios/{Folder}_(count)/{Prefix}_{num}.mp3`
 - English slug: `https://www.oshoworld.com/wp-content/uploads/newAudios/{slug}/{Title} {num}.mp3`
@@ -101,11 +134,12 @@ OshoDiscoursesTests/
 ### Persistence (no SwiftData)
 - **Playback positions / recently-played / completed** — `PlaybackStateService` over UserDefaults.
 - **Settings** — `UserSettings` over UserDefaults.
+- **Transcripts** — `Application Support/transcripts/<discourseID>.json` (cached text, backup-excluded) and `transcript_state.json` (anchors, read position, alignment) via `TranscriptStateService`.
 - **Downloads** — files on disk, tracked by a JSON manifest in `DownloadService`. The audio folder (`Documents/Osho Discourses/`) is flagged `isExcludedFromBackup` since it's re-downloadable (avoids iCloud-backup bloat + App Store 5.1 rejection).
 - **Bookmarks** — `bookmarks.json`; **listening stats** — `listening_stats.json`.
 
 ### iCloud sync (live, cross-device) vs device backup
-- **Live sync** — `CloudSyncService` mirrors one `CloudSnapshot` through `NSUbiquitousKeyValueStore` (the user's own iCloud, no account/server/toggle). Synced: recent playback positions+durations, completed set, recently-played/completed lists, **bookmarks** (union by id), and **daily listening stats** (max seconds per day). Merge rules are convergent + idempotent so devices agree regardless of write order; no merge UI, no "last synced" timestamp. Push fires on each progress auto-save and on bookmark add/remove; pull/merge on external change.
+- **Live sync** — `CloudSyncService` mirrors one `CloudSnapshot` through `NSUbiquitousKeyValueStore` (the user's own iCloud, no account/server/toggle). Synced: recent playback positions+durations, completed set, recently-played/completed lists, **bookmarks** (union by id), **daily listening stats** (max seconds per day), and **transcript anchors + read positions** (anchor union replayed oldest-first through the contradiction filter; newest read position wins, with "following again" stored as a timestamped tombstone so it beats a stale position). Merge rules are convergent + idempotent so devices agree regardless of write order; no merge UI, no "last synced" timestamp. Push fires on each progress auto-save and on bookmark add/remove; pull/merge on external change.
 - **NOT live-synced** — `UserSettings` (accent, language, speed, toggles) stays per-device. Bookmark *deletions* don't propagate (union-by-id, no tombstones — deletes can resurrect from another device).
 - **Device backup** — everything in the app container (settings, full position history, the JSON files) rides the normal iCloud device backup; only the downloads folder is excluded.
 
@@ -139,6 +173,9 @@ OshoDiscoursesTests/
 - [x] iCloud sync of progress + bookmarks + daily stats (silent, NSUbiquitousKeyValueStore)
 - [x] Downloads excluded from iCloud backup (re-downloadable content)
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
+- [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
+- [x] Transcript speech sync (experimental) — English + iOS 26 only, on-device SpeechTranscriber; Hindi stays on estimate + anchors
+- [x] Home > Continue Listening: series name is a link to the series page (Downloads-header style)
 
 ## What's remaining (post-MVP)
 
@@ -152,6 +189,10 @@ OshoDiscoursesTests/
 
 ## Key decisions
 
+- **Transcripts have no timestamps, so sync is an estimate the listener can correct** — oshoworld publishes plain paragraphs. The highlight assumes speech moves through the text at a constant rate and lets "Audio is here" pin a paragraph to the current time; the map is linear between pins. Measured against speech alignment on A Bird on the Wing #1, the raw estimate drifts up to ~45 s mid-talk (the opening question is read slowly), which one or two anchors remove.
+- **Hindi cannot be speech-aligned on device** — `SpeechTranscriber` (iOS 26) ships no Hindi model and `SFSpeechRecognizer` `hi-IN` is server-only in one-minute requests. English alignment runs on device (a 98-min talk recognised in ~40 s on an M-series Mac, 89 of 93 paragraphs matched) and is gated behind an experimental toggle; the alternative for Hindi would be vendoring whisper.cpp or shipping pre-aligned timestamps as data.
+- **`AssetInventory.reserve(locale:)` before any asset call** — without a reservation `assetInstallationRequest` fails with "not subscribed to transcription.en". The simulator reports no supported speech locales at all; test alignment on a device or via the macOS harness.
+- **Transcript matching is by mp3 path, never by folder alone** — every Hindi series shares one upload folder, so folder+index is only trusted when the folder holds a single series. All 4,361 discourses map to a page; 217 pages are blank and are left out of the catalog.
 - **Static catalog, not fetched** — 4,361 discourses hardcoded. Updates via app releases. No server needed.
 - **Almost no third-party deps** — everything from Apple frameworks except the vendored RNNoise C sources and the DeepFilterNet Rust/tract bridge, both linked statically with no package manager. Adding DeepFilterNet was a deliberate trade: it is the only option that removes steady tape hiss and noise overlapping speech.
 - **The catalog is 22.05 kHz, not 48 kHz** — the Hindi talks are 22,050 Hz 43 kbps MP3s (the archive.org mirror is byte-identical). Both neural denoisers are 48 kHz models, so without `PolyphaseResampler` DeepFilterNet was bypassed entirely and RNNoise ran on mis-mapped bands. This was the real reason noise reduction "did nothing".
@@ -188,5 +229,9 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-08-02 (182 tests passing; Release verified for device arm64 and simulator)
+- Build succeeds as of 2026-09-05 (221 tests passing; Release verified for device arm64 and simulator)
+- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
+- Small screens: verified on an iPhone SE (3rd gen) simulator (create one with `xcrun simctl create`; none ships by default). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.
+- Transcript reader keeps the screen awake (`isIdleTimerDisabled`) only while its discourse is playing and the app is active.
+- Seed a simulator download for testing: copy an mp3 to `Documents/Osho Discourses/<Series>/<Series> - #N.mp3` and write `{"<discourseID>": "<relative path>"}` to `Library/Application Support/.download_manifest.json`.
 - Dynamic Island / Live Activity was removed (was a Live Activity hosted by a now-deleted widget extension); standard lock-screen/Control-Center controls stay via MediaPlayer

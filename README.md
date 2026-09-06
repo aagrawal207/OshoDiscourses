@@ -38,6 +38,7 @@ There are no ads, accounts, subscriptions, or tracking.
 - Listen in the background with Lock Screen, Control Center, AirPods, and AirPlay controls
 - Change playback speed from 0.5x to 2x and use voice boost
 - Reduce recording noise with the optional RNNoise filter, currently in beta
+- Read along with the transcript, lyrics-style: the paragraph being spoken is highlighted and kept in view, and where you left off is remembered per discourse
 - Save timestamped bookmarks with notes and categories
 - Use a countdown sleep timer or stop at the end of the current discourse
 - Automatically download the next talk and delete completed talks when enabled
@@ -47,7 +48,7 @@ There are no ads, accounts, subscriptions, or tracking.
 
 ## Privacy
 
-Osho Talks has no developer-operated server and includes no analytics or advertising SDKs. Settings and downloaded audio stay on the device. Playback progress, bookmarks, and listening stats can sync between devices through the listener's own iCloud account.
+Osho Talks has no developer-operated server and includes no analytics or advertising SDKs. Settings, downloaded audio, and transcripts stay on the device. Playback progress, bookmarks, listening stats, and transcript reading positions can sync between devices through the listener's own iCloud account. The optional speech sync for transcripts uses Apple's on-device recogniser; audio never leaves the device.
 
 See [PRIVACY.md](PRIVACY.md) for details.
 
@@ -74,7 +75,7 @@ The app is written in Swift 6 and SwiftUI. It uses Apple frameworks for playback
 
 ## Audio and affiliation
 
-The app does not bundle discourse audio. It accesses publicly available recordings from [oshoworld.com](https://www.oshoworld.com/) and an [Internet Archive](https://archive.org/) mirror.
+The app does not bundle discourse audio or transcripts. It accesses publicly available recordings from [oshoworld.com](https://www.oshoworld.com/) and an [Internet Archive](https://archive.org/) mirror, and fetches transcripts from the matching oshoworld.com discourse pages.
 
 All discourses are copyright OSHO International Foundation. Osho Talks is an independent app and is not affiliated with or endorsed by the Osho International Foundation.
 

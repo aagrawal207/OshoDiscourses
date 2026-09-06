@@ -139,6 +139,11 @@ final class DownloadService {
 
     /// Fired when `downloadHistory` gains an entry, so the app can push it to iCloud.
     var onDownloadHistoryChanged: (() -> Void)?
+    /// Fired once a transfer's file is committed to the library, so companion
+    /// data (the transcript) can be fetched behind it.
+    var onDownloadCommitted: ((CatalogDiscourse) -> Void)?
+    /// Fired after a download is deleted, so companion data can go with it.
+    var onDownloadDeleted: ((String) -> Void)?
 
     private let manifestURL: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -583,6 +588,7 @@ final class DownloadService {
         pathMap[discourse.id] = relativePath(for: discourse)
         saveManifest()
         recordDownloaded(discourse.id)
+        onDownloadCommitted?(discourse)
         return destination
     }
 
@@ -613,6 +619,7 @@ final class DownloadService {
         pathMap.removeValue(forKey: discourseID)
         saveManifest()
         activeDownloads.removeValue(forKey: discourseID)
+        onDownloadDeleted?(discourseID)
     }
 
     /// Delete a specific set of downloaded discourses (multi-select / per-series).

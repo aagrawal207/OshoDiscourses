@@ -9,7 +9,9 @@ struct PlayerView: View {
     @State private var showSleepTimer = false
     @State private var showDenoisePicker = false
     @State private var showQueue = false
+    @State private var showTranscript = false
     private var sleepTimer = SleepTimerService.shared
+    private var transcripts = TranscriptService.shared
     @State private var showBookmarkSheet = false
     @State private var bookmarkTimestamp: TimeInterval = 0
     @State private var showBookmarkAdded = false
@@ -135,6 +137,14 @@ struct PlayerView: View {
                 .environment(player)
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showTranscript) {
+            if let id = player.currentTrackId {
+                TranscriptView(discourseID: id)
+                    .environment(player)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
         .sheet(isPresented: $showBookmarkSheet) {
             AddBookmarkSheet(
                 timestamp: bookmarkTimestamp,
@@ -185,6 +195,15 @@ struct PlayerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .white.opacity(0.08), radius: 30)
             .accessibilityHidden(true)
+            // Lyrics-style shortcut: the artwork is the biggest tap target on
+            // the screen, so it opens the transcript when there is one.
+            .onTapGesture { if hasTranscript { showTranscript = true } }
+    }
+
+    /// oshoworld.com publishes a transcript for the playing discourse.
+    private var hasTranscript: Bool {
+        guard let id = player.currentTrackId else { return false }
+        return transcripts.availability(for: id) != .unavailable
     }
 
     // MARK: - Top Bar (AirPlay + Up Next)
@@ -196,6 +215,19 @@ struct PlayerView: View {
                 .accessibilityLabel("AirPlay and output device")
 
             Spacer()
+
+            Button {
+                showTranscript = true
+            } label: {
+                Image(systemName: "doc.plaintext")
+                    .font(.title3)
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, height: 40)
+            }
+            .accessibilityLabel("Transcript")
+            .accessibilityHint(hasTranscript ? "Reads along with the discourse" : "No transcript for this discourse")
+            .disabled(!hasTranscript)
+            .opacity(hasTranscript ? 1 : 0.35)
 
             Button {
                 showQueue = true
@@ -214,38 +246,80 @@ struct PlayerView: View {
 
     // MARK: - Track Info
 
-    private var currentSeriesInfo: SeriesInfo? {
-        Catalog.allSeries.first { $0.name == player.currentSeries }
+    /// Resolved from the track id through the catalog's dictionary rather than
+    /// by scanning 259 series for a name match, so the discourse number and the
+    /// series metadata both come straight from the catalog.
+    private var currentEntry: (discourse: CatalogDiscourse, series: SeriesInfo)? {
+        guard let id = player.currentTrackId else { return nil }
+        return Catalog.discourseLookup[id]
+    }
+
+    /// "Discourse 1 · Pune, 1976", composed by SeriesMetadata so the place and
+    /// year handling is unit tested rather than living inside the view.
+    private var discourseSubtitle: String? {
+        guard let entry = currentEntry else { return nil }
+        return SeriesMetadata.discourseSubtitle(
+            number: entry.discourse.number,
+            seriesName: entry.series.name
+        )
     }
 
     private var trackInfo: some View {
         VStack(spacing: 4) {
-            Text(player.currentTitle.isEmpty ? "Not Playing" : player.currentTitle)
-                .font(.title3.bold())
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+            // The series name leads, with the discourse number and where and
+            // when it was recorded underneath. The old layout titled the track
+            // "<series> - #N" and then repeated the series name directly below,
+            // spending two lines to say the same thing twice.
+            seriesTitle
 
-            if currentSeriesInfo != nil {
-                Button {
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(
-                            name: .navigateToSeries,
-                            object: currentSeriesInfo
-                        )
-                    }
-                } label: {
-                    Text(player.currentSeries)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
-                }
-            } else {
-                Text(player.currentSeries.isEmpty ? "—" : player.currentSeries)
+            if let discourseSubtitle {
+                Text(discourseSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var seriesTitle: some View {
+        let name = player.currentSeries.isEmpty
+            ? (player.currentTitle.isEmpty ? "Not Playing" : player.currentTitle)
+            : player.currentSeries
+
+        if let series = currentEntry?.series {
+            Button {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(
+                        name: .navigateToSeries,
+                        object: series
+                    )
+                }
+            } label: {
+                // Primary rather than accent now that it is the title; the
+                // chevron carries the "opens the series" affordance instead.
+                HStack(spacing: 4) {
+                    Text(name)
+                        .font(.title3.bold())
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(name)
+            .accessibilityHint("Opens the series")
+        } else {
+            Text(name)
+                .font(.title3.bold())
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
     }
 
     // MARK: - Seek Slider

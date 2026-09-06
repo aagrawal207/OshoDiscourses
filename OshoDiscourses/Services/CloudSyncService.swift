@@ -11,6 +11,9 @@ struct CloudSnapshot: Codable, Equatable {
     var recentlyPlayed: [String] = []
     var completed: [String] = []
     var listenedCompleted: [String] = []
+    /// Uncapped playback history. Optional so snapshots from older app versions
+    /// continue to decode; their recent/completed data seeds the history.
+    var played: [String]? = nil
     var bookmarks: [Bookmark] = []
     /// Tombstones for deleted bookmark ids (union-merged) so a delete on one
     /// device sticks everywhere instead of resurrecting from a stale snapshot.
@@ -22,6 +25,9 @@ struct CloudSnapshot: Codable, Equatable {
     /// Discourse IDs ever downloaded (monotonic, union-merged). Lets a reinstall
     /// or second device offer quick re-download of previously-downloaded talks.
     var downloaded: [String] = []
+    /// Transcript anchors and read positions per discourse (see
+    /// TranscriptStateService.merge). Optional so older snapshots still decode.
+    var transcripts: [String: TranscriptSyncedState]? = nil
 }
 
 /// Mirrors listening progress through `NSUbiquitousKeyValueStore` (the user's
@@ -85,6 +91,7 @@ final class CloudSyncService {
             // Download history (monotonic union) so a reinstall/second device
             // knows what was previously downloaded.
             downloadService?.mergeSyncedDownloadHistory(snapshot.downloaded)
+            TranscriptStateService.shared.mergeSynced(snapshot.transcripts ?? [:])
         }
         if thenPush { push() }
     }
@@ -97,6 +104,7 @@ final class CloudSyncService {
         snapshot.deletedBookmarkIDs = BookmarkService.shared.deletedBookmarkIDs
         snapshot.dailyStats = ListeningStatsService.shared.syncedDailyStats()
         snapshot.downloaded = downloadService?.syncedDownloadHistory() ?? []
+        snapshot.transcripts = TranscriptStateService.shared.syncedStates()
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         store.set(data, forKey: snapshotKey)
     }
