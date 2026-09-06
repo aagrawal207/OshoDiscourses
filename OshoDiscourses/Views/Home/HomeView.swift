@@ -82,6 +82,26 @@ struct HomeView: View {
         let savedDuration: TimeInterval
     }
 
+    struct ContinueGroup: Identifiable {
+        let seriesInfo: SeriesInfo
+        var items: [ContinueItem]
+        var id: String { seriesInfo.id }
+    }
+
+    /// The first few in-progress discourses, grouped by series in order of
+    /// first appearance so the most recent series still leads.
+    private var continueListeningGroups: [ContinueGroup] {
+        var groups: [ContinueGroup] = []
+        for item in continueListening.prefix(4) {
+            if let index = groups.firstIndex(where: { $0.id == item.seriesInfo.id }) {
+                groups[index].items.append(item)
+            } else {
+                groups.append(ContinueGroup(seriesInfo: item.seriesInfo, items: [item]))
+            }
+        }
+        return groups
+    }
+
     private var continueListening: [ContinueItem] {
         playbackState.recentlyPlayed.compactMap { discourseID in
             guard downloads.isDownloaded(discourseID) else { return nil }
@@ -240,15 +260,23 @@ struct HomeView: View {
             }
             .padding(.horizontal)
 
+            // Grouped under a series header like the Downloads screen: the
+            // header (thumbnail + bold name) opens the series page, the rows
+            // beneath it play. A caption-sized link in each row was too small
+            // to hit and repeated the name per row.
             VStack(spacing: 0) {
-                ForEach(continueListening.prefix(4)) { item in
-                    ContinueListeningRow(item: item, onDismiss: {
-                        withAnimation {
-                            playbackState.dismissFromRecent(discourseId: item.id)
-                        }
-                    })
-                    if item.id != continueListening.prefix(4).last?.id {
-                        Divider().padding(.leading, 68)
+                let groups = continueListeningGroups
+                ForEach(groups) { group in
+                    ContinueListeningHeader(seriesInfo: group.seriesInfo, count: group.items.count)
+                    ForEach(group.items) { item in
+                        ContinueListeningRow(item: item, onDismiss: {
+                            withAnimation {
+                                playbackState.dismissFromRecent(discourseId: item.id)
+                            }
+                        })
+                    }
+                    if group.id != groups.last?.id {
+                        Divider()
                     }
                 }
             }
@@ -410,6 +438,45 @@ struct SeriesThumbnailView: View {
     }
 }
 
+// MARK: - Continue Listening Header
+
+/// Series header for a Continue Listening group, styled like the Downloads
+/// section headers. The whole row opens the series page.
+private struct ContinueListeningHeader: View {
+    let seriesInfo: SeriesInfo
+    let count: Int
+
+    var body: some View {
+        NavigationLink(value: seriesInfo) {
+            HStack(spacing: 10) {
+                SeriesThumbnailView(name: seriesInfo.name, size: 32, seriesID: seriesInfo.id)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(seriesInfo.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text("\(seriesInfo.count) discourses · \(count) in progress")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.quaternary)
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the series")
+    }
+}
+
 // MARK: - Continue Listening Row
 
 private struct ContinueListeningRow: View {
@@ -435,39 +502,29 @@ private struct ContinueListeningRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Button {
-                playItem()
-            } label: {
-                HStack(spacing: 12) {
-                    SeriesThumbnailView(name: item.seriesInfo.name, size: 48, seriesID: item.seriesInfo.id)
+            // The series name is in the group header above, so the row is just
+            // the discourse and its progress; tapping either plays.
+            Button { playItem() } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Discourse \(item.discourse.number)")
+                        .font(.subheadline)
+                        .foregroundStyle(isCurrentTrack ? Color.accent : .primary)
+                        .lineLimit(1)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        // Discourse number leads as the row's identity, series
-                        // name is the subtitle. The old "<series> - #N" title
-                        // truncated on narrow screens and repeated the name.
-                        Text("Discourse \(item.discourse.number)")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-
-                        Text(item.seriesInfo.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.primary.opacity(0.1))
-                                    .frame(height: 3)
-                                Capsule()
-                                    .fill(Color.accent)
-                                    .frame(width: geo.size.width * progressFraction, height: 3)
-                            }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.primary.opacity(0.1))
+                                .frame(height: 3)
+                            Capsule()
+                                .fill(Color.accent)
+                                .frame(width: geo.size.width * progressFraction, height: 3)
                         }
-                        .frame(height: 3)
                     }
+                    .frame(height: 3)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
