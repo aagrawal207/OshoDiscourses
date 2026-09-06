@@ -22,6 +22,21 @@ enum SeriesMetadata {
         return "\(seriesName) \(desc.sourceText) \(desc.themes.joined(separator: " "))"
     }
 
+    /// The player's subtitle: "Discourse 1 · Pune, 1976". Only 33 of the 259
+    /// series carry a recording place and year, so the origin is appended when
+    /// known and dropped entirely otherwise, never leaving a dangling "· ".
+    /// Either half may also be missing on its own, which must not leave a stray
+    /// comma, so blanks are filtered before joining.
+    static func discourseSubtitle(number: Int, seriesName: String) -> String {
+        let label = "Discourse \(number)"
+        guard let desc = descriptions[seriesName] else { return label }
+        let origin = [desc.location, desc.year]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        return origin.isEmpty ? label : "\(label) · \(origin)"
+    }
+
     /// Pre-lowercased "name + description + themes" per series, built once.
     /// The Library search runs on every keystroke over all 261 series —
     /// rebuilding and lowercasing the concatenated string each time was
