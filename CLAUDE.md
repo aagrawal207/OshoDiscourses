@@ -136,10 +136,13 @@ OshoDiscoursesTests/
   text-length estimate (share of characters = share of duration, 50-character
   floor). The user's "Audio is here" anchors bend all three and win over
   aligned starts they contradict. With aligned timing the reader also marks
-  the sentence being spoken (interpolated within the paragraph). Paragraphs
-  longer than ~360 letters are shown as several blocks cut at sentence
-  boundaries (`TranscriptBlocks`, ~240 letters each); the highlight, "Play
-  from here" and "Audio is here" act on a block, and a block anchor stores
+  the sentence being spoken (interpolated within the paragraph). By default
+  each sentence is its own row (`TranscriptBlocks.sentenceRanges`, fragments
+  under 40 letters fold into the previous sentence) so the highlight and
+  anchors point at one sentence; the "One sentence per line" toggle in the
+  reader menu (`UserSettings.transcriptSentenceLayout`) falls back to blocks
+  of ~240 letters cut at sentence boundaries for paragraphs over ~360. The
+  highlight, "Play from here" and "Audio is here" act on a row, and a row anchor stores
   its position in the paragraph (`TranscriptAnchor.fraction`, nil = middle
   for anchors from older versions). Anchors +
   last-read paragraph live in `transcript_state.json` and sync via iCloud;
@@ -197,7 +200,7 @@ OshoDiscoursesTests/
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
 - [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
 - [x] Transcript timing shipped for every aligned discourse (AlignmentCatalog, iOS 18+, both languages) + sentence-level highlight
-- [x] Long transcript paragraphs shown as sentence-aligned blocks of 4-8 lines (state stays per source paragraph)
+- [x] Transcript shown one sentence per row (lyrics style; toggle back to 4-8 line blocks); state stays per source paragraph
 - [x] Transcript speech sync on device (iOS 26) for discourses the catalog lacks — English via SpeechTranscriber, Hindi via DictationTranscriber
 - [x] Home > Continue Listening: series name is a link to the series page (Downloads-header style)
 
@@ -256,7 +259,7 @@ Features from the RN version — port status:
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
-- Build succeeds as of 2026-09-06 (243 tests passing; Release verified for device arm64 and simulator)
+- Build succeeds as of 2026-09-06 (244 tests passing; Release verified for device arm64 and simulator)
 - Regenerate shipped timings: `Tools/AlignTranscripts/build.sh` then `build/AlignTranscripts/AlignTranscripts align --parallel 4` (resumable; per-discourse results in `build/alignments/`), `... merge` writes `AlignmentCatalog.json`, `... report` prints coverage. Needs macOS 26; the first run downloads the hi_IN and en_IN speech assets.
 - Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptFollow` to ignore a saved read position. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
 - Small screens: verified on an iPhone SE (3rd gen) simulator (create one with `xcrun simctl create`; none ships by default). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.

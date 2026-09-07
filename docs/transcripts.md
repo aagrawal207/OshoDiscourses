@@ -88,10 +88,13 @@ the timing does not have.
 
 ### Display blocks
 
-oshoworld's paragraphs run to 900 characters. Paragraphs over ~360 letters
-are shown as blocks of roughly 240 letters cut at sentence boundaries
-(`TranscriptBlocks`), with blocks of one paragraph spaced closer than
-paragraph breaks. Blocks are presentation only: alignment, read positions
+oshoworld's paragraphs run to 900 characters. By default every sentence is
+its own row (`TranscriptBlocks.sentenceRanges`; sentences under 40 letters
+fold into the one before), so the highlight names one sentence and an
+anchor pins one sentence. "One sentence per line" in the reader menu turns
+that off, in which case paragraphs over ~360 letters are shown as blocks of
+roughly 240 letters cut at sentence boundaries (`TranscriptBlocks.ranges`).
+Either way, rows of one paragraph are spaced closer than paragraph breaks. Blocks are presentation only: alignment, read positions
 and anchors stay keyed by source paragraph, so shipped timings and synced
 state are unaffected. A block's time is interpolated from its character
 share of the paragraph; "Play from here" seeks to the block start and

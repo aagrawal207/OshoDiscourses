@@ -171,6 +171,12 @@ final class UserSettings {
         didSet { defaults.set(volumeBoost, forKey: Keys.volumeBoost) }
     }
     /// Point size of transcript body text, stepped from the reader.
+    /// Show each sentence of a transcript on its own line (lyrics style) so the
+    /// highlight and anchors point at one sentence; off shows paragraph blocks.
+    var transcriptSentenceLayout: Bool {
+        didSet { defaults.set(transcriptSentenceLayout, forKey: Keys.transcriptSentenceLayout) }
+    }
+
     var transcriptFontSize: Double {
         didSet { defaults.set(transcriptFontSize, forKey: Keys.transcriptFontSize) }
     }
@@ -241,6 +247,7 @@ final class UserSettings {
         static let defaultPlaybackRate = "settings.defaultPlaybackRate"
         static let volumeBoost = "settings.volumeBoost"
         static let transcriptFontSize = "settings.transcriptFontSize"
+        static let transcriptSentenceLayout = "settings.transcriptSentenceLayout"
         static let transcriptSpeechSync = "settings.transcriptSpeechSync"
     }
 
@@ -260,6 +267,7 @@ final class UserSettings {
             Keys.volumeBoost: 2.0,
             Keys.dailyAccentShuffle: false,
             Keys.transcriptFontSize: Self.defaultTranscriptFontSize,
+            Keys.transcriptSentenceLayout: true,
             Keys.transcriptSpeechSync: false,
         ])
 
@@ -283,6 +291,7 @@ final class UserSettings {
         self.defaultPlaybackRate = d.double(forKey: Keys.defaultPlaybackRate)
         self.volumeBoost = d.double(forKey: Keys.volumeBoost)
         self.transcriptFontSize = d.double(forKey: Keys.transcriptFontSize)
+        self.transcriptSentenceLayout = d.bool(forKey: Keys.transcriptSentenceLayout)
         self.transcriptSpeechSync = d.bool(forKey: Keys.transcriptSpeechSync)
 
         // Seed today's shuffled color now that all stored props are set.

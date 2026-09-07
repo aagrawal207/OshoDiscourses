@@ -551,6 +551,18 @@ struct TranscriptAlignerTests {
         #expect(abs(shares[1].start - 1.0 / 3) < 0.05)
     }
 
+    @Test func sentenceLayoutGivesOneBlockPerSentenceAndFoldsFragments() {
+        let text = "Tantra is science, tantra is not philosophy. Why? Why this method? To understand philosophy is easy because only your intellect is required. It is the same! The reality remains the same; only clothes differ."
+        let parts = TranscriptBlocks.sentenceRanges(in: text).map { String(text[$0]) }
+        #expect(parts == [
+            "Tantra is science, tantra is not philosophy. Why? Why this method?",
+            "To understand philosophy is easy because only your intellect is required. It is the same!",
+            "The reality remains the same; only clothes differ.",
+        ])
+        #expect(TranscriptBlocks.sentenceRanges(in: "").isEmpty)
+        #expect(TranscriptBlocks.sentenceRanges(in: "Short.").count == 1)
+    }
+
     @Test func noTinyRemainderBlock() {
         let text = String(repeating: sentence, count: 8) + "Short end."
         let ranges = TranscriptBlocks.ranges(in: text)

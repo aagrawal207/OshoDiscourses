@@ -179,6 +179,15 @@ struct TranscriptView: View {
         .onChange(of: discourseState?.anchors) { _, _ in rebuildModel() }
         .onChange(of: discourseState?.alignment) { _, _ in rebuildModel() }
         .onChange(of: settings.transcriptSpeechSync) { _, _ in rebuildModel() }
+        .onChange(of: settings.transcriptSentenceLayout) { _, sentences in
+            guard let transcript else { return }
+            let paragraph = block(scrolledID)?.paragraph
+            blocks = Self.blocks(for: transcript, sentences: sentences)
+            selectedBlock = nil
+            currentBlock = nil
+            updateCurrentParagraph(for: player.currentTime)
+            scrolledID = isFollowing ? currentBlock : paragraph.flatMap(firstBlock(ofParagraph:))
+        }
         .onChange(of: aligner.status) { _, status in
             guard aligner.discourseID == discourseID else { return }
             switch status {
@@ -297,8 +306,8 @@ struct TranscriptView: View {
             }
         }
         // Cuts within one paragraph sit closer than real paragraph breaks.
-        .padding(.top, block.isFirstInParagraph ? 10 : 4)
-        .padding(.bottom, block.isLastInParagraph ? 10 : 4)
+        .padding(.top, block.isFirstInParagraph ? 10 : 3)
+        .padding(.bottom, block.isLastInParagraph ? 10 : 3)
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -407,7 +416,7 @@ struct TranscriptView: View {
         rebuildModel()
         withAnimation { selectedBlock = nil }
         resumeFollowing()
-        showToast("Synced to this paragraph")
+        showToast(settings.transcriptSentenceLayout ? "Synced to this sentence" : "Synced to this paragraph")
     }
 
     // MARK: - Following
@@ -487,7 +496,7 @@ struct TranscriptView: View {
             let id = discourseID
             let shipped = await Task.detached(priority: .userInitiated) { AlignmentCatalog.entry(for: id) }.value
             transcript = loaded
-            blocks = Self.blocks(for: loaded)
+            blocks = Self.blocks(for: loaded, sentences: settings.transcriptSentenceLayout)
             shippedAlignment = shipped?.paragraphCount == loaded.paragraphs.count ? shipped : nil
             rebuildModel()
             // Land where the reader left off, or on the audio.
@@ -527,10 +536,10 @@ struct TranscriptView: View {
         #endif
     }
 
-    static func blocks(for transcript: Transcript) -> [Block] {
+    static func blocks(for transcript: Transcript, sentences: Bool) -> [Block] {
         var result: [Block] = []
         for paragraph in transcript.paragraphs {
-            let ranges = TranscriptBlocks.ranges(in: paragraph.text)
+            let ranges = sentences ? TranscriptBlocks.sentenceRanges(in: paragraph.text) : TranscriptBlocks.ranges(in: paragraph.text)
             let shares = TranscriptBlocks.fractions(of: ranges, in: paragraph.text)
             for (i, range) in ranges.enumerated() {
                 result.append(Block(
@@ -594,6 +603,14 @@ struct TranscriptView: View {
                         stepFontSize(1)
                     } label: { Label("Larger", systemImage: "textformat.size.larger") }
                         .disabled(settings.transcriptFontSize >= UserSettings.transcriptFontSizes.last!)
+                }
+                Section("Layout") {
+                    Toggle(isOn: Binding(
+                        get: { settings.transcriptSentenceLayout },
+                        set: { settings.transcriptSentenceLayout = $0 }
+                    )) {
+                        Label("One sentence per line", systemImage: "text.justify.leading")
+                    }
                 }
                 if isPlayingThis {
                     Section("Timing") {

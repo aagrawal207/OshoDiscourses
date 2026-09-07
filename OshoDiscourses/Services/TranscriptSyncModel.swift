@@ -309,6 +309,24 @@ enum TranscriptBlocks {
     /// Paragraphs up to this long stay whole.
     static let splitThreshold = 360
 
+    /// Letters below which a sentence is too small to stand alone ("Why?",
+    /// "It is the same!") and joins the sentence before it.
+    static let minimumSentenceLength = 40
+
+    /// One block per sentence, with fragments folded into their predecessor.
+    /// The listener can then pin the highlight to a single sentence.
+    static func sentenceRanges(in text: String) -> [Range<String.Index>] {
+        var result: [Range<String.Index>] = []
+        for range in TranscriptSentences.ranges(in: text) {
+            if let last = result.last, weight(text[range]) < minimumSentenceLength || weight(text[last]) < minimumSentenceLength {
+                result[result.count - 1] = last.lowerBound..<range.upperBound
+            } else {
+                result.append(range)
+            }
+        }
+        return result
+    }
+
     static func ranges(in text: String) -> [Range<String.Index>] {
         let sentences = TranscriptSentences.ranges(in: text)
         let weights = sentences.map { weight(text[$0]) }
