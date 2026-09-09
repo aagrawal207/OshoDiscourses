@@ -40,6 +40,7 @@ OshoDiscourses/
 │   ├── Downloads/DownloadsView.swift   # "My Activity" tab — downloads + stats/bookmarks links + storage meter
 │   ├── BookmarksView.swift             # Bookmark list (built) — filter chips, swipe-delete, play/redownload
 │   ├── Settings/SettingsView.swift     # Preferences: language, player/downloads, noise reduction, appearance, about
+│   ├── Settings/TipJarView.swift       # Support Development sheet: consumable tips via StoreKit 2
 │   └── Settings/ListeningStatsView.swift # Listening stats dashboard
 ├── Services/
 │   ├── AudioPlayerService.swift        # AVPlayer + lock screen controls + audio-session interruption/route recovery
@@ -61,6 +62,7 @@ OshoDiscourses/
 │   ├── SpeechAlignmentService.swift    # On-device fallback (iOS 26) for discourses AlignmentCatalog lacks -> paragraph timings
 │   ├── SpeechWordRecognizer.swift      # SpeechAnalyzer wrapper: SpeechTranscriber (English) / DictationTranscriber (Hindi), words with time ranges
 │   ├── TranscriptAligner.swift         # Unique-trigram landmarks + LIS chain -> paragraph start times (any script)
+│   ├── TipJarService.swift             # StoreKit 2 tip jar: load products, purchase, finish, Transaction.updates
 │   └── UserSettings.swift              # @Observable singleton over UserDefaults
 ├── RNNoise/                            # Vendored RNNoise C sources + bridging header
 ├── Bridging/                           # Single Obj-C bridging header (RNNoise + DeepFilter)
@@ -198,6 +200,7 @@ OshoDiscoursesTests/
 - [x] iCloud sync of progress + bookmarks + daily stats (silent, NSUbiquitousKeyValueStore)
 - [x] Downloads excluded from iCloud backup (re-downloadable content)
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
+- [x] Tip jar (Settings > About > Support Development): four consumable IAPs ($3/$5/$10/$25) that unlock nothing. App Review rejected the earlier buymeacoffee link under 3.1.1
 - [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
 - [x] Transcript timing shipped for every aligned discourse (AlignmentCatalog, iOS 18+, both languages) + sentence-level highlight
 - [x] Transcript shown one sentence per row (lyrics style; toggle back to 4-8 line blocks); state stays per source paragraph
@@ -235,6 +238,7 @@ OshoDiscoursesTests/
 - **Pre-rendering after download was built and removed** — it worked, but settings baked into each file (killing instant A/B), an ~85 minute discourse took ~20 minutes to render, and every copy doubled that discourse's storage. See `docs/noise-reduction-lab.md`.
 - **DeepFilterNet strength = attenuation limit, not dry/wet** — blending the untouched signal back in would reintroduce the very noise the model removed, and would need sample-alignment against the model's lookahead. Output is always fully wet.
 - **DeepFilterNet failures degrade to passthrough** — a panic-safe Rust bridge (`catch_unwind`) plus explicit UI status, so a bad model or frame never crashes playback and never silently substitutes another denoiser.
+- **Donations go through In-App Purchase, not a link** — App Review (3.1.1) treats any developer donation as a digital purchase, even one that unlocks nothing, so the buymeacoffee link was rejected. Consumable tips through StoreKit 2 are the only path Apple accepts on every storefront; the US link-out exception needs its own entitlement and covers one country. Products: `com.agraabhi.oshodiscourses.tip.{small,medium,large,grand}`; `OshoDiscourses/TipJar.storekit` mirrors them for the simulator (applied only when Xcode itself launches the app; `simctl launch` and `SKTestSession` under `xcodebuild test` both see no products).
 - **No database** — catalog is static structs, downloads tracked by filesystem, settings in UserDefaults.
 - **Services as @Observable** — injected via .environment(), shared app-wide.
 - **Apple Music dark UI** — true black, white text, .ultraThinMaterial for glass, SF Symbols.
@@ -261,7 +265,7 @@ Features from the RN version — port status:
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
 - Build succeeds as of 2026-09-06 (244 tests passing; Release verified for device arm64 and simulator)
 - Regenerate shipped timings: `Tools/AlignTranscripts/build.sh` then `build/AlignTranscripts/AlignTranscripts align --parallel 4` (resumable; per-discourse results in `build/alignments/`), `... merge` writes `AlignmentCatalog.json`, `... report` prints coverage. Needs macOS 26; the first run downloads the hi_IN and en_IN speech assets.
-- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptFollow` to ignore a saved read position. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
+- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptFollow` to ignore a saved read position, `-debugTipJar` to open the tip sheet. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
 - Small screens: verified on an iPhone SE (3rd gen) simulator (create one with `xcrun simctl create`; none ships by default). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.
 - Transcript reader keeps the screen awake (`isIdleTimerDisabled`) only while its discourse is playing and the app is active.
 - Seed a simulator download for testing: copy an mp3 to `Documents/Osho Discourses/<Series>/<Series> - #N.mp3` and write `{"<discourseID>": "<relative path>"}` to `Library/Application Support/.download_manifest.json`.
