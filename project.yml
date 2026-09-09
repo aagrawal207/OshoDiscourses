@@ -11,6 +11,10 @@ schemes:
         OshoDiscourses: all
     run:
       config: Debug
+      # Local StoreKit products so the tip jar can be exercised in a
+      # simulator without App Store Connect; TestFlight/App Store use the
+      # real products with the same ids.
+      storeKitConfiguration: OshoDiscourses/TipJar.storekit
     test:
       config: Debug
       targets:
@@ -29,6 +33,7 @@ targets:
       - path: OshoDiscourses
         excludes:
           - Info.plist
+          - TipJar.storekit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses

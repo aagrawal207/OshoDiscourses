@@ -3,6 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
     @Environment(AudioPlayerService.self) private var player
+    @State private var showTipJar = false
+    #if DEBUG
+    /// `-debugTipJar` opens the tip sheet on launch for layout checks.
+    private var debugTipJar: Bool { ProcessInfo.processInfo.arguments.contains("-debugTipJar") }
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -14,6 +19,14 @@ struct SettingsView: View {
                 moreAppsSection
                 aboutSection
             }
+            .sheet(isPresented: $showTipJar) { TipJarView() }
+            #if DEBUG
+            .task {
+                guard debugTipJar else { return }
+                try? await Task.sleep(for: .seconds(2))   // after the tab switch
+                showTipJar = true
+            }
+            #endif
             // Use the Form's native grouped background so sections render as
             // rounded cards: light-gray page + white cards in light mode, true
             // black + dark-gray cards in dark mode. (An earlier systemBackground
@@ -257,6 +270,12 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
+            // In-app tips through StoreKit; App Review does not allow linking
+            // to an outside donation page.
+            Button { showTipJar = true } label: {
+                linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent, trailing: "chevron.right")
+            }
+
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }
@@ -280,13 +299,13 @@ struct SettingsView: View {
 
     /// Compact About-link row: smaller label, subtle trailing arrow, tighter
     /// height than a default Form row. Shared by the About links so they match.
-    private func linkRow(_ title: String, icon: String, tint: Color = .primary) -> some View {
+    private func linkRow(_ title: String, icon: String, tint: Color = .primary, trailing: String = "arrow.up.right") -> some View {
         HStack {
             Label(title, systemImage: icon)
                 .font(.subheadline)
                 .foregroundStyle(tint)
             Spacer()
-            Image(systemName: "arrow.up.right")
+            Image(systemName: trailing)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

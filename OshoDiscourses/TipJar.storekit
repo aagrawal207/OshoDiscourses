@@ -1,0 +1,123 @@
+{
+  "identifier": "8F1D2C3A-0000-4000-8000-000000000001",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "3.00",
+      "familyShareable": false,
+      "internalID": "6F1A2B30",
+      "localizations": [
+        {
+          "description": "A coffee for the developer.",
+          "displayName": "Small tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.oshodiscourses.tip.small",
+      "referenceName": "Small tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "5.00",
+      "familyShareable": false,
+      "internalID": "6F1A2B31",
+      "localizations": [
+        {
+          "description": "Covers a month of the odd fix.",
+          "displayName": "Generous tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.oshodiscourses.tip.medium",
+      "referenceName": "Generous tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "10.00",
+      "familyShareable": false,
+      "internalID": "6F1A2B32",
+      "localizations": [
+        {
+          "description": "Funds an afternoon on a new feature.",
+          "displayName": "Big tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.oshodiscourses.tip.large",
+      "referenceName": "Big tip",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "25.00",
+      "familyShareable": false,
+      "internalID": "6F1A2B33",
+      "localizations": [
+        {
+          "description": "You are keeping this app alive.",
+          "displayName": "Grand tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.oshodiscourses.tip.grand",
+      "referenceName": "Grand tip",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": [
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Load Products"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Purchase"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Verification"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Store Sync"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Subscription Status"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Transaction"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Manage Subscriptions Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Refund Request Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

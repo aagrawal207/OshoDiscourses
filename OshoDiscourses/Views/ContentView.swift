@@ -92,6 +92,7 @@ struct ContentView: View {
                     }
                 }
             }
+            if args.contains("-debugTipJar") { selectedTab = 3 }
             guard let flag = args.firstIndex(of: "-debugTranscript"), args.indices.contains(flag + 1) else { return }
             let id = args[flag + 1]
             try? await Task.sleep(for: .seconds(1.5))
