@@ -270,11 +270,12 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
-            // In-app tips through StoreKit; App Review does not allow linking
-            // to an outside donation page.
-            Button { showTipJar = true } label: {
-                linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent, trailing: "chevron.right")
-            }
+            // Tip jar (TipJarView) is built but hidden until the In-App
+            // Purchase products exist in App Store Connect; App Review does
+            // not allow linking to an outside donation page instead.
+            // Button { showTipJar = true } label: {
+            //     linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent, trailing: "chevron.right")
+            // }
 
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")

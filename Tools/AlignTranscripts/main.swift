@@ -153,7 +153,14 @@ struct AlignTranscripts {
                     let engines = enginesByLanguage
                     while let (index, item) = await queue.next() {
                         guard let engine = engines[item.1.language] else { continue }
-                        let result = await alignOne(item.0, series: item.1, engine: engine)
+                        var result = await alignOne(item.0, series: item.1, engine: engine)
+                        // A dead connection fails every download instantly and
+                        // would burn through the whole list; wait it out instead.
+                        while result.error?.contains("offline") == true || result.error?.contains("connection was lost") == true {
+                            print("network down; retrying \(item.0.id) in 60s"); fflush(stdout)
+                            try? await Task.sleep(for: .seconds(60))
+                            result = await alignOne(item.0, series: item.1, engine: engine)
+                        }
                         if let data = try? encoder.encode(result) {
                             try? data.write(to: resultURL(item.0.id), options: .atomic)
                         }

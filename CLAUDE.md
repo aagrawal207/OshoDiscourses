@@ -200,7 +200,7 @@ OshoDiscoursesTests/
 - [x] iCloud sync of progress + bookmarks + daily stats (silent, NSUbiquitousKeyValueStore)
 - [x] Downloads excluded from iCloud backup (re-downloadable content)
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
-- [x] Tip jar (Settings > About > Support Development): four consumable IAPs ($3/$5/$10/$25) that unlock nothing. App Review rejected the earlier buymeacoffee link under 3.1.1
+- [ ] Tip jar (built, row commented out in SettingsView until the IAP products exist in App Store Connect): four consumable IAPs ($3/$5/$10/$25) that unlock nothing. App Review rejected the earlier buymeacoffee link under 3.1.1
 - [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
 - [x] Transcript timing shipped for every aligned discourse (AlignmentCatalog, iOS 18+, both languages) + sentence-level highlight
 - [x] Transcript shown one sentence per row (lyrics style; toggle back to 4-8 line blocks); state stays per source paragraph
