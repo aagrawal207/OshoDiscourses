@@ -261,7 +261,7 @@ struct DownloadsView: View {
                         onDeleteSeries: isEditing ? nil : { seriesPendingDelete = group.seriesInfo }
                     )
                 } footer: {
-                    // Tip + storage live as plain footer text under the last
+                    // Hint + storage live as plain footer text under the last
                     // section — small and informational, not a tappable card.
                     if index == filteredDownloads.count - 1 {
                         downloadsFooter

@@ -257,10 +257,6 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
-            Link(destination: URL(string: "https://buymeacoffee.com/aagrawal207")!) {
-                linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent)
-            }
-
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }
@@ -275,7 +271,6 @@ struct SettingsView: View {
                 Text("Acknowledgements: All discourses are copyright OSHO International Foundation. Audio is served from oshoworld.com.")
                 Text("Noise reduction uses RNNoise (Xiph.Org, BSD 3-Clause) and DeepFilterNet by Hendrik Schröter (MIT/Apache-2.0).")
                 Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
-                Text("If the app is useful to you, a coffee helps me keep working on it. It's a voluntary thank-you, not a purchase, and unlocks nothing.")
                 Text("Your listening progress, bookmarks, and stats sync between your devices through your own iCloud. Everything else stays on your phone. There are no accounts, no servers, and no tracking of any kind.")
             }
             .padding(.top, 8)
@@ -284,7 +279,7 @@ struct SettingsView: View {
     }
 
     /// Compact About-link row: smaller label, subtle trailing arrow, tighter
-    /// height than a default Form row. Shared by all three links so they match.
+    /// height than a default Form row. Shared by the About links so they match.
     private func linkRow(_ title: String, icon: String, tint: Color = .primary) -> some View {
         HStack {
             Label(title, systemImage: icon)
