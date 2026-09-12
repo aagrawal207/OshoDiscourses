@@ -61,6 +61,13 @@ the middle on. One anchor around paragraph 3 removes most of the drift.
 
 ## Timing
 
+The completed batch and retries cover 4,932 of 4,946 transcribed discourses
+(99.7%): 2,960 English and 1,972 Hindi. Approximately 83% of paragraphs have
+matched starts; gaps are interpolated. The remaining 14 recordings failed
+text matching, with no outstanding download failures. For example, the audio
+for Dharam Sadhana Ke Sutra #5 matches the text on the site's #4 page rather
+than its own page. Repeating speech recognition cannot correct that mapping.
+
 Paragraph start times come from three sources, in order of preference:
 
 1. `AlignmentCatalog.json`, shipped with the app. `Tools/AlignTranscripts`
@@ -138,7 +145,40 @@ Notes:
   `assetInstallationRequest`, or it fails with "not subscribed to
   transcription.en". The simulator reports no supported speech locales at
   all; test on a device or through the macOS tool.
-- Batch throughput on an M-series Mac: ~42 s per discourse sequentially,
-  ~18 s with four parallel analyzers; the full catalog takes about a day.
-  `align` is resumable (one JSON per discourse in `build/alignments/`),
-  `report` summarises, `merge` writes the catalog.
+- The English sample took ~42 s per discourse sequentially and ~18 s per
+  discourse across four analyzers. Long Hindi recordings took several
+  minutes each in the full run; network interruptions also extend the run.
+
+### Regenerating and retrying timings
+
+```sh
+Tools/AlignTranscripts/build.sh
+build/AlignTranscripts/AlignTranscripts align --parallel 4
+build/AlignTranscripts/AlignTranscripts align --parallel 2 --retry-downloads
+build/AlignTranscripts/AlignTranscripts report
+build/AlignTranscripts/AlignTranscripts merge
+```
+
+Results are checkpointed per discourse in `build/alignments/`. Successful
+entries are reused on subsequent runs. `--retry-downloads` retries audio
+fetch failures; `--retry-failed` also retries speech-recognition and matching
+failures. The tool merges completed timings into the bundled catalog when
+the run finishes. Use `report` to check failures even when the process exits
+normally.
+
+Use two workers for retries dominated by oshoworld downloads. The eight-worker
+pass left 91 download failures; every original URL subsequently returned an
+HTTP 206 response with an MP3 header and matched the site's current API path.
+The failure message alone did not establish that the link was broken.
+
+Archive filename matches also need recording checks. For example, the archive
+metadata lists From Death to Deathlessness #11 as 5,370.16 seconds, about
+42 seconds longer than the downloaded oshoworld recording. Timings generated
+against one version cannot be assumed to fit the other.
+
+Wisdom of the Sands #3 also had a damaged archive copy: its 1,993,299-byte
+MP3 advertises 5,482 seconds, but decoding yields only 292.734 seconds of
+audio. The complete oshoworld copy is 34,358,099 bytes and 5,387.389 seconds;
+it aligns 102 of 121 paragraphs. `scripts/extend-archive-catalog.py` removes
+this mirror through `UNUSABLE_AUDIO`, so both the app and alignment tool
+use the original. The exclusion is covered by generator and app catalog tests.

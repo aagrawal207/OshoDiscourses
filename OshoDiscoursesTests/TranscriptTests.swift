@@ -623,16 +623,20 @@ struct TranscriptAlignerTests {
         #expect(!entry.matches(paragraphCount: 3, duration: 610))
     }
 
-    @Test func bundledCatalogEntriesDecodeAndPointAtTranscripts() {
-        // Empty until the batch tool has run; every entry it does contain must
-        // be for a discourse that exists and has a transcript.
+    @Test func bundledCatalogEntriesDecodeAndPointAtTranscripts() throws {
+        #expect(AlignmentCatalog.count >= 4_800)
         var checked = 0
         for (id, _) in Catalog.discourseLookup where AlignmentCatalog.hasAlignment(id) {
-            let entry = try? #require(AlignmentCatalog.entry(for: id))
+            let entry = try #require(AlignmentCatalog.entry(for: id), Comment(rawValue: id))
             #expect(TranscriptCatalog.hasTranscript(id), Comment(rawValue: id))
-            #expect((entry?.matchedCount ?? 0) > 0, Comment(rawValue: id))
+            #expect(entry.paragraphCount > 0 && entry.matchedCount > 0, Comment(rawValue: id))
+            #expect(entry.duration.isFinite && entry.duration > 0, Comment(rawValue: id))
+            let startsWithinRecording = entry.starts.compactMap { $0 }.allSatisfy {
+                $0.isFinite && $0 >= 0 && $0 <= entry.duration
+            }
+            #expect(startsWithinRecording, Comment(rawValue: id))
             checked += 1
-            if checked >= 200 { break }
         }
+        #expect(checked == AlignmentCatalog.count)
     }
 }

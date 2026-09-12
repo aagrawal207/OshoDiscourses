@@ -12,7 +12,7 @@ import Foundation
 struct ArchiveCatalogTests {
 
     @Test func mappingLoadsAndCoversMostOfTheCatalog() {
-        // 4,876 of 5,481 mapped at generation time. Assert a floor, not the
+        // 4,875 of 5,481 mapped at generation time. Assert a floor, not the
         // exact number, so regenerating the mapping doesn't break the test.
         #expect(ArchiveCatalog.mappedSeriesCount >= 320)
         #expect(ArchiveCatalog.mappedDiscourseCount >= 4800)
@@ -61,6 +61,14 @@ struct ArchiveCatalogTests {
         let series = try #require(Catalog.allSeries.first { $0.name == "Ashtavakra Maha Geeta" })
         let cover = try #require(ArchiveCatalog.coverURL(forSeriesID: series.id))
         #expect(cover.absoluteString.hasSuffix(".png"))
+    }
+
+    @Test func damagedWisdomRecordingUsesTheOriginalSource() throws {
+        let entry = try #require(Catalog.discourseLookup["english-Wisdom_Of_The_Sands-3"])
+        #expect(ArchiveCatalog.audioURL(for: entry.discourse) == nil)
+        #expect(entry.discourse.audioURL ==
+            "https://www.oshoworld.com/wp-content/uploads/newAudios/wisdom-of-the-sands-series/Wisdom Of The Sands Vol 1 03.mp3")
+        #expect(ArchiveCatalog.coverURL(forSeriesID: entry.series.id) != nil)
     }
 
     // MARK: - Fallback decision

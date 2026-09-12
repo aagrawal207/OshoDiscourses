@@ -8,7 +8,7 @@ import Speech
 /// paragraph start times. Runs on macOS 26 (same Speech framework as iOS 26).
 ///
 ///   align [--language english|hindi] [--series <seriesID>] [--limit N]
-///         [--parallel N] [--retry-failed] [--only <discourseID>]
+///         [--parallel N] [--retry-failed | --retry-downloads] [--only <discourseID>]
 ///   merge      write Resources/AlignmentCatalog.json from the results so far
 ///   report     print coverage and failure counts
 ///
@@ -54,6 +54,7 @@ struct AlignTranscripts {
         var limit = Int.max
         var parallel = 1
         var retryFailed = false
+        var retryDownloads = false
 
         init(_ args: [String]) {
             var i = 0
@@ -66,6 +67,7 @@ struct AlignTranscripts {
                 case "--limit": limit = Int(value()) ?? Int.max
                 case "--parallel": parallel = max(1, Int(value()) ?? 1)
                 case "--retry-failed": retryFailed = true
+                case "--retry-downloads": retryDownloads = true
                 default: print("ignoring argument \(args[i])")
                 }
                 i += 1
@@ -126,7 +128,8 @@ struct AlignTranscripts {
         let all = workList(options)
         let pending = all.filter { item in
             guard let existing = loadResult(item.0.id) else { return true }
-            return existing.isFailure && options.retryFailed
+            return existing.isFailure && (options.retryFailed ||
+                (options.retryDownloads && existing.error?.hasPrefix("audio unavailable:") == true))
         }.prefix(options.limit)
         print("\(all.count) discourses with transcripts, \(pending.count) to align, parallel=\(options.parallel)")
         guard !pending.isEmpty else { return }

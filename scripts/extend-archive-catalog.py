@@ -59,6 +59,20 @@ FOLDER_ALIASES = {
     "Jesus Crucified Again": "Jesus Crucified Again 01",
 }
 
+# This mirror contains 293 seconds of audio despite a 91-minute MP3 header;
+# the oshoworld original is complete and matches its transcript.
+UNUSABLE_AUDIO = {"english-Wisdom_Of_The_Sands-3"}
+
+
+def remove_unusable_audio(archive: dict) -> list[str]:
+    removed = []
+    for discourse_id in sorted(UNUSABLE_AUDIO):
+        sid, number = discourse_id.rsplit("-", 1)
+        entry = archive.get(sid)
+        if entry and entry["files"].pop(number, None) is not None:
+            removed.append(discourse_id)
+    return removed
+
 
 def norm(title: str) -> str:
     t = re.sub(r"^\d{3}-", "", title)                 # "162-Swarn Pakhi …"
@@ -140,9 +154,12 @@ def main() -> int:
           f"({sum(len(e['files']) for e in added.values())} discourses)", file=sys.stderr)
     for name, why in skipped:
         print(f"  skipped {name!r}: {why}", file=sys.stderr)
-    if args.dry_run or not added:
-        return 0
     archive.update(added)
+    removed = remove_unusable_audio(archive)
+    for discourse_id in removed:
+        print(f"  excluded damaged mirror {discourse_id}", file=sys.stderr)
+    if args.dry_run or not (added or removed):
+        return 0
     with open(ARCHIVE_JSON, "w", encoding="utf-8") as f:
         json.dump(archive, f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     print(f"wrote {ARCHIVE_JSON}: {len(archive)} series", file=sys.stderr)
