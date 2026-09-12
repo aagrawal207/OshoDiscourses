@@ -105,14 +105,16 @@ OshoDiscoursesTests/
   with `scripts/build-transcript-catalog.py --audio-out`; `--list-missing` prints SeriesInfo
   lines for any series the site has added since.
 - Archive.org mirror: `Resources/ArchiveCatalog.json` maps ~89% of discourses
-  (4,876 across 325 series) to the archive item
+  (4,875 across 325 series) to the archive item
   `osho-audio-discourses-collection` — ~12x faster downloads. Downloads try
   archive first, fall back to oshoworld (see `DownloadService.downloadSources`).
   Mirror also provides per-series cover art (first track's extracted PNG),
   shown in thumbnails via `ArchiveCatalog.coverURL`. The original mapping was
   generated offline; `scripts/extend-archive-catalog.py` adds entries for
   series the JSON lacks (folder matched by title; files paired by sorted order
-  when the counts agree, or by volume number).
+  when the counts agree, or by volume number). Its `UNUSABLE_AUDIO` exclusions
+  keep damaged mirrors out, including Wisdom of the Sands #3, whose archive
+  file contains less than five minutes of a roughly 90-minute talk.
 - Curated lists: Popular English/Hindi, Beginner English/Hindi
 - All in `Resources/Catalog.swift` — `Catalog.allSeries`, `Catalog.allDiscourses()`
 
@@ -133,7 +135,7 @@ OshoDiscoursesTests/
   from backup, and deleted with the audio. Opening a transcript that isn't
   cached fetches it on demand.
 - Sync: paragraph start times come from `AlignmentCatalog.json` (computed on
-  a Mac by `Tools/AlignTranscripts`, ~96% of paragraphs matched, gaps
+  a Mac by `Tools/AlignTranscripts`, ~83% of paragraphs matched in the full run, gaps
   interpolated), else on iOS 26 from on-device speech alignment, else from a
   text-length estimate (share of characters = share of duration, 50-character
   floor). The user's "Audio is here" anchors bend all three and win over
@@ -151,6 +153,9 @@ OshoDiscoursesTests/
   device alignments stay local. A shipped entry is used only when its
   paragraph count matches the parsed transcript and its duration is within
   2.5 s of the file being played.
+- Shipped timing covers 4,932 of 4,946 transcribed discourses: 2,960 English
+  and 1,972 Hindi. The remaining 14 failed text matching after all download
+  failures were recovered; some site pages contain another discourse's text.
 
 ### URL patterns
 - English underscore: `https://www.oshoworld.com/wp-content/uploads/newAudios/{Folder}_(count)/{Prefix}_{num}.mp3`
@@ -200,7 +205,7 @@ OshoDiscoursesTests/
 - [x] iCloud sync of progress + bookmarks + daily stats (silent, NSUbiquitousKeyValueStore)
 - [x] Downloads excluded from iCloud backup (re-downloadable content)
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
-- [ ] Tip jar (built, row commented out in SettingsView until the IAP products exist in App Store Connect): four consumable IAPs ($3/$5/$10/$25) that unlock nothing. App Review rejected the earlier buymeacoffee link under 3.1.1
+- [ ] Tip jar (Debug-only; row commented out in SettingsView): four consumable IAPs ($3/$5/$10/$25) that unlock nothing. The view and service are excluded from Release until the products and purchase flow are ready to launch together. App Review rejected the earlier buymeacoffee link under 3.1.1
 - [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
 - [x] Transcript timing shipped for every aligned discourse (AlignmentCatalog, iOS 18+, both languages) + sentence-level highlight
 - [x] Transcript shown one sentence per row (lyrics style; toggle back to 4-8 line blocks); state stays per source paragraph
@@ -220,7 +225,7 @@ OshoDiscoursesTests/
 ## Key decisions
 
 - **Transcripts have no timestamps, so sync is an estimate the listener can correct** — oshoworld publishes plain paragraphs. The highlight assumes speech moves through the text at a constant rate and lets "Audio is here" pin a paragraph to the current time; the map is linear between pins. Measured against speech alignment on A Bird on the Wing #1, the raw estimate drifts up to ~45 s mid-talk (the opening question is read slowly), which one or two anchors remove.
-- **Timing ships as data; the device recogniser is the fallback** — the Mac aligns an 85-min talk in under a minute (four workers: ~18 s per discourse, the whole catalog in about a day), and paragraph starts as tenth-second deltas cost ~500 bytes per discourse. Shipping them gives accurate sync on iOS 18 and for Hindi, with no battery cost and no "experimental" toggle; on-device alignment remains only for discourses added after the last batch.
+- **Timing ships as data; the device recogniser is the fallback.** Paragraph starts stored as tenth-second deltas cost about 630 bytes per discourse in the full batch. Shipping them gives English and Hindi timing on iOS 18 without running recognition on the phone. The English sample averaged ~18 s per discourse across four workers; long Hindi recordings took several minutes each during the full run. On-device alignment remains available for recordings without matching shipped timing.
 - **Hindi speech goes through `DictationTranscriber`, not `SpeechTranscriber`** — iOS 26's `SpeechTranscriber` covers 30 locales with no Hindi, but `DictationTranscriber` (the keyboard-dictation models, same framework) covers 54 including `hi_IN` and runs on device with word time ranges. On Maha Geeta #5 it recognised 9,754 of 10,386 words and aligned 176 of 218 paragraphs (the unmatched are the opening Sanskrit sutras and one-line paragraphs, interpolated). The estimate drifted up to 148 s on that talk, three times the English figure, so Hindi gains most. `SFSpeechRecognizer` `hi-IN` is still server-only, so below iOS 26 Hindi relies on the shipped catalog.
 - **The aligner's tokeniser keeps combining marks outside the Latin block** — Devanagari matras, virama and nukta are combining marks that distinguish words (कि/की, क/क्); stripping to ASCII, as the first version did, reduced every Hindi token to nothing. Latin diacritics (U+0300–036F) are still dropped so "café" matches "cafe".
 - **`AssetInventory.reserve(locale:)` before any asset call** — without a reservation `assetInstallationRequest` fails with "not subscribed to transcription.en". The simulator reports no supported speech locales at all; test alignment on a device or via the macOS harness.
@@ -264,7 +269,7 @@ Features from the RN version — port status:
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
 - Simulator: iPhone 17 Pro (iOS 26.5) — UUID 8FAAABA5-25F8-4678-A8F1-B1D6B1104FB0
 - Build succeeds as of 2026-09-06 (244 tests passing; Release verified for device arm64 and simulator)
-- Regenerate shipped timings: `Tools/AlignTranscripts/build.sh` then `build/AlignTranscripts/AlignTranscripts align --parallel 4` (resumable; per-discourse results in `build/alignments/`), `... merge` writes `AlignmentCatalog.json`, `... report` prints coverage. Needs macOS 26; the first run downloads the hi_IN and en_IN speech assets.
+- Regenerate shipped timings: `Tools/AlignTranscripts/build.sh` then `build/AlignTranscripts/AlignTranscripts align --parallel 4` (resumable; per-discourse results in `build/alignments/`). Use `... align --parallel 2 --retry-downloads` for failed audio fetches, or `--retry-failed` to include recognition failures. `... merge` writes `AlignmentCatalog.json`; `... report` prints coverage. Needs macOS 26; the first run downloads the hi_IN and en_IN speech assets.
 - Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptFollow` to ignore a saved read position, `-debugTipJar` to open the tip sheet. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
 - Small screens: verified on an iPhone SE (3rd gen) simulator (create one with `xcrun simctl create`; none ships by default). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.
 - Transcript reader keeps the screen awake (`isIdleTimerDisabled`) only while its discourse is playing and the app is active.

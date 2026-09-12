@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import StoreKit
 
@@ -113,3 +114,4 @@ final class TipJarService {
         }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 import StoreKit
 
@@ -99,3 +100,4 @@ struct TipJarView: View {
         .disabled(tips.state != .idle)
     }
 }
+#endif

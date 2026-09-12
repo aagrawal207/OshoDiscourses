@@ -3,8 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
     @Environment(AudioPlayerService.self) private var player
-    @State private var showTipJar = false
     #if DEBUG
+    @State private var showTipJar = false
     /// `-debugTipJar` opens the tip sheet on launch for layout checks.
     private var debugTipJar: Bool { ProcessInfo.processInfo.arguments.contains("-debugTipJar") }
     #endif
@@ -19,8 +19,8 @@ struct SettingsView: View {
                 moreAppsSection
                 aboutSection
             }
-            .sheet(isPresented: $showTipJar) { TipJarView() }
             #if DEBUG
+            .sheet(isPresented: $showTipJar) { TipJarView() }
             .task {
                 guard debugTipJar else { return }
                 try? await Task.sleep(for: .seconds(2))   // after the tab switch
@@ -124,17 +124,9 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            HStack(spacing: 6) {
-                Text("Noise Reduction")
-                Text("BETA")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(Color.accent)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.accent.opacity(0.15), in: Capsule())
-            }
+            Text("Noise Reduction")
         } footer: {
-            Text("Compare the processors on the same passage. DeepFilterNet is the strongest and also clears steady tape hiss, at a higher battery cost. RNNoise handles varied noise but may soften the voice. Cadence targets hum and long noisy pauses more conservatively.")
+            Text("DeepFilterNet is the strongest and also clears steady tape hiss, at a higher battery cost. RNNoise handles varied noise but may soften the voice. Cadence targets hum and long noisy pauses more conservatively.")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -270,9 +262,8 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
-            // Tip jar (TipJarView) is built but hidden until the In-App
-            // Purchase products exist in App Store Connect; App Review does
-            // not allow linking to an outside donation page instead.
+            // TipJarView and its service are Debug-only until the products
+            // and purchase flow are ready to launch together.
             // Button { showTipJar = true } label: {
             //     linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent, trailing: "chevron.right")
             // }
