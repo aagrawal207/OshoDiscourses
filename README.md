@@ -1,64 +1,122 @@
 # Osho Talks
 
 <p align="center">
-  <img src="OshoDiscourses/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="112" alt="Osho Talks app icon">
+  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039">
+    <img src="docs/screenshots/osho-talks-hero.jpg" width="1100" alt="Osho Talks: 5,481 discourses in English and Hindi, with the audio player and highlighted read-along transcript">
+  </a>
 </p>
 
 <p align="center">
-  A focused iPhone app for browsing, downloading, and listening to Osho's audio discourses.
+  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039">
+    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" width="180" alt="Download on the App Store">
+  </a>
 </p>
 
 <p align="center">
-  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039"><strong>Download free on the App Store</strong></a>
-  &nbsp;|&nbsp;
-  <a href="PRIVACY.md">Privacy policy</a>
+  <strong>Free for iPhone and iPad</strong> · English &amp; Hindi · iOS 18+
+  <br>
+  No ads. No app account. No subscriptions.
 </p>
 
-## Why this app exists
-
-Many audio apps include social feeds, subscriptions, accounts, and other features that get in the way of listening. Osho Talks was built as a simpler alternative: a focused audio player with a complete listening toolkit and nothing unrelated.
-
-There are no ads, accounts, subscriptions, or tracking.
-
-## Screenshots
+Explore **5,481 Osho discourses across 351 series**, from Zen and Tantra to Tao
+and the Upanishads. Download a talk for a walk or a quiet evening, follow its
+transcript, and continue from your saved position next time.
 
 <p align="center">
-  <img src="docs/screenshots/home-and-library.jpg" width="900" alt="Home screen in light mode, the series library with language and theme filters, and the same home screen in dark mode">
+  <a href="#read-as-you-listen">Read along</a> ·
+  <a href="#a-library-for-everyday-listening">Explore &amp; download</a> ·
+  <a href="#keep-your-place-and-your-notes">Bookmarks &amp; stats</a> ·
+  <a href="SUPPORT.md">Support</a>
 </p>
+
+<sub>The player and DeNoise screenshots preview the upcoming update. Screens show
+the real app with demonstration listening history.</sub>
+
+## Read as you listen
+
+Open a transcript beside the player and follow the highlighted text. Original-language
+transcripts are available for **4,946 discourses in English and Hindi**.
+Search for a passage, change the text size, or tap a sentence to play from that point.
 
 <p align="center">
-  <img src="docs/screenshots/stats-and-bookmarks.jpg" width="900" alt="Listening stats with all-time total and streak, the daily listening history log, and bookmarks grouped by series">
+  <img src="docs/screenshots/listen-and-read.jpg" width="1100" alt="The full audio player, an English transcript with the current passage highlighted, and a Hindi transcript in light appearance">
 </p>
 
-## Features
+The reader remembers your place. If a recording's timing drifts, **Audio is here**
+lets you line the text up with what you hear.
 
-- Browse and search 5,481 discourses across 351 English and Hindi series
-- Download talks for offline listening, including background downloads
-- Continue from the exact position where you stopped
-- Listen in the background with Lock Screen, Control Center, AirPods, and AirPlay controls
-- Change playback speed from 0.5x to 2x and use voice boost
-- Reduce recording noise with the optional RNNoise filter, currently in beta
-- Read along with the transcript, lyrics-style: the paragraph and sentence being spoken are highlighted and kept in view (timing pre-computed from the speech itself for both languages), and where you left off is remembered per discourse
-- Save timestamped bookmarks with notes and categories
-- Use a countdown sleep timer or stop at the end of the current discourse
-- Automatically download the next talk and delete completed talks when enabled
-- Review listening history, daily totals, and streaks
-- Sync progress, bookmarks, and listening stats through your own iCloud account
-- Choose light, dark, or system appearance and customize the accent color
+## A library for everyday listening
 
-## Privacy
+Find a series by name or topic, filter by language, or start with the **Popular**
+and **Beginner Friendly** collections. Keep a few talks downloaded so your next
+listen is ready without a connection.
 
-Osho Talks has no developer-operated server and includes no analytics or advertising SDKs. Settings, downloaded audio, and transcripts stay on the device. Playback progress, bookmarks, listening stats, and transcript reading positions can sync between devices through the listener's own iCloud account. The optional speech sync for transcripts uses Apple's on-device recogniser; audio never leaves the device.
+<p align="center">
+  <img src="docs/screenshots/explore-and-offline.jpg" width="1100" alt="Library search and language filters, the shared DeNoise controls, and downloaded talks with storage usage">
+</p>
 
-See [PRIVACY.md](PRIVACY.md) for details.
+- **Tune older recordings.** DeNoise brings noise reduction, volume boost and
+  quiet-speech controls together. Choose Best Quality, Balanced or Gentle Cleanup,
+  and compare with the original sound. Results vary by recording.
+- **Download in the background.** Downloads continue when you switch apps or
+  lock the screen. Manage talks by series and see how much storage they use.
+- **Plan the next listen.** Optional Smart Download prepares the next discourse;
+  Smart Delete can clear finished recordings.
 
-## Requirements
+## Keep your place and your notes
 
-- iPhone or iPad running iOS 18 or later
-- Xcode with an iOS 18 or later SDK for local builds
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+Save a timestamped bookmark with a note and category, then return directly to that
+moment. Listening stats show your daily totals, streak and completed discourses.
+For an evening listen, set a countdown or stop at the end of the talk.
 
-## Build locally
+<p align="center">
+  <img src="docs/screenshots/bookmarks-and-routine.jpg" width="1100" alt="Bookmarks with personal notes, the sleep timer's countdown and end-of-discourse options, and a listening-stats dashboard">
+</p>
+
+### More ways to make listening comfortable
+
+| Feature | What it does |
+| --- | --- |
+| Continue Listening | Saves your position in each discourse and links you back to its series |
+| Background playback | Keeps audio playing with the screen locked, with Lock Screen, Control Center and AirPods controls |
+| Playback speed | Choose a pace from 0.5× to 2×, with quick back and forward controls |
+| AirPlay | Listen through a compatible speaker or other AirPlay device |
+| iCloud sync | Carries progress, bookmarks, listening stats and transcript reading state between your devices |
+| Appearance | Light, dark or system appearance, with eight accent colors |
+| Files access | Find downloaded recordings in the iOS Files app |
+
+## Free to listen. Personal by design.
+
+Every feature and discourse is available without a purchase. The upcoming
+**Support Development** tip jar offers optional, one-time tips that unlock nothing.
+
+Osho Talks has no developer-operated server and includes no analytics or advertising
+SDKs. Downloads and cached transcripts stay on your device. Synced listening data
+uses your own iCloud account. Read the [privacy policy](PRIVACY.md).
+
+<p align="center">
+  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039"><strong>Download Osho Talks free on the App Store</strong></a>
+  <br>
+  iPhone and iPad · iOS 18 or later
+</p>
+
+## Questions or feedback?
+
+See [Support](SUPPORT.md) for help with the app, missing discourses or purchases.
+You can also [report a problem on GitHub](https://github.com/aagrawal207/OshoDiscourses/issues).
+
+## For developers
+
+<details>
+<summary>Build from source</summary>
+
+The app uses Swift 6 and SwiftUI, with Apple frameworks for playback, downloads,
+media controls and iCloud sync. Noise reduction uses vendored RNNoise C sources
+and DeepFilterNet 3 through a Rust/tract bridge. The iOS app has no package-manager
+dependencies; normal app builds need no Rust toolchain.
+
+Requirements: Xcode with an iOS 26.4 or later SDK and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). The app runs on iOS 18+.
 
 ```bash
 git clone https://github.com/aagrawal207/OshoDiscourses.git
@@ -67,22 +125,26 @@ brew install xcodegen
 xcodegen generate
 xcodebuild -project OshoDiscourses.xcodeproj \
   -scheme OshoDiscourses \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'generic/platform=iOS Simulator' \
   build
 ```
 
-The app is written in Swift 6 and SwiftUI. It uses Apple frameworks for playback, downloads, media controls, and iCloud sync. There are no package-manager dependencies. RNNoise is vendored in the repository for optional noise reduction.
+Open the generated Xcode project to run on a simulator or your device.
+The [project guide](CLAUDE.md) covers architecture and development workflows.
+[Screenshot tools](Tools/StoreAssets/README.md) document how the gallery was made.
+
+</details>
 
 ## Audio and affiliation
 
-The app does not bundle discourse audio or transcripts. It accesses publicly available recordings from [oshoworld.com](https://www.oshoworld.com/) and an [Internet Archive](https://archive.org/) mirror, and fetches transcripts from the matching oshoworld.com discourse pages.
+The app does not bundle discourse audio or transcripts. It accesses publicly
+available recordings from [oshoworld.com](https://www.oshoworld.com/) and an
+[Internet Archive](https://archive.org/) mirror, with transcripts from the matching
+oshoworld.com pages.
 
-All discourses are copyright OSHO International Foundation. Osho Talks is an independent app and is not affiliated with or endorsed by the Osho International Foundation.
-
-## Feedback
-
-Report bugs or missing discourses through [GitHub Issues](https://github.com/aagrawal207/OshoDiscourses/issues).
+All discourses are copyright OSHO International Foundation. Osho Talks is an
+independent app and is not affiliated with or endorsed by the Osho International Foundation.
 
 ## License
 
-Original source code in this project is available under the [MIT License](LICENSE). Vendored RNNoise code remains under its [BSD license](OshoDiscourses/RNNoise/COPYING). Osho audio, names, imagery, and other third-party content are not covered by the MIT License.
+Original source code in this project is available under the [MIT License](LICENSE). Vendored RNNoise code remains under its [BSD license](OshoDiscourses/RNNoise/COPYING), and DeepFilterNet retains its [MIT/Apache-2.0 licenses](native/deepfilter-bridge/third-party-licenses/DeepFilterNet/). Osho audio, names, imagery, and other third-party content are not covered by the MIT License.

@@ -1,0 +1,66 @@
+[
+  {
+    "id": "01-listen",
+    "source": "player",
+    "ipadSource": "home",
+    "title": ["Osho talks.", "English & Hindi."],
+    "subtitle": "5,481 discourses across 351 series.",
+    "style": "night"
+  },
+  {
+    "id": "02-read-along",
+    "source": "transcript-english",
+    "title": ["Read along.", "Stay with the talk."],
+    "subtitle": "Follow highlighted transcripts as you listen.",
+    "style": "night"
+  },
+  {
+    "id": "03-denoise",
+    "source": "denoise",
+    "title": ["Make the voice", "easier to hear."],
+    "subtitle": "Noise reduction, volume boost and quiet-speech controls.",
+    "style": "night"
+  },
+  {
+    "id": "04-explore",
+    "source": "library",
+    "title": ["Find your", "next discourse."],
+    "subtitle": "Browse by language, series or topic.",
+    "style": "paper"
+  },
+  {
+    "id": "05-offline",
+    "source": "downloads",
+    "title": ["Download it.", "Listen offline."],
+    "subtitle": "Your saved talks, ready without a connection.",
+    "style": "paper"
+  },
+  {
+    "id": "06-hindi",
+    "source": "transcript-hindi",
+    "title": ["Listen in Hindi.", "Read along, too."],
+    "subtitle": "Original-language transcripts with adjustable text.",
+    "style": "paper"
+  },
+  {
+    "id": "07-bookmarks",
+    "source": "bookmarks",
+    "title": ["Save a moment.", "Come back to it."],
+    "subtitle": "Bookmarks with timestamps, notes and categories.",
+    "style": "night"
+  },
+  {
+    "id": "08-sleep-timer",
+    "source": "sleep-timer",
+    "title": ["Set a timer.", "Ease into the evening."],
+    "subtitle": "Choose a countdown or the end of the discourse.",
+    "style": "night"
+  },
+  {
+    "id": "09-listening-stats",
+    "source": "stats",
+    "title": ["See your listening", "over time."],
+    "subtitle": "Daily totals, streaks and completed discourses.",
+    "style": "paper"
+  }
+]

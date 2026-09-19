@@ -1,0 +1,182 @@
+{
+  "appID" : "6774409039",
+  "locale" : "en-US",
+  "sets" : [
+    {
+      "displayType" : "IPHONE_69",
+      "family" : "iphone",
+      "files" : [
+        {
+          "bytes" : 1746084,
+          "file" : "iphone\/01-listen.png",
+          "height" : 2868,
+          "md5" : "24dcd5a4200aa52dc588328941e17d1d",
+          "sha256" : "22c0831681633c0e42efee2cf322bc729223e7be655aa3c64702ed97f3dde1a7",
+          "sourceCapture" : "raw\/iphone\/player.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1975553,
+          "file" : "iphone\/02-read-along.png",
+          "height" : 2868,
+          "md5" : "b8db460a4e8427e74fb67218ab3c47ca",
+          "sha256" : "99894ff02f80e083108dc3e93372c823c5338e3d03525d271aa17fe7b4373d20",
+          "sourceCapture" : "raw\/iphone\/transcript-english.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1495672,
+          "file" : "iphone\/03-denoise.png",
+          "height" : 2868,
+          "md5" : "03bb4ca817802ea7450362cd9b011782",
+          "sha256" : "659e088f2cc88d36dba7115503d28062144b589c55e1c8564812d31135a0ea1a",
+          "sourceCapture" : "raw\/iphone\/denoise.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1381337,
+          "file" : "iphone\/04-explore.png",
+          "height" : 2868,
+          "md5" : "fbcbea5e9156a91c4569554773f70c9b",
+          "sha256" : "8462dd4e27085c4ef69990e95b1856da0117d526695c219da84038baa4fabbc3",
+          "sourceCapture" : "raw\/iphone\/library.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1294288,
+          "file" : "iphone\/05-offline.png",
+          "height" : 2868,
+          "md5" : "f5d2a10158efb81067f3b1a3b083f710",
+          "sha256" : "eb25502e43053020107368af9f1fea4ed2ae9fb6b5aea7379497ca6f42d104d6",
+          "sourceCapture" : "raw\/iphone\/downloads.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1679971,
+          "file" : "iphone\/06-hindi.png",
+          "height" : 2868,
+          "md5" : "5bc3fc280734209a848aa159ceb42068",
+          "sha256" : "bce1cbebe2b7e53e536e8bdccce4fe2f64a08c34c85b8cbfb885d537137ba61a",
+          "sourceCapture" : "raw\/iphone\/transcript-hindi.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1471218,
+          "file" : "iphone\/07-bookmarks.png",
+          "height" : 2868,
+          "md5" : "1257eb26c383ff92de257f9d256efe68",
+          "sha256" : "dd998e6627203e5cc4d7fc236eb6c7e9f09084e39685dfb9ed562a1cb50e0d50",
+          "sourceCapture" : "raw\/iphone\/bookmarks.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1933787,
+          "file" : "iphone\/08-sleep-timer.png",
+          "height" : 2868,
+          "md5" : "3771c04605d1c5ed307d1568d019de61",
+          "sha256" : "eba66c8872e5ef0f156ddbb33b4cbe87797543b3255f0db85968cc7b98edc065",
+          "sourceCapture" : "raw\/iphone\/sleep-timer.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1188040,
+          "file" : "iphone\/09-listening-stats.png",
+          "height" : 2868,
+          "md5" : "f25cd313db9745a93ff0e75c24255ff0",
+          "sha256" : "a20397ae4a78f26f349114c17c18e9b0af45ed5781fd723a2f164ce516c8b6ec",
+          "sourceCapture" : "raw\/iphone\/stats.png",
+          "width" : 1320
+        }
+      ]
+    },
+    {
+      "displayType" : "IPAD_PRO_3GEN_129",
+      "family" : "ipad",
+      "files" : [
+        {
+          "bytes" : 2775264,
+          "file" : "ipad\/01-listen.png",
+          "height" : 2752,
+          "md5" : "4036ad66ee6aae0551222f17660cf8f5",
+          "sha256" : "6e15387f63462056cfbb4deaffc92f51842cb6fc879adf881cace5f086f14cde",
+          "sourceCapture" : "raw\/ipad\/home.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 3045536,
+          "file" : "ipad\/02-read-along.png",
+          "height" : 2752,
+          "md5" : "e21a3c42e6fe895b58cda1f0c37e35c2",
+          "sha256" : "6f343838535d7e92f3c12b575e20c705f86dac43463b5d9503f03aab2df89d5d",
+          "sourceCapture" : "raw\/ipad\/transcript-english.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2791558,
+          "file" : "ipad\/03-denoise.png",
+          "height" : 2752,
+          "md5" : "8a85b8834f2381dffe76e4b300d5cda2",
+          "sha256" : "ce451277a552581fb4ab1fb264499c108f2e10802126103f26e2051fcb600e69",
+          "sourceCapture" : "raw\/ipad\/denoise.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2470424,
+          "file" : "ipad\/04-explore.png",
+          "height" : 2752,
+          "md5" : "9bd300653cf13fe7063b0f9a6f17346c",
+          "sha256" : "503ded60d46c0b01ef2f2d9913a33d2bda51249694bcf1b301caaa755df35fa6",
+          "sourceCapture" : "raw\/ipad\/library.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2260630,
+          "file" : "ipad\/05-offline.png",
+          "height" : 2752,
+          "md5" : "fb96e9bbfb48d98bc58be42b137fc4f7",
+          "sha256" : "3632a0623b62e74f653411bb32131d5e467e52f366604c143ae34b39e1989d6e",
+          "sourceCapture" : "raw\/ipad\/downloads.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2833254,
+          "file" : "ipad\/06-hindi.png",
+          "height" : 2752,
+          "md5" : "5dbc79ed9f37369ed724e92f470d9a18",
+          "sha256" : "60396c1474ed09bd1ac0875f95b40a7a185a31f14c0f6a7572c327568657f252",
+          "sourceCapture" : "raw\/ipad\/transcript-hindi.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2481285,
+          "file" : "ipad\/07-bookmarks.png",
+          "height" : 2752,
+          "md5" : "c639597008d75aaa6b22ff2df7c5e521",
+          "sha256" : "7e22359785bbf6ebcbe8eba8b68a81285fe24d6851bf1abe3d60d7378f2b8747",
+          "sourceCapture" : "raw\/ipad\/bookmarks.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2900597,
+          "file" : "ipad\/08-sleep-timer.png",
+          "height" : 2752,
+          "md5" : "400e572d9e90113720c78d33135aab4a",
+          "sha256" : "d30ea4ac2c6bfe5d277d8234f0a6a596e9a09c2c7e950b26a0eb2e348b0a0e08",
+          "sourceCapture" : "raw\/ipad\/sleep-timer.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2212827,
+          "file" : "ipad\/09-listening-stats.png",
+          "height" : 2752,
+          "md5" : "c15a8c43e4a3b958873ba1e3db00c4a4",
+          "sha256" : "17bc814f23ec8da0e6da04862d8bfb5d18e43fe99d77f9998a875a559b1bb096",
+          "sourceCapture" : "raw\/ipad\/stats.png",
+          "width" : 2064
+        }
+      ]
+    }
+  ],
+  "sourceBuild" : "1.15.0 (26)",
+  "version" : "1.16.0"
+}
