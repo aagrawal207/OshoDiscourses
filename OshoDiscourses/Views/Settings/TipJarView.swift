@@ -1,14 +1,14 @@
-#if DEBUG
 import SwiftUI
 import StoreKit
 
-/// Tip jar sheet: three consumable tips with prices from the App Store, a
-/// short note on what they are (a thank-you, not a purchase of anything), and
-/// a thank-you once one goes through.
 struct TipJarView: View {
     @Environment(\.dismiss) private var dismiss
-    private var tips = TipJarService.shared
+    private let tips: TipJarService
     private var settings = UserSettings.shared
+
+    init(tips: TipJarService = .shared) {
+        self.tips = tips
+    }
 
     private var accent: Color { settings.effectiveAccentTheme.color }
 
@@ -20,8 +20,8 @@ struct TipJarView: View {
                         Image(systemName: "cup.and.saucer.fill")
                             .font(.system(size: 40))
                             .foregroundStyle(accent)
-                        Text("Osho Talks is free, has no ads and collects nothing. If it has become part of your days, a small tip helps me keep improving it.")
-                        Text("A tip unlocks nothing and is not refundable. Every feature stays free for everyone.")
+                        Text("Osho Talks is free and has no ads or tracking. If it has become part of your days, an optional tip helps me keep improving it.")
+                        Text("Tips are one-time purchases through Apple. They unlock no features or content. Every feature stays free for everyone.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -30,18 +30,23 @@ struct TipJarView: View {
                 .listRowBackground(Color(.secondarySystemGroupedBackground))
 
                 Section {
-                    if tips.isLoading && tips.products.isEmpty {
-                        HStack { ProgressView(); Text("Loading…").foregroundStyle(.secondary) }
-                    } else if let error = tips.loadError, tips.products.isEmpty {
+                    if tips.isLoading {
+                        HStack { ProgressView(); Text("Loading tips…").foregroundStyle(.secondary) }
+                    }
+                    ForEach(tips.products, id: \.id) { product in
+                        tipRow(product)
+                    }
+                    if let error = tips.loadError {
                         Text(error).foregroundStyle(.secondary)
-                    } else {
-                        ForEach(tips.products, id: \.id) { product in
-                            tipRow(product)
+                        Button("Try Again") {
+                            Task { await tips.loadProducts() }
                         }
+                        .disabled(tips.isLoading || tips.isPurchasing)
+                        .accessibilityIdentifier("tipJar.retry")
                     }
                 } footer: {
                     if tips.tipCount > 0 {
-                        Text(tips.tipCount == 1 ? "You have tipped once. Thank you." : "You have tipped \(tips.tipCount) times. Thank you.")
+                        Text(tips.tipCount == 1 ? "One tip recorded on this device. Thank you." : "\(tips.tipCount) tips recorded on this device. Thank you.")
                     }
                 }
                 .listRowBackground(Color(.secondarySystemGroupedBackground))
@@ -56,19 +61,41 @@ struct TipJarView: View {
                 }
             }
             .task { await tips.loadProducts() }
-            .alert("Thank you", isPresented: Binding(get: { tips.state == .thanked }, set: { _ in tips.dismissMessage() })) {
-                Button("You're welcome") { tips.dismissMessage() }
-            } message: {
-                Text("Your tip keeps this app going. Enjoy the talks.")
+            // Pending stays inline so a later approval can present its own confirmation.
+            .safeAreaInset(edge: .bottom) {
+                if tips.state == .pending {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Tip pending", systemImage: "clock")
+                            .font(.headline)
+                        Text("Your purchase is pending with the App Store. It may need approval, such as Ask to Buy. You don't need to try again.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Button("Got It") { tips.dismissMessage() }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.regularMaterial)
+                }
             }
-            .alert("Tip did not go through", isPresented: Binding(
-                get: { if case .failed = tips.state { return true } else { return false } },
-                set: { _ in tips.dismissMessage() }
-            )) {
+            .alert(purchaseMessage?.title ?? "", isPresented: Binding(
+                get: { purchaseMessage != nil },
+                set: { if !$0 { tips.dismissMessage() } }
+            ), presenting: purchaseMessage) { _ in
                 Button("OK") { tips.dismissMessage() }
-            } message: {
-                if case .failed(let message) = tips.state { Text(message) }
+            } message: { message in
+                Text(message.body)
             }
+        }
+    }
+
+    private var purchaseMessage: (title: String, body: String)? {
+        switch tips.state {
+        case .thanked:
+            return ("Thank you", "Your tip keeps this app going. Enjoy the talks.")
+        case .failed(let message):
+            return ("Couldn't confirm tip", message)
+        case .idle, .purchasing, .pending:
+            return nil
         }
     }
 
@@ -97,7 +124,7 @@ struct TipJarView: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(tips.state != .idle)
+        .disabled(!tips.canPurchase)
+        .accessibilityIdentifier(product.id)
     }
 }
-#endif

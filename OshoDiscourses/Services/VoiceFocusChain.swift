@@ -223,6 +223,11 @@ final class VoiceFocusChain: @unchecked Sendable {
     }
 
     func update(parameters: Parameters) {
+        if self.parameters.liftMaxDb == 0, parameters.liftMaxDb > 0 {
+            // Focus does not track a speech level. Seed the lifting target without
+            // resetting the gate, filters or SNR alignment mid-sentence.
+            speechLevelDb = parameters.liftTargetDb
+        }
         self.parameters = parameters
         duckClose = exp(-1 / (parameters.closeMs / 1000 * Float(sampleRate)))
     }

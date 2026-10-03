@@ -46,6 +46,7 @@ struct PolyphaseResamplerTests {
         let steady = Array(output[100..<produced])
         let mean = steady.reduce(0, +) / Float(steady.count)
         #expect(abs(mean - 0.5) < 0.01, "DC gain drifted: \(mean)")
+        #expect(steady.allSatisfy { abs($0 - 0.5) < 0.00001 }, "individual phases must not modulate DC")
     }
 
     @Test func preservesAToneAtTheCorrectFrequency() {
@@ -78,19 +79,44 @@ struct PolyphaseResamplerTests {
         #expect(abs(measured - frequency) < 6, "frequency shifted to \(measured) Hz")
     }
 
-    @Test func suppressesContentAboveTheOutputNyquist() {
-        // Downsampling 48k -> 22.05k must attenuate an 18 kHz tone rather than
-        // alias it back into the speech band.
-        let resampler = PolyphaseResampler(inputRate: 48_000, outputRate: 22_050, maxInputFrames: 4096)
-        let input = (0..<4096).map { Float(0.5 * sin(2 * .pi * 18_000 * Double($0) / 48_000)) }
-        var output = [Float](repeating: 0, count: 4096)
-
-        _ = run(resampler, input, &output)
+    @Test(arguments: [11_025.0, 12_000, 14_000, 18_000])
+    func suppressesContentAboveTheOutputNyquist(frequency: Double) {
+        let resampler = PolyphaseResampler(inputRate: 48_000, outputRate: 22_050, maxInputFrames: 48_000)
+        let input = (0..<48_000).map { Float(0.5 * sin(2 * .pi * frequency * Double($0) / 48_000)) }
+        var output = [Float](repeating: 0, count: 25_000)
         let produced = run(resampler, input, &output)
-        let steady = Array(output[100..<produced])
+        let steady = Array(output[1000..<produced])
         let rms = sqrt(steady.reduce(Float(0)) { $0 + $1 * $1 } / Float(steady.count))
-        // Should be far below the 0.354 RMS of the unfiltered tone.
-        #expect(rms < 0.05, "aliasing leaked through at \(rms)")
+        #expect(rms < 0.0000354, "less than 80 dB rejection at \(frequency) Hz: \(rms)")
+    }
+
+    @Test(arguments: [300.0, 3_000, 8_000, 9_500])
+    func preservesTheConsonantBand(frequency: Double) {
+        let input = (0..<22_050).map { Float(0.5 * sin(2 * .pi * frequency * Double($0) / 22_050)) }
+        let up = PolyphaseResampler(inputRate: 22_050, outputRate: 48_000, maxInputFrames: input.count)
+        let down = PolyphaseResampler(inputRate: 48_000, outputRate: 22_050, maxInputFrames: 50_000)
+        var mid = [Float](repeating: 0, count: 50_000)
+        var out = [Float](repeating: 0, count: 25_000)
+        let midCount = run(up, input, &mid)
+        let count = down.process(input: mid, count: midCount, output: &out, outputCapacity: out.count)
+        let steady = out[1000..<count]
+        let rms = sqrt(steady.reduce(Float(0)) { $0 + $1 * $1 } / Float(steady.count))
+        let gainDb = 20 * log10(rms / Float(0.5 / sqrt(2.0)))
+        #expect(abs(gainDb) < 0.1, "round-trip speech-band gain at \(frequency) Hz: \(gainDb) dB")
+    }
+
+    @Test func shortDestinationDoesNotAdvanceHistory() {
+        let resampler = PolyphaseResampler(inputRate: 22_050, outputRate: 48_000, maxInputFrames: 512)
+        let reference = PolyphaseResampler(inputRate: 22_050, outputRate: 48_000, maxInputFrames: 512)
+        let input = (0..<512).map { Float(sin(Double($0) * 0.07)) }
+        var short = [Float](repeating: -1, count: 1)
+        #expect(run(resampler, input, &short) == 0)
+        #expect(short == [-1])
+        var actual = [Float](repeating: 0, count: 2048)
+        var expected = actual
+        let count = run(resampler, input, &actual)
+        #expect(count == run(reference, input, &expected))
+        #expect(actual == expected)
     }
 
     @Test func roundTripThroughTheModelRateStaysRecognisable() {
@@ -129,8 +155,7 @@ struct PolyphaseResamplerTests {
         _ = run(resampler, input, &output)
         let produced = run(resampler, input, &output)
         #expect(produced == 512)
-        // 1:1 still runs through the filter, so allow a small group-delay shift
-        // but require the energy to be preserved.
+        #expect(Array(output.prefix(produced)) == input)
         let inRms = sqrt(input.reduce(Float(0)) { $0 + $1 * $1 } / Float(input.count))
         let outRms = sqrt(output[0..<produced].reduce(Float(0)) { $0 + $1 * $1 } / Float(produced))
         #expect(abs(20 * log10(outRms / inRms)) < 1.0)

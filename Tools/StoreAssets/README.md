@@ -25,8 +25,12 @@ the app's public sources and stay in ignored `build/` storage.
 Captures were made with iOS 26.5, using **Osho Store iPhone** (iPhone 17 Pro Max)
 and **Osho Store iPad** (iPad Pro 13-inch M4). Install the app's Debug simulator
 build on each fresh, signed-out simulator. The capture recipes target the 1.15.0
-UI used in build 26; rerendering only needs the committed raw images. Keep the
-translated-narration build condition disabled.
+UI used in build 26; rerendering only needs the committed raw images.
+
+The tools cover iPhone and iPad only. 1.16.0 (28) needs new captures for the iPad
+sidebar and two-column player, plus new Mac and Apple Watch sets; `seed.py`,
+`scenes.py` and `story.json` do not yet support the Mac or the Watch. See the
+[screenshot bundle](../../docs/app-store/screenshots/1.16.0/README.md).
 
 The scripts invoke [Cameron Cooke's AXe](https://github.com/cameroncooke/AXe)
 explicitly at `build/store-capture-tools/axe`. A different program named `axe` may
@@ -82,6 +86,11 @@ changing the story or source captures. The upload directories contain only the
 nine ordered PNGs for each device family.
 
 `prepare.py` checks that 1.15.0 has released before any remote write. It resolves
-the new localization, previews metadata/screenshot changes, protects the previous
-version's image IDs, and verifies delivery before clearing superseded optional
-iPhone sizes on 1.16.0. It prepares the listing; app submission is a separate step.
+the new localization and an editable app-info record, previews changes, and
+protects the previous version's image and set IDs. It verifies delivery before
+clearing superseded optional iPhone images and their empty set containers on
+1.16.0. The first pre-upload backup is preserved across repeated runs.
+
+The live upload path completed on 2026-09-19. `--app-info` selects an explicit
+editable record if several exist. The script prepares the listing; app submission
+is a separate step.

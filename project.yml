@@ -1,8 +1,17 @@
 name: OshoDiscourses
+configs:
+  Debug: debug
+  Release: release
+  # CarPlay configurations request the managed CarPlay audio entitlement. Use
+  # them only once Apple has approved it for this App ID; normal Debug/Release
+  # signing must not ask for it.
+  Debug-CarPlay: debug
+  Release-CarPlay: release
 options:
   bundleIdPrefix: com.agraabhi
   deploymentTarget:
     iOS: "18.0"
+    watchOS: "11.0"
   createIntermediateGroups: true
 schemes:
   OshoDiscourses:
@@ -19,12 +28,62 @@ schemes:
       config: Debug
       targets:
         - OshoDiscoursesTests
+    archive:
+      config: Release
+  OshoDiscoursesUI:
+    build:
+      targets:
+        OshoDiscourses: all
+    test:
+      config: Debug
+      targets:
+        - OshoDiscoursesUITests
+  OshoDiscoursesCarPlay:
+    build:
+      targets:
+        OshoDiscourses: all
+    run:
+      config: Debug-CarPlay
+    test:
+      config: Debug-CarPlay
+      targets:
+        - OshoDiscoursesTests
+    archive:
+      config: Release-CarPlay
+  OshoDiscoursesWatch:
+    build:
+      targets:
+        OshoDiscoursesWatch: all
+        OshoDiscourses: all
+    run:
+      config: Debug
+      executable: OshoDiscoursesWatch
+    test:
+      config: Debug
+      targets:
+        - OshoDiscoursesWatchTests
+    archive:
+      config: Release
+  OshoDiscoursesWatchUI:
+    build:
+      targets:
+        OshoDiscoursesWatch: all
+    test:
+      config: Debug
+      targets:
+        - OshoDiscoursesWatchUITests
 settings:
   base:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: W2NS9DM63G
-    MARKETING_VERSION: "1.14.0"
-    CURRENT_PROJECT_VERSION: "24"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.16.0"
+    CURRENT_PROJECT_VERSION: "28"
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG"
+    Debug-CarPlay:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG"
 targets:
   OshoDiscourses:
     type: application
@@ -34,9 +93,19 @@ targets:
         excludes:
           - Info.plist
           - TipJar.storekit
+      - path: Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        SUPPORTS_MACCATALYST: YES
+        # One bundle ID across iPhone, iPad and Mac keeps universal purchase,
+        # iCloud key-value sync and the tip products shared.
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        CODE_SIGN_ENTITLEMENTS: Signing/OshoDiscourses.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Signing/MacCatalyst.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: OshoDiscourses/Bridging/OshoDiscourses-Bridging-Header.h
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/OshoDiscourses/RNNoise/include
@@ -44,20 +113,36 @@ targets:
           - $(SRCROOT)/native/deepfilter-bridge/include
         GCC_WARN_INHIBIT_ALL_WARNINGS: YES
         GCC_FAST_MATH: NO
+      configs:
+        Debug-CarPlay:
+          CODE_SIGN_ENTITLEMENTS: Signing/CarPlay.entitlements
+        Release-CarPlay:
+          CODE_SIGN_ENTITLEMENTS: Signing/CarPlay.entitlements
     dependencies:
       # Static library XCFramework (DeepFilterNet via Rust/tract) — linked, not
       # embedded. Rebuild with native/deepfilter-bridge/build-xcframework.sh.
       - framework: Vendor/DeepFilterBridge.xcframework
         embed: false
+      - sdk: CarPlay.framework
+        platformFilter: iOS
+      - sdk: WatchConnectivity.framework
+        platformFilter: iOS
+      - target: OshoDiscoursesWatch
+        embed: true
+        link: false
+        platformFilter: iOS
     info:
       path: OshoDiscourses/Info.plist
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Osho Talks
+        # The Mac menu bar, About and Quit items use the bundle name, not the display name.
+        CFBundleName: Osho Talks
         # HTTPS/TLS only, no proprietary encryption — declaring exempt so uploads
         # skip the manual export-compliance questionnaire each build.
         ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.education
         UIBackgroundModes: [audio]
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -65,16 +150,46 @@ targets:
         # runs Apple's on-device recogniser over downloaded audio; nothing
         # leaves the device.
         NSSpeechRecognitionUsageDescription: Osho Talks can listen to a downloaded discourse on this device to line its transcript up with the audio. Nothing is sent anywhere.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneClassName: CPTemplateApplicationScene
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UILaunchStoryboardName: SplashScreen
-    entitlements:
-      path: OshoDiscourses/OshoDiscourses.entitlements
+  OshoDiscoursesWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: WatchApp/Sources
+      - path: WatchApp/Resources
+      - path: Shared/Companion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agraabhi.oshodiscourses.watchkitapp
+        PRODUCT_NAME: OshoDiscoursesWatch
+        TARGETED_DEVICE_FAMILY: "4"
+        SWIFT_STRICT_CONCURRENCY: complete
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SKIP_INSTALL: YES
+    info:
+      path: WatchApp/Info.plist
       properties:
-        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
+        CFBundleDisplayName: Osho Talks
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.agraabhi.oshodiscourses
+        WKRunsIndependentlyOfCompanionApp: false
+        # Offline discourses play on Bluetooth headphones with the screen off.
+        UIBackgroundModes: [audio]
   OshoDiscoursesTests:
     type: bundle.unit-test
     platform: iOS
@@ -83,5 +198,43 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
+        SUPPORTS_MACCATALYST: YES
+        # Without this the bundle targets the SDK's macOS and cannot load on older Macs.
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
     dependencies:
       - target: OshoDiscourses
+  OshoDiscoursesUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: OshoDiscoursesUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: OshoDiscourses
+    dependencies:
+      - target: OshoDiscourses
+  OshoDiscoursesWatchTests:
+    type: bundle.unit-test
+    platform: watchOS
+    sources:
+      - path: WatchTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_STRICT_CONCURRENCY: complete
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OshoDiscoursesWatch.app/OshoDiscoursesWatch
+        BUNDLE_LOADER: $(TEST_HOST)
+    dependencies:
+      - target: OshoDiscoursesWatch
+  OshoDiscoursesWatchUITests:
+    type: bundle.ui-testing
+    platform: watchOS
+    sources:
+      - path: WatchUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: OshoDiscoursesWatch
+    dependencies:
+      - target: OshoDiscoursesWatch

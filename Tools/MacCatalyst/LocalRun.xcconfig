@@ -1,0 +1,8 @@
+// Ad-hoc local run on this Mac without a Mac Catalyst provisioning profile.
+// Restricted entitlements (iCloud key-value store) need a profile, so they are left out.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+PROVISIONING_PROFILE_SPECIFIER =
+CODE_SIGN_ENTITLEMENTS = $(SRCROOT)/Tools/MacCatalyst/LocalRun.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(SRCROOT)/Tools/MacCatalyst/LocalRun.entitlements

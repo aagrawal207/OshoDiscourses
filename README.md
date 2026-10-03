@@ -29,8 +29,7 @@ transcript, and continue from your saved position next time.
   <a href="SUPPORT.md">Support</a>
 </p>
 
-<sub>The player and DeNoise screenshots preview the upcoming update. Screens show
-the real app with demonstration listening history.</sub>
+<sub>Screenshots show the released 1.15.0 interface with demonstration listening history.</sub>
 
 ## Read as you listen
 
@@ -85,10 +84,23 @@ For an evening listen, set a countdown or stop at the end of the talk.
 | Appearance | Light, dark or system appearance, with eight accent colors |
 | Files access | Find downloaded recordings in the iOS Files app |
 
+### In the next update
+
+Version 1.16 is in development and not yet on the App Store.
+
+- **Apple Watch:** control the iPhone player and browse your downloads from your
+  wrist. Save a talk to the Watch to listen with Bluetooth headphones while the
+  iPhone stays home.
+- **iPad:** a sidebar, a player with the transcript beside it, keyboard shortcuts
+  and multiple windows.
+- **Mac:** a native Mac version with the menu bar, keyboard controls and DeNoise.
+- **CarPlay:** support is built, and it will ship only after Apple approves it for
+  the app.
+
 ## Free to listen. Personal by design.
 
-Every feature and discourse is available without a purchase. The upcoming
-**Support Development** tip jar offers optional, one-time tips that unlock nothing.
+Every feature and discourse is available without a purchase.
+**Support Development** offers optional, one-time tips that unlock nothing.
 
 Osho Talks has no developer-operated server and includes no analytics or advertising
 SDKs. Downloads and cached transcripts stay on your device. Synced listening data
@@ -116,7 +128,8 @@ and DeepFilterNet 3 through a Rust/tract bridge. The iOS app has no package-mana
 dependencies; normal app builds need no Rust toolchain.
 
 Requirements: Xcode with an iOS 26.4 or later SDK and
-[XcodeGen](https://github.com/yonaskolb/XcodeGen). The app runs on iOS 18+.
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). The app runs on iOS 18+,
+the Watch app on watchOS 11+, and the Mac Catalyst build on macOS 15+.
 
 ```bash
 git clone https://github.com/aagrawal207/OshoDiscourses.git
@@ -131,6 +144,8 @@ xcodebuild -project OshoDiscourses.xcodeproj \
 
 Open the generated Xcode project to run on a simulator or your device.
 The [project guide](CLAUDE.md) covers architecture and development workflows.
+Platform notes: [Apple Watch](docs/apple-watch.md), [CarPlay](docs/carplay.md),
+[iPad and Mac](docs/ipad-and-mac.md).
 [Screenshot tools](Tools/StoreAssets/README.md) document how the gallery was made.
 
 </details>

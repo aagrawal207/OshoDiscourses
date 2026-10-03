@@ -28,10 +28,8 @@ enum LanguageFilter: String, CaseIterable, Sendable {
     case hindi = "Hindi"
 }
 
-/// The three DeepFilterNet voice-forward variants, chosen by listening tests on
-/// Ashtavakra Maha Geeta #5 (aircraft overhead at 40:20). All three run the
-/// model at full attenuation and differ only in how hard they duck noise-only
-/// frames and whether they lift quiet speech.
+/// Post-model pause reduction and quiet-speech lift, independent of the model's
+/// attenuation limit selected by Noise reduction strength.
 enum VoiceFocusPreset: String, CaseIterable, Identifiable, Sendable {
     case focus
     case lift
@@ -41,64 +39,55 @@ enum VoiceFocusPreset: String, CaseIterable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
-        case .focus: return "Focus"
-        case .lift: return "Lift"
-        case .strong: return "Strong"
+        case .focus: return "Natural"
+        case .lift: return "Gentle Lift"
+        case .strong: return "Extra Lift"
         }
     }
 
     var detail: String {
         switch self {
         case .focus:
-            return "Quietens noise between sentences and keeps Osho's natural dynamics. The most transparent option."
+            return "Quieter pauses, with no extra lift for soft speech. Keeps more of the voice’s natural dynamics."
         case .lift:
-            return "Same noise ducking, and also raises his quieter passages so soft speech stays forward."
+            return "Brings out quieter words without turning up the whole recording."
         case .strong:
-            return "Ducks noise hardest and lifts quiet speech. Clearest over loud interruptions, most likely to sound processed."
+            return "More lift for soft speech and quieter pauses. The voice may sound less natural."
         }
     }
 }
 
 enum NoiseReductionMode: String, CaseIterable, Identifiable, Sendable {
+    case deepFilterNet
     case rnnoise
     case cadence
-    case deepFilterNet
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .rnnoise: return "RNNoise"
-        case .cadence: return "Cadence Filter"
-        case .deepFilterNet: return "DeepFilterNet"
+        case .deepFilterNet: return "Best Quality"
+        case .rnnoise: return "Balanced"
+        case .cadence: return "Gentle Cleanup"
         }
     }
 
-    var playerLabel: String {
+    var batteryNote: String {
         switch self {
-        case .rnnoise: return "RNNoise"
-        case .cadence: return "Cadence"
-        case .deepFilterNet: return "DeepFilter"
-        }
-    }
-
-    /// One-word category shown under the name in the player picker.
-    var shortDescriptor: String {
-        switch self {
-        case .rnnoise: return "Neural"
-        case .cadence: return "Hum + pauses"
-        case .deepFilterNet: return "Neural, full-band"
+        case .deepFilterNet: return "Uses more battery"
+        case .rnnoise: return "Uses less battery than Best Quality"
+        case .cadence: return "Lightest on battery"
         }
     }
 
     var detail: String {
         switch self {
-        case .rnnoise:
-            return "General-purpose neural speech denoising. Removes more varied noise, but can soften the voice."
-        case .cadence:
-            return "Targets electrical hum and gently lowers hiss during long pauses while preserving speech."
         case .deepFilterNet:
-            return "The strongest option. A 48 kHz neural model that also removes steady tape hiss and room tone, at a higher battery cost."
+            return "Our recommended cleanup for hiss and background noise."
+        case .rnnoise:
+            return "Everyday noise reduction with lighter processing. May soften the voice."
+        case .cadence:
+            return "Reduces hum and noise in pauses. Less effective during speech."
         }
     }
 }
@@ -262,7 +251,7 @@ final class UserSettings {
             Keys.noiseReduction: false,
             Keys.denoiseStrength: "medium",
             Keys.noiseReductionMode: NoiseReductionMode.deepFilterNet.rawValue,
-            Keys.voiceFocusPreset: VoiceFocusPreset.focus.rawValue,
+            Keys.voiceFocusPreset: VoiceFocusPreset.lift.rawValue,
             Keys.defaultPlaybackRate: 1.0,
             Keys.volumeBoost: 2.0,
             Keys.dailyAccentShuffle: false,
@@ -287,7 +276,7 @@ final class UserSettings {
         ) ?? .deepFilterNet
         self.voiceFocusPreset = VoiceFocusPreset(
             rawValue: d.string(forKey: Keys.voiceFocusPreset) ?? ""
-        ) ?? .focus
+        ) ?? .lift
         self.defaultPlaybackRate = d.double(forKey: Keys.defaultPlaybackRate)
         self.volumeBoost = d.double(forKey: Keys.volumeBoost)
         self.transcriptFontSize = d.double(forKey: Keys.transcriptFontSize)
@@ -297,10 +286,6 @@ final class UserSettings {
         // Seed today's shuffled color now that all stored props are set.
         self.shuffledThemeToday = Self.shuffledTheme(forDaysSinceEpoch: Self.daysSinceEpoch())
     }
-}
-
-extension Notification.Name {
-    static let navigateToSeries = Notification.Name("navigateToSeries")
 }
 
 extension Color {

@@ -26,9 +26,9 @@ def asc(*arguments):
     return json.loads(result.stdout)
 
 
-def state(version):
-    attributes = version["attributes"]
-    return attributes.get("appVersionState") or attributes["appStoreState"]
+def state(resource):
+    attributes = resource["attributes"]
+    return attributes.get("appVersionState") or attributes.get("state") or attributes["appStoreState"]
 
 
 def screenshots(version_id):
@@ -53,7 +53,7 @@ def verify_uploaded(groups, remote):
     return True
 
 
-def main(apply):
+def main(apply, app_info_id=None):
     manifest = json.loads((ASSETS / "manifest.json").read_text())
     assert (manifest["appID"], manifest["version"], manifest["locale"]) == (APP, VERSION, "en-US")
     for group in manifest["sets"]:
@@ -95,16 +95,24 @@ def main(apply):
     before = screenshots(target_id)
     source = screenshots(base["id"])
     protected = {s["id"] for group in source["sets"] for s in group["screenshots"]}
+    protected_sets = {group["set"]["id"] for group in source["sets"]}
     current = {s["id"] for group in before["sets"] for s in group["screenshots"]}
     assert not protected.intersection(current), "Source and target unexpectedly share screenshot resources"
     localization = before["versionLocalizationId"]
+    infos = asc("apps", "info", "list", "--app", APP)["data"]
+    editable_infos = [info for info in infos if state(info) in EDITABLE
+                      and (app_info_id is None or info["id"] == app_info_id)]
+    if len(editable_infos) != 1:
+        raise RuntimeError("Select exactly one editable app info with --app-info")
+    app_info_id = editable_infos[0]["id"]
     asc("metadata", "push", "--app", APP, "--version", VERSION, "--platform", "IOS",
-        "--dir", ROOT / "docs/app-store/metadata", "--dry-run")
+        "--app-info", app_info_id, "--dir", ROOT / "docs/app-store/metadata", "--dry-run")
     asc("metadata", "push", "--app", APP, "--version", VERSION, "--platform", "IOS",
-        "--dir", ROOT / "docs/app-store/metadata")
+        "--app-info", app_info_id, "--dir", ROOT / "docs/app-store/metadata")
     backup = ROOT / "build/store-assets-1.16.0-before.json"
     backup.parent.mkdir(parents=True, exist_ok=True)
-    backup.write_text(json.dumps(before, indent=2) + "\n")
+    if not backup.exists():
+        backup.write_text(json.dumps(before, indent=2) + "\n")
     for group in manifest["sets"]:
         if verify_uploaded([group], screenshots(target_id)):
             continue
@@ -120,17 +128,22 @@ def main(apply):
     # Old optional device sets take precedence over Apple's scaling from the new largest set.
     for group in screenshots(target_id)["sets"]:
         if group["set"]["attributes"]["screenshotDisplayType"] in {"APP_IPHONE_61", "APP_IPHONE_65"}:
+            assert group["set"]["id"] not in protected_sets
             for image in group["screenshots"]:
                 assert image["id"] not in protected
                 asc("screenshots", "delete", "--id", image["id"], "--confirm")
+            asc("localizations", "screenshot-sets", "delete", "--id", group["set"]["id"], "--confirm")
     final = screenshots(target_id)
     assert verify_uploaded(manifest["sets"], final)
     assert sum(len(g["screenshots"]) for g in final["sets"]) == 18
     print(json.dumps({"version": VERSION, "versionID": target_id, "localizationID": localization,
+                      "appInfoID": app_info_id,
                       "screenshots": 18, "deliveryState": "COMPLETE", "submitted": False}, indent=2))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="Create/update only the editable 1.16.0 listing")
-    main(parser.parse_args().apply)
+    parser.add_argument("--app-info", help="Explicit editable app info ID when multiple records exist")
+    options = parser.parse_args()
+    main(options.apply, options.app_info)

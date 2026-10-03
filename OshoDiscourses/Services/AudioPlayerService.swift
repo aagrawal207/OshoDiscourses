@@ -3,6 +3,7 @@ import AVFoundation
 import MediaPlayer
 import Observation
 import UIKit
+import os
 
 @Observable
 @MainActor
@@ -38,9 +39,7 @@ final class AudioPlayerService {
 
     enum DenoiseStrength: String, CaseIterable, Sendable {
         case light, medium, strong
-        /// Wet (denoised) fraction. Lower = clearer voice, higher = more noise removed.
-        /// Used by RNNoise only — DeepFilterNet is always fully wet and uses
-        /// `attenuationLimitDb` instead.
+        /// RNNoise's wet fraction; DeepFilterNet uses its native attenuation cap instead.
         var wetMix: Float {
             switch self {
             case .light: return 0.35
@@ -55,10 +54,8 @@ final class AudioPlayerService {
             case .strong: return 1.0
             }
         }
-        /// DeepFilterNet's native strength control: the maximum attenuation the
-        /// model may apply, in dB. This is spectrally aware, so it preserves the
-        /// voice far better than mixing the noisy signal back in. Upstream treats
-        /// 100 dB and above as "no limit", which is what Strong uses.
+        /// Native attenuation cap, independent of Voice Focus. Upstream treats 100 dB
+        /// and above as unlimited; this is not RNNoise's wet/dry control.
         var attenuationLimitDb: Float {
             switch self {
             case .light: return 6
@@ -73,62 +70,180 @@ final class AudioPlayerService {
             case .strong: return "Strong"
             }
         }
+
+        var detail: String {
+            switch self {
+            case .light: return "Gentle cleanup that keeps more of the original sound."
+            case .medium: return "A good starting point for most recordings."
+            case .strong: return "More noise reduction. The voice may sound less natural."
+            }
+        }
+    }
+
+    enum AudioMixFailure: String, Equatable, Sendable {
+        case trackLoading, noAudioTrack, tapCreation, playback
+
+        var label: String {
+            switch self {
+            case .trackLoading: return "Couldn't load audio track"
+            case .noAudioTrack: return "No audio track"
+            case .tapCreation: return "Couldn't attach noise reduction"
+            case .playback: return "Playback unavailable"
+            }
+        }
+    }
+
+    enum AudioProcessingStatus: Equatable, Sendable {
+        case off, waitingForPlayback, preparing, loadingModel, modelReady, active
+        case waitingForAudio, bypassing, unsupportedFormat, sourceError
+        case setupFailed(AudioMixFailure)
+        case modelUnavailable(DeepFilterProcessor.Status)
+
+        var isActive: Bool { self == .active }
+
+        var isIssue: Bool {
+            switch self {
+            case .waitingForAudio, .bypassing, .unsupportedFormat, .sourceError, .setupFailed, .modelUnavailable: return true
+            default: return false
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .off: return "Original sound"
+            case .waitingForPlayback: return "Ready for playback"
+            case .preparing, .loadingModel, .modelReady: return "Getting ready…"
+            case .active: return "Enhancement is on"
+            case .waitingForAudio, .bypassing, .sourceError: return "Enhancement paused"
+            case .unsupportedFormat: return "Unavailable for this recording"
+            case .setupFailed(.playback): return "Playback unavailable"
+            case .setupFailed, .modelUnavailable: return "Enhancement unavailable"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .off: return "Noise reduction and volume boost are off."
+            case .waitingForPlayback: return "Your choices will apply when you play a discourse."
+            case .preparing, .loadingModel, .modelReady:
+                return "Getting noise reduction ready. Volume boost starts once cleanup is working."
+            case .active: return "Reducing recording noise. Adjust the controls as you listen."
+            case .waitingForAudio, .bypassing, .sourceError:
+                return "Noise reduction and volume boost are temporarily paused. Try another mode if this continues."
+            case .unsupportedFormat:
+                return "This recording can’t use audio enhancement. Noise reduction and volume boost are paused."
+            case .setupFailed(.playback): return "Playback could not start. Try playing the discourse again."
+            case .setupFailed:
+                return "Enhancement couldn’t start. Try playing the discourse again. Volume boost is paused."
+            case .modelUnavailable:
+                return "This mode couldn’t start. Try another listening mode. Volume boost is paused."
+            }
+        }
+
+        var outcome: String {
+            switch self {
+            case .off: return "off"
+            case .waitingForPlayback: return "waiting"
+            case .preparing: return "preparing"
+            case .loadingModel: return "model_loading"
+            case .modelReady: return "model_ready"
+            case .active: return "processing"
+            case .waitingForAudio: return "waiting_for_audio"
+            case .bypassing: return "bypassing"
+            case .unsupportedFormat: return "unsupported_format"
+            case .sourceError: return "source_error"
+            case .setupFailed(let failure): return "setup_\(failure.rawValue)"
+            case .modelUnavailable: return "model_unavailable"
+            }
+        }
     }
 
     var isNoiseReductionEnabled: Bool = false {
         didSet {
-            UserSettings.shared.noiseReduction = isNoiseReductionEnabled
-            // Do not activate DeepFilterNet against the previous tap's cached
-            // format. The replacement tap's prepare callback owns activation.
+            guard oldValue != isNoiseReductionEnabled else { return }
+            settings?.noiseReduction = isNoiseReductionEnabled
+            // Each replacement tap owns its model and format; its prepare callback activates them.
             noiseProcessor.setDenoiseEnabled(isNoiseReductionEnabled)
             rebuildAudioMix()
         }
     }
     var noiseReductionMode: NoiseReductionMode = .deepFilterNet {
         didSet {
-            UserSettings.shared.noiseReductionMode = noiseReductionMode
+            guard oldValue != noiseReductionMode else { return }
+            settings?.noiseReductionMode = noiseReductionMode
             configureNoiseProcessor()
+            resetProcessingEvidence()
+            refreshAudioProcessingStatus()
         }
     }
     var denoiseStrength: DenoiseStrength = .medium {
         didSet {
-            UserSettings.shared.denoiseStrength = denoiseStrength.rawValue
+            guard oldValue != denoiseStrength else { return }
+            settings?.denoiseStrength = denoiseStrength.rawValue
             configureNoiseProcessor()
         }
     }
     /// Which DeepFilterNet voice-forward variant is active. Only affects the
     /// DeepFilterNet mode; RNNoise and Cadence ignore it.
-    var voiceFocusPreset: VoiceFocusPreset = .focus {
+    var voiceFocusPreset: VoiceFocusPreset = .lift {
         didSet {
-            UserSettings.shared.voiceFocusPreset = voiceFocusPreset
+            guard oldValue != voiceFocusPreset else { return }
+            settings?.voiceFocusPreset = voiceFocusPreset
             configureNoiseProcessor()
         }
     }
-    private let noiseProcessor = NoiseReductionProcessor()
+    private let noiseProcessor: NoiseReductionProcessor
 
-    /// Live state of the native DeepFilterNet runtime. Surfaced in the UI so the
-    /// listener can tell actual denoising apart from silent passthrough (the
-    /// model loads asynchronously and can be unavailable).
+    /// Model readiness is separate from successful processing by the current tap.
     private(set) var deepFilterStatus: DeepFilterProcessor.Status = .idle
     private(set) var isAudioProcessingAttached = false
+    private(set) var audioProcessingStatus: AudioProcessingStatus = .off
 
-    /// Whether DeepFilterNet is selected but not currently processing audio.
+    /// Whether DeepFilterNet lacks confirmed processing by the current tap.
     var isDeepFilterBypassing: Bool {
         isNoiseReductionEnabled
             && noiseReductionMode == .deepFilterNet
-            && !deepFilterStatus.isActive
+            && !audioProcessingStatus.isActive
     }
 
-    /// Boost is useful only after a denoiser has actually produced output.
-    /// DeepFilterNet explicitly passes raw audio through while loading or failed.
+    /// Describes current availability, independently of the listener's saved boost level.
+    /// The tap also gates gain per buffer, including between status polls.
     var isBoostAvailable: Bool {
-        isNoiseReductionEnabled && isAudioProcessingAttached && !isDeepFilterBypassing
+        isNoiseReductionEnabled && isAudioProcessingAttached && audioProcessingStatus.isActive
+    }
+
+    var noiseReductionAccessibilityValue: String {
+        guard isNoiseReductionEnabled else { return "Off" }
+        var value = "On, \(noiseReductionMode.displayName), \(denoiseStrength.label) noise reduction"
+        if noiseReductionMode == .deepFilterNet {
+            value += ", quiet speech \(voiceFocusPreset.displayName)"
+        }
+        return "\(value). \(audioProcessingStatus.label)"
     }
 
     // MARK: - Playback State
 
     weak var playbackStateService: PlaybackStateService?
     weak var downloadService: DownloadService?
+
+    struct OriginalPlaybackActions {
+        let autoPlayNext: Bool
+        let smartDownload: @MainActor (String) -> Void
+        let smartDelete: @MainActor (String) -> Void
+        let nextDownloadedItem: @MainActor (String) -> QueueItem?
+    }
+
+    /// One uninterrupted stretch of playback, so a Watch report that arrives just
+    /// after the phone resumed an older position can still move it forward.
+    struct PlaySession: Equatable, Sendable {
+        let discourseID: String
+        let startedAt: Date
+        let startPosition: TimeInterval
+        /// The talk's save time before this stretch wrote its own.
+        let savedBefore: Date?
+    }
+
+    @ObservationIgnored private(set) var playSession: PlaySession?
 
     // MARK: - Position History (Kindle-style)
 
@@ -138,7 +253,26 @@ final class AudioPlayerService {
     // MARK: - Private
 
     private var player: AVPlayer?
-    private var audioMixGeneration = 0
+    // Queued callbacks can outlive an item, whose object address can be reused.
+    private(set) var playbackGeneration: UInt64 = 0
+    private var audioMixGeneration: UInt64 = 0
+    private var audioMixTask: Task<Void, Never>?
+    private var processingMonitor: Task<Void, Never>?
+    private var audioMixFailure: AudioMixFailure?
+    private var wantsPlayback = false
+    private var readyItemID: ObjectIdentifier?
+    // Pending original offsets are explicit restorations; ordinary saved resume is read at readiness.
+    private var pendingResumePosition: TimeInterval?
+    @ObservationIgnored private var previousDiagnostics = NoiseReductionProcessor.Diagnostics()
+    @ObservationIgnored private var lastProcessedAt: TimeInterval?
+    @ObservationIgnored private var monitoringStartedAt: TimeInterval?
+    private let settings: UserSettings?
+    private let originalPlaybackActions: OriginalPlaybackActions?
+    private let connectsToSystem: Bool
+    private let makePlayer: @MainActor () -> AVPlayer
+    private let loadAudioTrack: @MainActor (AVPlayerItem) async throws -> AVAssetTrack?
+    private let makeAudioMix: @MainActor (NoiseReductionProcessor, AVAssetTrack, UInt64) -> AVAudioMix?
+    private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "AudioProcessing")
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
@@ -178,24 +312,40 @@ final class AudioPlayerService {
 
     // MARK: - Init
 
-    init() {
-        isNoiseReductionEnabled = UserSettings.shared.noiseReduction
-        noiseReductionMode = UserSettings.shared.noiseReductionMode
-        denoiseStrength = DenoiseStrength(rawValue: UserSettings.shared.denoiseStrength) ?? .medium
-        voiceFocusPreset = UserSettings.shared.voiceFocusPreset
-        volume = max(1.0, min(Float(UserSettings.shared.volumeBoost), Self.maximumBoost))
-        configureNoiseProcessor()
-        // Mirror the native runtime's state onto the main actor for the UI.
-        noiseProcessor.deepFilter.observeStatus { status in
-            Task { @MainActor [weak self] in
-                self?.deepFilterStatus = status
-            }
+    init(
+        settings: UserSettings? = .shared,
+        connectsToSystem: Bool = true,
+        originalPlaybackActions: OriginalPlaybackActions? = nil,
+        noiseProcessor: NoiseReductionProcessor = NoiseReductionProcessor(),
+        makePlayer: @escaping @MainActor () -> AVPlayer = { AVPlayer() },
+        loadAudioTrack: @escaping @MainActor (AVPlayerItem) async throws -> AVAssetTrack? = {
+            try await $0.asset.loadTracks(withMediaType: .audio).first
+        },
+        makeAudioMix: @escaping @MainActor (NoiseReductionProcessor, AVAssetTrack, UInt64) -> AVAudioMix? = {
+            processor, track, generation in processor.createAudioMix(for: track, generation: generation)
         }
+    ) {
+        self.settings = settings
+        self.connectsToSystem = connectsToSystem
+        self.originalPlaybackActions = originalPlaybackActions
+        self.noiseProcessor = noiseProcessor
+        self.makePlayer = makePlayer
+        self.loadAudioTrack = loadAudioTrack
+        self.makeAudioMix = makeAudioMix
+        isNoiseReductionEnabled = settings?.noiseReduction ?? false
+        noiseReductionMode = settings?.noiseReductionMode ?? .deepFilterNet
+        denoiseStrength = DenoiseStrength(rawValue: settings?.denoiseStrength ?? "") ?? .medium
+        voiceFocusPreset = settings?.voiceFocusPreset ?? .lift
+        volume = max(1.0, min(Float(settings?.volumeBoost ?? 1), Self.maximumBoost))
+        configureNoiseProcessor()
         // Restore the listener's preferred speed; clamp in case a stale/corrupt
         // value was stored outside the supported 0.5–2.0 range.
-        playbackRate = max(0.5, min(Float(UserSettings.shared.defaultPlaybackRate), 2.0))
-        setupAudioSession()
-        setupRemoteCommands()
+        playbackRate = max(0.5, min(Float(settings?.defaultPlaybackRate ?? 1), 2.0))
+        refreshAudioProcessingStatus()
+        if connectsToSystem {
+            setupAudioSession()
+            setupRemoteCommands()
+        }
     }
 
     /// Cleanup is handled by `stop()`. Since AudioPlayerService is MainActor-isolated,
@@ -205,63 +355,129 @@ final class AudioPlayerService {
     // MARK: - Public API
 
     func play(localURL: URL, id: String, title: String, series: String) {
-        queue = [QueueItem(id: id, url: localURL, title: title, series: series)]
+        let item = QueueItem(id: id, url: localURL, title: title, series: series)
+        guard loadAndPlay(item: item) else { return }
+        queue = [item]
         currentIndex = 0
-        loadAndPlay(item: queue[0])
     }
 
-    func playQueue(items: [QueueItem], startIndex: Int = 0) {
+    /// `resumeAt` overrides the saved position of the starting item, e.g. for a bookmark.
+    func playQueue(items: [QueueItem], startIndex: Int = 0, resumeAt position: TimeInterval? = nil) {
         guard !items.isEmpty else { return }
+        let index = max(0, min(startIndex, items.count - 1))
+        guard loadAndPlay(item: items[index], resumeAt: position) else { return }
         queue = items
-        currentIndex = min(startIndex, items.count - 1)
-        loadAndPlay(item: queue[currentIndex])
+        currentIndex = index
     }
 
     func togglePlayPause() {
-        guard let player else {
-            // No player but a current track means the player was torn down
-            // under us (media services reset while paused). Rebuild at the
-            // saved position instead of silently ignoring the tap.
-            if currentTrackId != nil, queue.indices.contains(currentIndex) {
-                loadAndPlay(item: queue[currentIndex])
+        if isPlaying {
+            pausePlayback()
+        } else {
+            resumePlayback()
+        }
+    }
+
+    /// For remote controls: a repeated or late request leaves playback in the
+    /// requested state instead of toggling it back.
+    func setPlaying(_ playing: Bool) {
+        if playing {
+            if !isPlaying { resumePlayback() }
+        } else if isPlaying || wantsPlayback {
+            pausePlayback()
+        }
+    }
+
+    func resumePlayback() {
+        guard currentTrackId != nil, queue.indices.contains(currentIndex) else { return }
+        if isPlaying, player?.timeControlStatus == .playing { return }
+        wantsPlayback = true
+        guard let player, player.status != .failed, player.currentItem?.status != .failed else {
+            // An item that failed before its first frame has no position of its own;
+            // nil lets the saved position win instead of restarting at 0.
+            let position = pendingResumePosition ?? (currentTime > 0 ? currentTime : nil)
+            if self.player?.status == .failed {
+                detachCurrentItem()
+                self.player = nil
             }
+            loadAndPlay(item: queue[currentIndex], resumeAt: position)
             return
         }
-        if isPlaying {
-            player.pause()
+        guard player.currentItem?.status == .readyToPlay else { return }
+        guard activateSession() else {
             isPlaying = false
-        } else {
-            // Reclaim the session in case it was deactivated while we were paused
-            // (interruption, another app, backgrounding) so controls reappear.
-            activateSession()
-            player.play()
-            player.rate = playbackRate
-            isPlaying = true
+            audioMixFailure = .playback
+            refreshAudioProcessingStatus()
+            return
         }
+        if audioMixFailure == .playback {
+            audioMixFailure = nil
+            if isNoiseReductionEnabled, !isAudioProcessingAttached, let item = player.currentItem {
+                applyAudioMix(to: item)
+            }
+        }
+        // A pending seek can defer play(); its default must carry the requested speed.
+        player.defaultRate = playbackRate
+        player.play()
+        if let id = currentTrackId, !isPlaying || playSession?.discourseID != id {
+            playSession = PlaySession(
+                discourseID: id, startedAt: Date(), startPosition: currentTime,
+                savedBefore: playbackStateService?.lastSaved(discourseId: id)
+            )
+        }
+        isPlaying = true
+        refreshAudioProcessingStatus()
+        updateNowPlayingInfo()
+    }
+
+    private func pausePlayback() {
+        wantsPlayback = false
+        player?.pause()
+        isPlaying = false
+        // A Watch copy resumes from here; autosave alone would lag by up to 10 s.
+        if let id = currentTrackId, currentTime.isFinite, currentTime > 0 {
+            playbackStateService?.savePosition(discourseId: id, position: currentTime, duration: duration)
+        }
+        resetProcessingEvidence()
+        refreshAudioProcessingStatus()
         updateNowPlayingInfo()
     }
 
     func seek(to time: TimeInterval) {
-        guard let player else { return }
-        currentTime = time
+        let target = time
+        guard let player else {
+            // No player after a media-services reset: the next resume reloads at currentTime.
+            if currentTrackId != nil, target.isFinite { currentTime = max(0, target) }
+            return
+        }
+        // Readiness seeks to the restore position, which would undo a seek made while
+        // loading (a bookmark from CarPlay or the Watch); make this the restore position.
+        if currentTrackId != nil, target.isFinite,
+           let item = player.currentItem, readyItemID != ObjectIdentifier(item), item.status != .failed {
+            pendingResumePosition = max(0, target)
+            currentTime = max(0, target)
+            return
+        }
+        currentTime = target
         // Record where we're headed so skips accumulate from the target (not the
         // stale player clock) and the periodic observer doesn't snap us back
         // while the seek is in flight.
-        pendingSeekTarget = time
+        pendingSeekTarget = target
         pendingSeekIssuedAt = Date()
         seekGeneration += 1
         let generation = seekGeneration
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        let cmTime = CMTime(seconds: target, preferredTimescale: 600)
+        let itemID = player.currentItem.map(ObjectIdentifier.init)
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self,
+                      generation == self.seekGeneration,
+                      itemID == (self.player?.currentItem).map(ObjectIdentifier.init) else { return }
                 // Only the most recent seek clears the pending target — a burst
                 // of taps issues several seeks, and a stale completion must not
                 // release the guard before the final one lands.
-                if generation == self.seekGeneration {
-                    self.pendingSeekTarget = nil
-                    self.pendingSeekIssuedAt = nil
-                }
+                self.pendingSeekTarget = nil
+                self.pendingSeekIssuedAt = nil
                 self.updateNowPlayingInfo()
             }
         }
@@ -308,6 +524,7 @@ final class AudioPlayerService {
     /// `currentTime`: a stuck pending target also froze `currentTime`, so only
     /// the player itself knows where playback actually is.
     private var skipAnchor: TimeInterval {
+        if let pendingResumePosition { return pendingResumePosition }
         let liveClock = player?.currentTime().seconds
         let clock = (liveClock?.isFinite == true) ? liveClock! : currentTime
         return Self.skipAnchor(
@@ -376,16 +593,16 @@ final class AudioPlayerService {
 
     func skipToNext() {
         guard hasNext else { return }
+        guard loadAndPlay(item: queue[currentIndex + 1]) else { return }
         currentIndex += 1
-        loadAndPlay(item: queue[currentIndex])
     }
 
     /// Jump directly to a queue entry (from the Up Next list). No-op if the index
     /// is out of range or already playing.
     func playQueueItem(at index: Int) {
         guard queue.indices.contains(index), index != currentIndex else { return }
+        guard loadAndPlay(item: queue[index]) else { return }
         currentIndex = index
-        loadAndPlay(item: queue[currentIndex])
     }
 
     func skipToPrevious() {
@@ -398,8 +615,8 @@ final class AudioPlayerService {
             seek(to: 0)
             return
         }
+        guard loadAndPlay(item: queue[currentIndex - 1]) else { return }
         currentIndex -= 1
-        loadAndPlay(item: queue[currentIndex])
     }
 
     private func finishCurrentTrack(naturally: Bool) {
@@ -415,8 +632,8 @@ final class AudioPlayerService {
 
         // End-of-discourse sleep: let this talk finish, then stop here (don't
         // auto-advance). discourseDidFinish() resets the timer afterward.
-        let endSleepArmed = SleepTimerService.shared.mode == .endOfDiscourse
-        let autoNext = UserSettings.shared.autoPlayNext && !endSleepArmed
+        let endSleepArmed = connectsToSystem && SleepTimerService.shared.mode == .endOfDiscourse
+        let autoNext = (originalPlaybackActions?.autoPlayNext ?? (settings?.autoPlayNext == true)) && !endSleepArmed
         var playbackContinues = false
 
         // Auto-play is download-only. Prefer the queue's next item; if the queue
@@ -425,6 +642,11 @@ final class AudioPlayerService {
         // back to the next *downloaded* discourse in the same series so a
         // fully-downloaded series plays straight through regardless of how
         // playback started. This never advances to a discourse not on disk.
+        if autoNext {
+            // The finished talk's position was just cleared; zero keeps the next
+            // load from saving its end position back as progress.
+            currentTime = 0
+        }
         if autoNext, hasNext {
             playbackContinues = true
             skipToNext()
@@ -437,6 +659,7 @@ final class AudioPlayerService {
             loadAndPlay(item: next)
         } else {
             isPlaying = false
+            wantsPlayback = false
             // Only snap to the end when we actually know it; duration is 0 until
             // the item is ready, and blanking to 0:00 would misreport a finish.
             if duration > 0 { currentTime = duration }
@@ -444,6 +667,8 @@ final class AudioPlayerService {
             currentTrackId = nil
             currentTitle = ""
             currentSeries = ""
+            detachCurrentItem()
+            refreshAudioProcessingStatus()
         }
 
         // Smart Delete: remove the completed episode
@@ -457,12 +682,12 @@ final class AudioPlayerService {
         }
 
         // Notify the sleep timer so an armed end-of-discourse timer fires/resets.
-        SleepTimerService.shared.discourseDidFinish()
+        if connectsToSystem { SleepTimerService.shared.discourseDidFinish() }
 
         // Ask only after natural completion when playback has actually stopped.
         // Skip-to-end and auto-advance are active listening moments, not pauses in
         // which a system dialog should interrupt the listener.
-        if ReviewRequestService.isGoodMoment(
+        if connectsToSystem, ReviewRequestService.isGoodMoment(
             completionWasNatural: naturally,
             playbackContinues: playbackContinues,
             sleepTimerWasArmed: endSleepArmed
@@ -480,13 +705,21 @@ final class AudioPlayerService {
     // MARK: - Smart Download / Smart Delete
 
     private func performSmartDelete(completedDiscourseId: String) {
-        guard UserSettings.shared.smartDelete else { return }
+        if let action = originalPlaybackActions?.smartDelete {
+            action(completedDiscourseId)
+            return
+        }
+        guard settings?.smartDelete == true else { return }
         guard let downloadService, downloadService.isDownloaded(completedDiscourseId) else { return }
         try? downloadService.deleteDownload(discourseID: completedDiscourseId)
     }
 
     private func performSmartDownload(afterDiscourseId: String) {
-        guard UserSettings.shared.smartDownload else { return }
+        if let action = originalPlaybackActions?.smartDownload {
+            action(afterDiscourseId)
+            return
+        }
+        guard settings?.smartDownload == true else { return }
         guard let downloadService else { return }
         guard let lookup = Catalog.discourseLookup[afterDiscourseId] else { return }
 
@@ -510,6 +743,7 @@ final class AudioPlayerService {
     /// auto-play to continue past a queue that didn't include it (single-item
     /// queue, or a talk downloaded after playback started).
     private func nextDownloadedItem(after discourseId: String) -> QueueItem? {
+        if let action = originalPlaybackActions?.nextDownloadedItem { return action(discourseId) }
         guard let downloadService,
               let lookup = Catalog.discourseLookup[discourseId] else { return nil }
         let allInSeries = Catalog.discourses(for: lookup.series)
@@ -541,7 +775,8 @@ final class AudioPlayerService {
         playbackRate = clamped
         // Persist so the chosen speed survives relaunch. The in-player picker is
         // the single source of truth — no separate "remember speed" toggle.
-        UserSettings.shared.defaultPlaybackRate = Double(clamped)
+        settings?.defaultPlaybackRate = Double(clamped)
+        player?.defaultRate = clamped
         if isPlaying {
             player?.rate = clamped
         }
@@ -555,18 +790,16 @@ final class AudioPlayerService {
     func setVolume(_ vol: Float) {
         let clamped = max(0.0, min(vol, Self.maximumBoost))
         volume = clamped
-        UserSettings.shared.volumeBoost = Double(clamped)
+        settings?.volumeBoost = Double(clamped)
         // Attenuation below unity is the player's job; gain above it is the tap's.
         player?.volume = min(clamped, 1.0)
-        // The boost is a tap parameter now rather than a property of the mix, so
-        // changing the amount takes effect at once and needs no rebuild. That also
-        // retires the debounce the old mix-based boost needed, since a rebuild
-        // meant tearing down and recreating an MTAudioProcessingTap mid-render.
+        // Gain updates preserve the current tap and its streaming history.
         noiseProcessor.setOutputGain(clamped > 1.0 ? clamped : 1.0)
     }
 
     func stop() {
-        player?.pause()
+        wantsPlayback = false
+        detachCurrentItem()
         isPlaying = false
         currentTime = 0
         duration = 0
@@ -576,27 +809,21 @@ final class AudioPlayerService {
         pendingSeekTarget = nil
         pendingSeekIssuedAt = nil
         didManuallySeekNearEnd = false
-        removeTimeObserver()
-        removeEndObserver()
-        // Kill the status observation too: a still-loading item's readyToPlay
-        // would otherwise fire after stop and resurrect isPlaying/Now Playing.
-        statusObservation?.invalidate()
-        statusObservation = nil
+        player?.replaceCurrentItem(with: nil)
         player = nil
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        refreshAudioProcessingStatus()
+        if connectsToSystem { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
     }
 
     // MARK: - Private: Playback
 
-    private func loadAndPlay(item: QueueItem) {
-        // Save position+duration of the outgoing track before switching
+    @discardableResult
+    private func loadAndPlay(item: QueueItem, resumeAt position: TimeInterval? = nil) -> Bool {
+        // Outgoing identity belongs to the loaded item, even if a caller has replaced its queue.
         if let outgoingId = currentTrackId, currentTime > 0 {
             playbackStateService?.savePosition(discourseId: outgoingId, position: currentTime, duration: duration)
         }
-
-        removeTimeObserver()
-        removeEndObserver()
-        statusObservation?.invalidate()
+        detachCurrentItem()
 
         currentTrackId = item.id
         currentTitle = item.title
@@ -609,57 +836,81 @@ final class AudioPlayerService {
         pendingSeekIssuedAt = nil
         didManuallySeekNearEnd = false
         didTriggerPreemptiveDownload = false
+        pendingResumePosition = position
+        wantsPlayback = true
+        isPlaying = false
 
         let playerItem = AVPlayerItem(url: item.url)
-
-        if player == nil {
-            player = AVPlayer(playerItem: playerItem)
-        } else {
-            player?.replaceCurrentItem(with: playerItem)
-        }
-
-        player?.volume = min(volume, 1.0)
-        noiseProcessor.reset()
-        isAudioProcessingAttached = false
-        applyAudioMix(to: playerItem)
-
-        // Observe when the item is ready to play
-        statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+        let observedItemID = ObjectIdentifier(playerItem)
+        let generation = playbackGeneration
+        statusObservation = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                // A corrupt/missing local file fails silently otherwise — the UI
-                // sits at 0:00 with stale Now Playing. Surface a clean stopped
-                // state; the track stays current so the user can retry.
-                if item.status == .failed {
-                    print("[Player] item failed to load: \(String(describing: item.error))")
-                    self.isPlaying = false
-                    self.updateNowPlayingInfo()
-                    return
-                }
-                // `trackId` also guards against a late readyToPlay arriving after
-                // stop(): with no current track there's nothing to start.
-                guard item.status == .readyToPlay, let trackId = self.currentTrackId else { return }
-                self.duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
-
-                // Resume from saved position if available
-                let savedPosition = self.playbackStateService?.getPosition(discourseId: trackId)
-                if let saved = savedPosition, saved > 0, saved < self.duration - 5 {
-                    self.seek(to: saved)
-                    self.currentTime = saved
-                }
-
-                // Activate the session at the moment playback actually begins, so
-                // we acquire audio focus and the Now Playing controls light up.
-                self.activateSession()
-                self.player?.play()
-                self.player?.rate = self.playbackRate
-                self.isPlaying = true
-                self.setupTimeObserver()
-                self.observePlayerEnd()
-                self.updateNowPlayingInfo()
-                self.playbackStateService?.recordPlay(discourseId: trackId)
+                self?.handleItemStatusChange(for: observedItemID, generation: generation)
             }
         }
+
+        if player == nil {
+            player = makePlayer()
+        }
+        player?.defaultRate = playbackRate
+        player?.replaceCurrentItem(with: playerItem)
+
+        player?.volume = min(volume, 1.0)
+        configureNoiseProcessor()
+        applyAudioMix(to: playerItem)
+        return true
+    }
+
+    func handleItemStatusChange(for itemID: ObjectIdentifier, generation: UInt64) {
+        guard generation == playbackGeneration,
+              let item = player?.currentItem,
+              ObjectIdentifier(item) == itemID,
+              let trackID = currentTrackId else { return }
+        if item.status == .failed {
+            pausePlayback()
+            removeAudioMix()
+            audioMixFailure = .playback
+            refreshAudioProcessingStatus()
+            return
+        }
+        guard item.status == .readyToPlay, readyItemID != itemID else { return }
+        readyItemID = itemID
+        duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
+        let restoresExplicitPosition = pendingResumePosition != nil
+        let saved = pendingResumePosition ?? playbackStateService?.getPosition(discourseId: trackID)
+        pendingResumePosition = nil
+        if restoresExplicitPosition, let saved, saved.isFinite, duration > 0 {
+            // Exactly the end would finish at once: completion, Smart Delete, auto-advance.
+            let position = max(0, min(saved, duration - 1))
+            seek(to: position)
+            Self.log.info("outcome=original_position_restored clamped=\(position != saved)")
+        } else if let saved, saved.isFinite, saved > 0, saved < duration - 5 {
+            seek(to: saved)
+        }
+        setupTimeObserver()
+        observePlayerEnd()
+        if wantsPlayback {
+            resumePlayback()
+            if isPlaying {
+                playbackStateService?.recordPlay(discourseId: trackID)
+            }
+        }
+    }
+
+    private func detachCurrentItem() {
+        playbackGeneration &+= 1
+        player?.pause()
+        removeTimeObserver()
+        removeEndObserver()
+        statusObservation?.invalidate()
+        statusObservation = nil
+        removeAudioMix()
+        readyItemID = nil
+        pendingResumePosition = nil
+        pendingSeekTarget = nil
+        pendingSeekIssuedAt = nil
+        seekGeneration &+= 1
+        deepFilterStatus = .idle
     }
 
     // MARK: - Private: Audio Session
@@ -677,7 +928,7 @@ final class AudioPlayerService {
             // a different rate — the processor handles whatever rate it receives.
             try? session.setPreferredSampleRate(48000)
         } catch {
-            print("[AudioSession] category setup failed: \(error)")
+            Self.log.error("outcome=audio_session_configuration_failed")
         }
         observeInterruptions()
         observeRouteChanges()
@@ -689,11 +940,12 @@ final class AudioPlayerService {
     /// Returns true on success so callers can decide whether to proceed.
     @discardableResult
     private func activateSession() -> Bool {
+        guard connectsToSystem else { return true }
         do {
             try AVAudioSession.sharedInstance().setActive(true)
             return true
         } catch {
-            print("[AudioSession] activation failed: \(error)")
+            Self.log.error("outcome=audio_session_unavailable")
             return false
         }
     }
@@ -733,7 +985,10 @@ final class AudioPlayerService {
             // iOS has already paused us. Remember whether we were playing so we
             // can resume if the system says it's okay.
             wasPlayingBeforeInterruption = isPlaying
+            wantsPlayback = false
             isPlaying = false
+            resetProcessingEvidence()
+            refreshAudioProcessingStatus()
             updateNowPlayingInfo()
 
         case .ended:
@@ -742,11 +997,8 @@ final class AudioPlayerService {
             // AND we were playing before.
             activateSession()
             let options = optionValue.map { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
-            if player != nil,
-               Self.shouldResumeAfterInterruption(wasPlaying: wasPlayingBeforeInterruption, options: options) {
-                player?.play()
-                player?.rate = playbackRate
-                isPlaying = true
+            if Self.shouldResumeAfterInterruption(wasPlaying: wasPlayingBeforeInterruption, options: options) {
+                resumePlayback()
             }
             wasPlayingBeforeInterruption = false
             updateNowPlayingInfo()
@@ -796,31 +1048,25 @@ final class AudioPlayerService {
     /// the AVPlayer, and any audio tap are all invalid now, and playback plus
     /// Now Playing controls stay dead until relaunch. Apple's guidance is to
     /// reconfigure the session and rebuild every audio object from scratch.
-    private func handleMediaServicesReset() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio, options: [])
-        try? session.setPreferredSampleRate(48000)
-        noiseProcessor.reset()
-
-        guard currentTrackId != nil, queue.indices.contains(currentIndex) else {
-            player = nil
-            return
+    func handleMediaServicesReset() {
+        let resume = isPlaying || (wantsPlayback && pendingResumePosition != nil)
+        let position = pendingResumePosition ?? (currentTime > 0 ? currentTime : nil)
+        if let position { currentTime = position }
+        detachCurrentItem()
+        player = nil
+        isPlaying = false
+        wantsPlayback = false
+        if connectsToSystem {
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .spokenAudio, options: [])
+            try? session.setPreferredSampleRate(48000)
         }
-        if isPlaying {
-            // Rebuild and resume where we were. loadAndPlay saves the outgoing
-            // position first, then its resume path seeks back to it.
-            loadAndPlay(item: queue[currentIndex])
-        } else {
-            // Paused: don't blast audio unprompted. Drop the dead player but
-            // keep track/position state; togglePlayPause rebuilds on demand.
-            removeTimeObserver()
-            removeEndObserver()
-            statusObservation?.invalidate()
-            statusObservation = nil
-            pendingSeekTarget = nil
-            pendingSeekIssuedAt = nil
-            player = nil
+        Self.log.info("outcome=media_services_reset")
+        if resume, currentTrackId != nil, queue.indices.contains(currentIndex) {
+            loadAndPlay(item: queue[currentIndex], resumeAt: position)
         }
+        refreshAudioProcessingStatus()
+        updateNowPlayingInfo()
     }
 
     private func handleRouteChange(reasonValue: UInt?) {
@@ -832,9 +1078,7 @@ final class AudioPlayerService {
             // Headphones/AirPods were unplugged. Apple's convention: pause rather
             // than blast audio out of the speaker.
             if isPlaying {
-                player?.pause()
-                isPlaying = false
-                updateNowPlayingInfo()
+                pausePlayback()
             }
         case .newDeviceAvailable, .categoryChange, .override:
             // A new output appeared or the route otherwise changed; make sure we
@@ -882,12 +1126,7 @@ final class AudioPlayerService {
         commandCenter.playCommand.addTarget { [weak self] _ in
             guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
-                guard let self, !self.isPlaying, let player = self.player else { return }
-                self.activateSession()
-                player.play()
-                player.rate = self.playbackRate
-                self.isPlaying = true
-                self.updateNowPlayingInfo()
+                self?.resumePlayback()
             }
             return .success
         }
@@ -896,10 +1135,7 @@ final class AudioPlayerService {
         commandCenter.pauseCommand.addTarget { [weak self] _ in
             guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
-                guard let self, self.isPlaying, let player = self.player else { return }
-                player.pause()
-                self.isPlaying = false
-                self.updateNowPlayingInfo()
+                self?.pausePlayback()
             }
             return .success
         }
@@ -948,6 +1184,20 @@ final class AudioPlayerService {
             }
             return .success
         }
+
+        // CarPlay's speed button and Siri use this; setRate clamps to 0.5–2.0.
+        let rates: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+        commandCenter.changePlaybackRateCommand.supportedPlaybackRates = rates.map { NSNumber(value: $0) }
+        commandCenter.changePlaybackRateCommand.addTarget { [weak self] event in
+            guard self != nil, let event = event as? MPChangePlaybackRateCommandEvent else {
+                return .commandFailed
+            }
+            let rate = event.playbackRate
+            Task { @MainActor [weak self] in
+                self?.setRate(rate)
+            }
+            return .success
+        }
     }
 
     // MARK: - Private: Now Playing
@@ -958,6 +1208,15 @@ final class AudioPlayerService {
     }()
 
     private func updateNowPlayingInfo() {
+        guard connectsToSystem else { return }
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.nextTrackCommand.isEnabled = hasNext
+        // Previous restarts the current discourse when nothing precedes it.
+        commandCenter.previousTrackCommand.isEnabled = currentTrackId != nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = makeNowPlayingInfo()
+    }
+
+    func makeNowPlayingInfo() -> [String: Any] {
         var info = [String: Any]()
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPMediaItemPropertyTitle] = currentTitle
@@ -966,11 +1225,15 @@ final class AudioPlayerService {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0.0
-        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
+        if queue.indices.contains(currentIndex) {
+            info[MPNowPlayingInfoPropertyPlaybackQueueIndex] = currentIndex
+            info[MPNowPlayingInfoPropertyPlaybackQueueCount] = queue.count
+        }
         if let artwork = nowPlayingArtwork {
             info[MPMediaItemPropertyArtwork] = artwork
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        return info
     }
 
     // MARK: - Private: Time Observer
@@ -980,9 +1243,13 @@ final class AudioPlayerService {
     private func setupTimeObserver() {
         removeTimeObserver()
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
-        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        let itemID = (player?.currentItem).map(ObjectIdentifier.init)
+        let generation = playbackGeneration
+        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.isPlaying else { return }
+                guard let self, self.isPlaying,
+                      generation == self.playbackGeneration,
+                      itemID == (self.player?.currentItem).map(ObjectIdentifier.init) else { return }
                 // Don't clobber currentTime while a seek is in flight — the
                 // player's clock still reads the pre-seek position and would
                 // snap us backward, breaking skip accumulation. But self-heal:
@@ -995,7 +1262,8 @@ final class AudioPlayerService {
                     self.pendingSeekTarget = nil
                     self.pendingSeekIssuedAt = nil
                 }
-                let seconds = time.seconds
+                // A callback can be queued across a seek; sample the live clock after the hop.
+                let seconds = self.player?.currentTime().seconds ?? .nan
                 if seconds.isFinite {
                     self.currentTime = seconds
                     // Pre-emptive smart download: 20 seconds before end
@@ -1027,6 +1295,7 @@ final class AudioPlayerService {
         // skip/finish replaces the item between notification delivery and Task
         // execution, the stale end event must not finish the *new* track.
         let observedItemID = (player?.currentItem).map(ObjectIdentifier.init)
+        let generation = playbackGeneration
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player?.currentItem,
@@ -1034,6 +1303,7 @@ final class AudioPlayerService {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self,
+                      generation == self.playbackGeneration,
                       let observedItemID,
                       (self.player?.currentItem).map(ObjectIdentifier.init) == observedItemID else { return }
                 self.finishCurrentTrack(naturally: !self.didManuallySeekNearEnd)
@@ -1051,40 +1321,220 @@ final class AudioPlayerService {
     // MARK: - Private: Audio Mix (Noise Reduction / Voice Filter + Volume Boost)
 
     private func applyAudioMix(to item: AVPlayerItem) {
-        audioMixGeneration &+= 1
+        removeAudioMix()
+        guard isNoiseReductionEnabled else {
+            refreshAudioProcessingStatus()
+            return
+        }
+        noiseProcessor.setDenoiseEnabled(true)
         let generation = audioMixGeneration
-        let shouldProcess = isNoiseReductionEnabled
-        isAudioProcessingAttached = false
-        Task {
-            guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return }
-            guard generation == audioMixGeneration,
-                  item === player?.currentItem else { return }
-
-            // Boost is deliberately part of the filtered path. On an unfiltered,
-            // full-scale source its limiter changes speech dynamics and sounds
-            // worse than raw playback, so Noise Reduction off means no tap at all.
-            if shouldProcess {
-                guard let mix = noiseProcessor.createAudioMix(for: track) else { return }
+        let itemID = ObjectIdentifier(item)
+        setProcessingStatus(.preparing)
+        startProcessingMonitor(generation: generation, itemID: itemID)
+        let loadTrack = loadAudioTrack
+        audioMixTask = Task { [weak self] in
+            do {
+                let track = try await loadTrack(item)
+                guard let self, !Task.isCancelled,
+                      self.isCurrentAudioMix(generation: generation, itemID: itemID) else { return }
+                defer { self.audioMixTask = nil }
+                guard let track else {
+                    self.audioMixFailure = .noAudioTrack
+                    self.refreshAudioProcessingStatus()
+                    return
+                }
+                guard let mix = self.makeAudioMix(self.noiseProcessor, track, generation) else {
+                    self.audioMixFailure = .tapCreation
+                    self.refreshAudioProcessingStatus()
+                    return
+                }
+                self.resetProcessingEvidence()
                 item.audioMix = mix
-                isAudioProcessingAttached = true
-            } else {
-                item.audioMix = nil
-                isAudioProcessingAttached = false
+                self.isAudioProcessingAttached = true
+                self.refreshAudioProcessingStatus()
+            } catch {
+                guard let self, !Task.isCancelled,
+                      self.isCurrentAudioMix(generation: generation, itemID: itemID) else { return }
+                self.audioMixTask = nil
+                self.audioMixFailure = .trackLoading
+                self.refreshAudioProcessingStatus()
             }
         }
     }
 
     private func rebuildAudioMix() {
-        guard let item = player?.currentItem else { return }
-        noiseProcessor.reset()
-        if !isNoiseReductionEnabled {
-            // Remove processing immediately and invalidate any pending mix build.
-            audioMixGeneration &+= 1
-            item.audioMix = nil
-            isAudioProcessingAttached = false
+        if let item = player?.currentItem, isNoiseReductionEnabled {
+            applyAudioMix(to: item)
+        } else {
+            removeAudioMix()
+            refreshAudioProcessingStatus()
+        }
+    }
+
+    private func removeAudioMix() {
+        noiseProcessor.retireAudioMix(generation: audioMixGeneration)
+        audioMixGeneration &+= 1
+        audioMixTask?.cancel()
+        audioMixTask = nil
+        processingMonitor?.cancel()
+        processingMonitor = nil
+        player?.currentItem?.audioMix = nil
+        isAudioProcessingAttached = false
+        audioMixFailure = nil
+        deepFilterStatus = .idle
+        resetProcessingEvidence()
+    }
+
+    private func isCurrentAudioMix(generation: UInt64, itemID: ObjectIdentifier) -> Bool {
+        isNoiseReductionEnabled && currentTrackId != nil
+            && generation == audioMixGeneration
+            && (player?.currentItem).map(ObjectIdentifier.init) == itemID
+    }
+
+    private func startProcessingMonitor(generation: UInt64, itemID: ObjectIdentifier) {
+        processingMonitor = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .milliseconds(500)) }
+                catch { return }
+                guard let self,
+                      self.isCurrentAudioMix(generation: generation, itemID: itemID) else { return }
+                self.refreshAudioProcessingStatus()
+            }
+        }
+    }
+
+    private func resetProcessingEvidence() {
+        let snapshot = noiseProcessor.diagnosticsSnapshot()
+        previousDiagnostics = snapshot.tapGeneration == audioMixGeneration ? snapshot : .init()
+        lastProcessedAt = nil
+        monitoringStartedAt = nil
+    }
+
+    /// Model readiness alone does not prove audio processing. Sample recent
+    /// buffer outcomes on the control thread after mix attachment.
+    func refreshAudioProcessingStatus() {
+        guard isNoiseReductionEnabled else {
+            deepFilterStatus = .idle
+            setProcessingStatus(.off)
             return
         }
-        applyAudioMix(to: item)
+        guard currentTrackId != nil, let player else {
+            deepFilterStatus = .idle
+            setProcessingStatus(.waitingForPlayback)
+            return
+        }
+        if let failure = audioMixFailure {
+            deepFilterStatus = .idle
+            setProcessingStatus(.setupFailed(failure))
+            return
+        }
+        guard isAudioProcessingAttached else {
+            deepFilterStatus = .idle
+            setProcessingStatus(.preparing)
+            return
+        }
+
+        let snapshot = noiseProcessor.diagnosticsSnapshot()
+        guard snapshot.tapGeneration == audioMixGeneration else {
+            previousDiagnostics = .init()
+            lastProcessedAt = nil
+            monitoringStartedAt = nil
+            deepFilterStatus = .idle
+            setProcessingStatus(.preparing)
+            return
+        }
+        if previousDiagnostics.tapGeneration != snapshot.tapGeneration {
+            previousDiagnostics = .init()
+            previousDiagnostics.tapGeneration = snapshot.tapGeneration
+            lastProcessedAt = nil
+            monitoringStartedAt = nil
+        }
+        let processed = snapshot.processedBuffers &- previousDiagnostics.processedBuffers
+        let invalid = snapshot.invalidBuffers &- previousDiagnostics.invalidBuffers
+        let bypassed = snapshot.modelBypassedBuffers &- previousDiagnostics.modelBypassedBuffers
+            &+ snapshot.disabledBuffers &- previousDiagnostics.disabledBuffers
+            &+ snapshot.lockContendedBuffers &- previousDiagnostics.lockContendedBuffers
+        previousDiagnostics = snapshot
+        deepFilterStatus = noiseReductionMode == .deepFilterNet ? snapshot.deepFilterStatus : .idle
+
+        if snapshot.sourceReadFailed {
+            lastProcessedAt = nil
+            setProcessingStatus(.sourceError)
+            return
+        }
+        if invalid > 0 || snapshot.deepFilterStatus == .unsupportedAudioFormat {
+            lastProcessedAt = nil
+            setProcessingStatus(.unsupportedFormat)
+            return
+        }
+        if case .unsupportedSampleRate = snapshot.deepFilterStatus {
+            lastProcessedAt = nil
+            setProcessingStatus(.unsupportedFormat)
+            return
+        }
+        guard snapshot.isPrepared else {
+            lastProcessedAt = nil
+            monitoringStartedAt = nil
+            setProcessingStatus(.preparing)
+            return
+        }
+        if noiseReductionMode == .deepFilterNet {
+            switch deepFilterStatus {
+            case .loading:
+                lastProcessedAt = nil
+                setProcessingStatus(.loadingModel)
+                return
+            case .idle:
+                lastProcessedAt = nil
+                setProcessingStatus(.preparing)
+                return
+            case .active:
+                break
+            default:
+                lastProcessedAt = nil
+                setProcessingStatus(.modelUnavailable(deepFilterStatus))
+                return
+            }
+        }
+        guard wantsPlayback, player.timeControlStatus == .playing else {
+            lastProcessedAt = nil
+            monitoringStartedAt = nil
+            setProcessingStatus(.waitingForPlayback)
+            return
+        }
+        if snapshot.resetPending {
+            lastProcessedAt = nil
+            setProcessingStatus(.preparing)
+            return
+        }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        if monitoringStartedAt == nil { monitoringStartedAt = now }
+        if processed > 0 {
+            lastProcessedAt = now
+            setProcessingStatus(.active, processed: processed, bypassed: bypassed)
+        } else if bypassed > 0 {
+            lastProcessedAt = nil
+            setProcessingStatus(.bypassing, processed: processed, bypassed: bypassed)
+        } else if let lastProcessedAt, now - lastProcessedAt < 2 {
+            setProcessingStatus(.active)
+        } else if now - (monitoringStartedAt ?? now) >= 2 {
+            setProcessingStatus(.waitingForAudio)
+        } else {
+            setProcessingStatus(noiseReductionMode == .deepFilterNet ? .modelReady : .preparing)
+        }
+    }
+
+    private func setProcessingStatus(_ status: AudioProcessingStatus, processed: UInt64 = 0, bypassed: UInt64 = 0) {
+        guard audioProcessingStatus != status else { return }
+        audioProcessingStatus = status
+        let method = noiseReductionMode.rawValue
+        let outcome = status.outcome
+        if status.isIssue {
+            Self.log.error("method=\(method, privacy: .public) outcome=\(outcome, privacy: .public) processed=\(processed) bypassed=\(bypassed)")
+        } else {
+            Self.log.info("method=\(method, privacy: .public) outcome=\(outcome, privacy: .public) processed=\(processed) bypassed=\(bypassed)")
+        }
     }
 
     private func configureNoiseProcessor() {

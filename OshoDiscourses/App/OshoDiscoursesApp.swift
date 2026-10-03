@@ -22,11 +22,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct OshoDiscoursesApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var audioPlayer = AudioPlayerService()
-    @State private var downloadService = DownloadService()
-    @State private var playbackState = PlaybackStateService()
+    private let runtime: AppRuntime
+    @State private var audioPlayer: AudioPlayerService
+    @State private var downloadService: DownloadService
+    @State private var playbackState: PlaybackStateService
     @State private var showingSplash = true
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        let runtime = AppRuntime.shared
+        runtime.start()
+        WatchPhoneSession.shared.start(runtime: runtime)
+        MacWindowConfigurator.install()
+        self.runtime = runtime
+        _audioPlayer = State(initialValue: runtime.audioPlayer)
+        _downloadService = State(initialValue: runtime.downloadService)
+        _playbackState = State(initialValue: runtime.playbackState)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -46,46 +58,9 @@ struct OshoDiscoursesApp: App {
                         UserSettings.shared.refreshShuffledTheme()
                     }
                 }
-                .onAppear {
-                    // Prewarm the ~190KB ArchiveCatalog JSON decode off the
-                    // main thread so the first thumbnail render doesn't pay it
-                    // (static let init is thread-safe; first toucher decodes).
-                    Task.detached(priority: .utility) { _ = ArchiveCatalog.mappedSeriesCount }
-                    playbackState.attach(to: audioPlayer)
-                    audioPlayer.playbackStateService = playbackState
-                    audioPlayer.downloadService = downloadService
-                    SleepTimerService.shared.onExpire = { [weak audioPlayer] in
-                        guard let audioPlayer, audioPlayer.isPlaying else { return }
-                        audioPlayer.togglePlayPause()
-                    }
-                    // Silent iCloud sync of listening activity (positions, completed,
-                    // bookmarks, daily stats) through the user's own iCloud (no
-                    // account, no toggle). Push on each local save / bookmark change,
-                    // pull/merge on external change.
-                    playbackState.onProgressSaved = { CloudSyncService.shared.push() }
-                    BookmarkService.shared.onBookmarksChanged = { CloudSyncService.shared.push() }
-                    downloadService.onDownloadHistoryChanged = { CloudSyncService.shared.push() }
-                    TranscriptStateService.shared.onChanged = { CloudSyncService.shared.push() }
-                    CloudSyncService.shared.start(playbackState: playbackState, downloadService: downloadService)
-                    // Transcripts travel with the audio: fetched behind each
-                    // committed download, dropped with a deleted one, and
-                    // backfilled for downloads that predate the feature.
-                    downloadService.onDownloadCommitted = { TranscriptService.shared.prefetch($0.id) }
-                    downloadService.onDownloadDeleted = { TranscriptService.shared.remove($0) }
-                    Task {
-                        // Let launch settle first; the backfill is not urgent.
-                        try? await Task.sleep(for: .seconds(5))
-                        TranscriptService.shared.backfill(
-                            downloadedIDs: Array(downloadService.downloadedIDs),
-                            allowsCellular: UserSettings.shared.allowCellularDownloads
-                        )
-                    }
-                }
 
-            // A one-shot launch splash laid over ContentView (which mounts
-            // underneath at t=0, so all .onAppear wiring and the .onChange
-            // scenePhase resume handoff fire on their normal schedule — the
-            // splash gates nothing functional). It fades away after ~1s.
+            // A one-shot launch splash laid over ContentView, which mounts
+            // underneath at t=0; the splash gates nothing functional.
             if showingSplash {
                 LaunchView { showingSplash = false }
                     .transition(.opacity)
@@ -94,5 +69,6 @@ struct OshoDiscoursesApp: App {
             }
             .animation(.easeOut(duration: 0.25), value: showingSplash)
         }
+        .commands { AppCommands(player: audioPlayer) }
     }
 }

@@ -4,8 +4,13 @@ struct SeriesDetailView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
     @Environment(PlaybackStateService.self) private var playbackState
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let seriesInfo: SeriesInfo
     @State private var showDownloadAllConfirm = false
+
+    private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
+    /// Header and list share one column so their edges line up on iPad.
+    private static let regularColumnWidth: CGFloat = 820
 
     private var discourses: [CatalogDiscourse] {
         Catalog.discourses(for: seriesInfo)
@@ -14,10 +19,17 @@ struct SeriesDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                headerSection
-                downloadAllButton
+                if isRegular {
+                    regularHeader
+                } else {
+                    headerSection
+                    downloadAllButton
+                }
                 discourseList
             }
+            .padding(.bottom, isRegular ? 70 : 0)
+            .frame(maxWidth: isRegular ? Self.regularColumnWidth : .infinity)
+            .frame(maxWidth: .infinity)
         }
         .background(Color(.systemBackground))
         .navigationTitle(seriesInfo.name)
@@ -126,6 +138,70 @@ struct SeriesDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Podcasts-style header for wide windows: cover beside the details, so
+    /// the first discourses are visible without scrolling.
+    private var regularHeader: some View {
+        HStack(alignment: .top, spacing: 24) {
+            SeriesThumbnailView(name: seriesInfo.name, size: 176, seriesID: seriesInfo.id)
+                .shadow(color: .primary.opacity(0.08), radius: 16)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(seriesInfo.name)
+                    .font(.largeTitle.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Text("\(seriesInfo.count) discourses")
+                        .foregroundStyle(.secondary)
+                    Text("·").foregroundStyle(.secondary)
+                    Text(seriesInfo.language == .hindi ? "Hindi" : "English")
+                        .foregroundStyle(Color.accent)
+                    let completedCount = playbackState.completedCount(for: seriesInfo.id)
+                    if completedCount > 0 {
+                        Text("·").foregroundStyle(.secondary)
+                        Text("\(completedCount)/\(seriesInfo.count) completed")
+                            .foregroundStyle(.green)
+                    }
+                }
+                .font(.subheadline)
+
+                let transcriptCount = TranscriptCatalog.transcriptCount(forSeriesID: seriesInfo.id)
+                if transcriptCount > 0 {
+                    Label(
+                        transcriptCount == seriesInfo.count
+                            ? "Transcripts for every discourse"
+                            : "Transcripts for \(transcriptCount) of \(seriesInfo.count)",
+                        systemImage: "doc.plaintext"
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+
+                if let meta = SeriesMetadata.description(for: seriesInfo.name) {
+                    Text(meta.sourceText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                    if let year = meta.year, let location = meta.location {
+                        Text("\(location), \(year)")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                downloadAllControl
+                    .frame(maxWidth: 360)
+                    .padding(.top, 8)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal)
+        .padding(.top, 24)
+        .padding(.bottom, 24)
+    }
+
     private var remainingCount: Int {
         discourses.filter { !downloads.isDownloaded($0.id) }.count
     }
@@ -140,6 +216,12 @@ struct SeriesDetailView: View {
     }
 
     private var downloadAllButton: some View {
+        downloadAllControl
+            .padding(.horizontal)
+            .padding(.bottom, 20)
+    }
+
+    private var downloadAllControl: some View {
         Button {
             showDownloadAllConfirm = true
         } label: {
@@ -160,8 +242,7 @@ struct SeriesDetailView: View {
             .foregroundStyle(Color.accent)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
-        .padding(.horizontal)
-        .padding(.bottom, 20)
+        .hoverEffect(.highlight)
         .confirmationDialog(
             "Download \(remainingCount) discourses?",
             isPresented: $showDownloadAllConfirm,
@@ -200,6 +281,7 @@ private struct DiscourseRowView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
     @Environment(PlaybackStateService.self) private var playbackState
+    @Environment(AppNavigation.self) private var navigation: AppNavigation?
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
     @State private var showDownloadHint = false
@@ -286,7 +368,28 @@ private struct DiscourseRowView: View {
         .accessibilityAction {
             playDiscourse()
         }
+        .hoverEffect(.highlight)
         .contextMenu {
+            if isDownloaded {
+                Button {
+                    if player.currentTrackId == discourse.id { player.togglePlayPause() } else { playDiscourse() }
+                } label: {
+                    Label(isCurrentlyPlaying ? "Pause" : "Play", systemImage: isCurrentlyPlaying ? "pause" : "play")
+                }
+            } else if !downloads.isDownloading(discourse.id) {
+                Button {
+                    downloads.startDownload(discourse)
+                } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+            if player.currentTrackId == discourse.id, let navigation {
+                Button {
+                    navigation.addBookmark()
+                } label: {
+                    Label("Add Bookmark…", systemImage: "bookmark")
+                }
+            }
             if hasTranscript {
                 Button {
                     showTranscript = true
@@ -305,6 +408,14 @@ private struct DiscourseRowView: View {
                     playbackState.markCompleted(discourseId: discourse.id)
                 } label: {
                     Label("Mark as Complete", systemImage: "checkmark.circle")
+                }
+            }
+            if isDownloaded {
+                Divider()
+                Button(role: .destructive) {
+                    try? downloads.deleteDownload(discourseID: discourse.id)
+                } label: {
+                    Label("Remove Download", systemImage: "trash")
                 }
             }
         }

@@ -44,28 +44,34 @@ final class PolyphaseResampler: @unchecked Sendable {
     /// Sub-sample phase of the next output, in 1/interpolation units.
     private var nextPhase = 0
 
-    init(inputRate: Int, outputRate: Int, maxInputFrames: Int, tapsPerPhase: Int = 16) {
+    init(inputRate: Int, outputRate: Int, maxInputFrames: Int, tapsPerPhase: Int? = nil) {
+        precondition(inputRate > 0 && outputRate > 0 && maxInputFrames > 0)
+        // Keep the transition width relative to the lower Nyquist limit, including
+        // heavily decimated streams. A fixed short FIR aliases those streams.
+        let ratio = max(1, Double(inputRate) / Double(outputRate))
+        let taps = tapsPerPhase ?? Int(ceil(128 * ratio / 2)) * 2
+        precondition(taps >= 2)
         self.inputRate = inputRate
         self.outputRate = outputRate
         let divisor = Self.greatestCommonDivisor(inputRate, outputRate)
         self.interpolation = outputRate / divisor
         self.decimation = inputRate / divisor
-        self.tapsPerPhase = tapsPerPhase
+        self.tapsPerPhase = taps
 
-        historyCount = max(tapsPerPhase - 1, 1)
+        historyCount = max(taps - 1, 1)
         scratchCapacity = historyCount + max(maxInputFrames, 1)
         history = .allocate(capacity: historyCount)
         history.initialize(repeating: 0, count: historyCount)
         scratch = .allocate(capacity: scratchCapacity)
         scratch.initialize(repeating: 0, count: scratchCapacity)
 
-        let total = interpolation * tapsPerPhase
+        let total = interpolation * taps
         coefficients = .allocate(capacity: total)
         coefficients.initialize(repeating: 0, count: total)
         Self.buildCoefficients(
             into: coefficients,
             interpolation: interpolation,
-            tapsPerPhase: tapsPerPhase,
+            tapsPerPhase: taps,
             inputRate: inputRate,
             outputRate: outputRate
         )
@@ -103,24 +109,35 @@ final class PolyphaseResampler: @unchecked Sendable {
         outputCapacity: Int
     ) -> Int {
         guard count > 0, count + historyCount <= scratchCapacity else { return 0 }
+        if inputRate == outputRate {
+            guard outputCapacity >= count else { return 0 }
+            output.update(from: input, count: count)
+            return count
+        }
+
+        // Reject short destinations before advancing history. Partially consuming
+        // input would leave nextBase pointing outside the next block's history.
+        let endExclusive = inputPosition + count
+        let steps = (endExclusive - nextBase) * interpolation - nextPhase
+        let required = max(0, (steps + decimation - 1) / decimation)
+        guard outputCapacity >= required else { return 0 }
 
         // Lay out history followed by the new block. scratch[i] holds absolute
         // input index (inputPosition - historyCount + i).
         scratch.update(from: history, count: historyCount)
         (scratch + historyCount).update(from: input, count: count)
 
-        let endExclusive = inputPosition + count
         let originOffset = historyCount - inputPosition
         var produced = 0
 
-        while nextBase < endExclusive, produced < outputCapacity {
+        while nextBase < endExclusive {
             let basePosition = nextBase + originOffset
             var accumulator: Float = 0
             let phaseBase = nextPhase * tapsPerPhase
-            // y[k] = sum_t h[phase][t] * x[base - t]
-            for tap in 0..<tapsPerPhase {
-                accumulator += coefficients[phaseBase + tap] * scratch[basePosition - tap]
-            }
+            vDSP_dotpr(
+                coefficients + phaseBase, 1, scratch + basePosition - tapsPerPhase + 1, 1,
+                &accumulator, vDSP_Length(tapsPerPhase)
+            )
             output[produced] = accumulator
             produced += 1
 
@@ -149,13 +166,14 @@ final class PolyphaseResampler: @unchecked Sendable {
         outputRate: Int
     ) {
         let total = interpolation * tapsPerPhase
-        // Cutoff must sit below the lower of the two Nyquist limits: it removes
-        // interpolation images when upsampling and prevents aliasing when
-        // decimating. 0.45 leaves a modest transition band.
+        // Passband ends at 90% of the lower Nyquist limit; stopband starts at
+        // Nyquist. Kaiser beta 8.6 targets roughly 80 dB of image/alias rejection.
         let upsampledRate = Double(inputRate * interpolation)
-        let cutoffHz = 0.45 * Double(min(inputRate, outputRate))
+        let cutoffHz = 0.475 * Double(min(inputRate, outputRate))
         let normalizedCutoff = cutoffHz / upsampledRate   // cycles per upsampled sample
         let center = Double(total - 1) / 2
+        let beta = 8.6
+        let windowScale = besselI0(beta)
 
         var prototype = [Double](repeating: 0, count: total)
         for index in 0..<total {
@@ -168,28 +186,35 @@ final class PolyphaseResampler: @unchecked Sendable {
                 let argument = 2 * Double.pi * normalizedCutoff * offset
                 sincValue = sin(argument) / (Double.pi * offset)
             }
-            // Blackman window: ~-58 dB sidelobes, enough that imaging stays well
-            // below this source material's own noise floor.
-            let ratio = Double(index) / Double(total - 1)
-            let window = 0.42
-                - 0.5 * cos(2 * Double.pi * ratio)
-                + 0.08 * cos(4 * Double.pi * ratio)
+            let position = offset / center
+            let window = besselI0(beta * sqrt(max(0, 1 - position * position))) / windowScale
             prototype[index] = sincValue * window
         }
 
-        // Normalise for unity DC gain: each output sample uses one phase, whose
-        // taps must sum to 1.
-        let sum = prototype.reduce(0, +)
-        let scale = sum.magnitude > 1e-12 ? Double(interpolation) / sum : 1
-
-        // Regroup from prototype index (phase + tap * L) into phase-major order.
         for phase in 0..<interpolation {
+            var phaseSum = 0.0
+            for tap in 0..<tapsPerPhase {
+                phaseSum += prototype[phase + tap * interpolation]
+            }
+            let scale = abs(phaseSum) > 1e-12 ? 1 / phaseSum : 1
             for tap in 0..<tapsPerPhase {
                 let prototypeIndex = phase + tap * interpolation
                 let value = prototypeIndex < total ? prototype[prototypeIndex] * scale : 0
-                destination[phase * tapsPerPhase + tap] = Float(value)
+                // Reversed taps make both dot-product inputs contiguous forwards.
+                destination[phase * tapsPerPhase + tapsPerPhase - 1 - tap] = Float(value)
             }
         }
+    }
+
+    private static func besselI0(_ value: Double) -> Double {
+        var sum = 1.0
+        var term = 1.0
+        for index in 1...40 {
+            term *= value * value / (4 * Double(index * index))
+            sum += term
+            if term < sum * 1e-15 { break }
+        }
+        return sum
     }
 
     static func greatestCommonDivisor(_ a: Int, _ b: Int) -> Int {

@@ -323,14 +323,14 @@ struct DeepFilterNetTests {
     // MARK: - Wiring
 
     @Test func deepFilterNetIsSelectableAndPersists() {
-        #expect(NoiseReductionMode.allCases.contains(.deepFilterNet))
+        #expect(NoiseReductionMode.allCases.first == .deepFilterNet)
         // Raw value is the persisted key: changing it would silently reset the
         // listener's stored choice.
         #expect(NoiseReductionMode.deepFilterNet.rawValue == "deepFilterNet")
         #expect(NoiseReductionMode(rawValue: "deepFilterNet") == .deepFilterNet)
-        #expect(NoiseReductionMode.deepFilterNet.displayName == "DeepFilterNet")
+        #expect(NoiseReductionMode.deepFilterNet.displayName == "Best Quality")
         #expect(NoiseReductionMode.deepFilterNet.detail.isEmpty == false)
-        #expect(NoiseReductionMode.deepFilterNet.shortDescriptor.isEmpty == false)
+        #expect(NoiseReductionMode.deepFilterNet.batteryNote.isEmpty == false)
     }
 
     @Test func strengthMapsToAttenuationLimitNotWetMix() {
@@ -359,6 +359,9 @@ struct DeepFilterNetTests {
         let original = samples
         processSamples(&samples, with: processor)
         #expect(samples == original, "unloaded model must be transparent passthrough")
+        let diagnostics = processor.diagnosticsSnapshot()
+        #expect(diagnostics.modelBypassedBuffers == 1)
+        #expect(diagnostics.processedBuffers == 0)
     }
 
     @Test func voiceFocusPresetsArePersistableAndDistinct() {
@@ -549,7 +552,7 @@ struct DeepFilterNetTests {
     // MARK: - Latency across resets
 
     /// Lag, in samples, that best lines `rendered` up against `reference`.
-    private func bestLag(reference: [Float], rendered: [Float], maxLag: Int) -> Int {
+    func bestLag(reference: [Float], rendered: [Float], maxLag: Int) -> Int {
         var bestLag = 0
         var bestScore = 0.0
         let window = min(reference.count, rendered.count) - maxLag - 1
@@ -569,7 +572,7 @@ struct DeepFilterNetTests {
     /// Voiced-sounding syllables whose pitch changes each time, so the signal has
     /// a single unambiguous alignment. A steady note correlates once per period
     /// and would let this test lock onto the wrong peak.
-    private func syllables(seconds: Double, sampleRate: Double) -> [Float] {
+    func syllables(seconds: Double, sampleRate: Double) -> [Float] {
         let pitches: [Double] = [150, 232, 191, 305, 168, 264, 212, 143, 287, 176]
         let syllable = 0.5
         var phase = 0.0
@@ -859,6 +862,24 @@ struct DeepFilterNetTests {
             gainDb = 20 * log10(max(rms(frame), 1e-9) / max(before, 1e-9))
         }
         #expect(gainDb > 3, "quiet speech is no longer being lifted (got \(gainDb) dB)")
+    }
+
+    @Test func enablingLiftDoesNotWaitForANonLiftingLevelEstimate() {
+        let chain = VoiceFocusChain(sampleRate: 48_000, parameters: .focus)
+        var before: Float = 0
+        var after: Float = 0
+        for frameIndex in 0..<125 {
+            if frameIndex == 100 { chain.update(parameters: .lift) }
+            var frame = (0..<480).map { index in
+                Float(0.02 * sin(2 * .pi * 300 * Double(frameIndex * 480 + index) / 48_000))
+            }
+            frame.withUnsafeMutableBufferPointer { pointer in
+                chain.process(frame: pointer.baseAddress!, count: pointer.count, localSnrDb: 20)
+            }
+            if frameIndex == 99 { before = rms(frame) }
+            if frameIndex == 124 { after = rms(frame) }
+        }
+        #expect(20 * log10(after / before) > 2, "quiet speech should respond without resetting the stream")
     }
 
     // MARK: - Helpers

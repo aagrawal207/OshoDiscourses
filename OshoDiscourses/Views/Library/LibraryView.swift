@@ -41,7 +41,11 @@ struct LibraryView: View {
     @State private var sortField: SeriesSortField = .name
     @State private var sortDirection: SortDirection = .ascending
     @Environment(DownloadService.self) private var downloads
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @ScaledMetric(relativeTo: .subheadline) private var tileMinWidth = AppLayout.gridMinimumCardWidth
     private var settings = UserSettings.shared
+
+    private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
 
     /// Themes shown as filter chips only when shared by at least this many
     /// currently-visible series — keeps one-off themes out of the bar.
@@ -138,23 +142,46 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    filterSortBar
-                        .padding(.bottom, 8)
+                if isRegular {
+                    VStack(alignment: .leading, spacing: 0) {
+                        filterSortBar
+                            .padding(.bottom, 12)
 
-                    ForEach(filteredSeries) { series in
-                        NavigationLink(value: series) {
-                            SeriesRowView(series: series)
+                        LazyVGrid(columns: SeriesTileView.columns(minimum: tileMinWidth), spacing: 12) {
+                            ForEach(filteredSeries) { series in
+                                NavigationLink(value: series) {
+                                    SeriesTileView(series: series)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .buttonStyle(.plain)
-
-                        Divider()
-                            .padding(.leading, 72)
+                        .padding(.horizontal)
+                        noResults
                     }
+                    .padding(.bottom, 70)
+                    .frame(maxWidth: AppLayout.gridMaxWidth)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        filterSortBar
+                            .padding(.bottom, 8)
+
+                        ForEach(filteredSeries) { series in
+                            NavigationLink(value: series) {
+                                SeriesRowView(series: series)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider()
+                                .padding(.leading, 72)
+                        }
+                        noResults
+                    }
+                    .padding(.bottom, 70)
                 }
-                .padding(.bottom, 70)
             }
-            .background(Color(.systemBackground))
+            // Grouped background on the grid so the tiles read as cards.
+            .background(isRegular ? Color(.systemGroupedBackground) : Color(.systemBackground))
             .navigationTitle("Library")
             .searchable(text: $searchText, prompt: "Search by name or topic")
             .navigationDestination(for: SeriesInfo.self) { series in
@@ -163,6 +190,14 @@ struct LibraryView: View {
             .onAppear { resetFilterIfUnavailable() }
             .onChange(of: settings.languageFilter) { resetFilterIfUnavailable() }
             .onChange(of: downloads.downloadedIDs) { resetFilterIfUnavailable() }
+        }
+    }
+
+    @ViewBuilder
+    private var noResults: some View {
+        if filteredSeries.isEmpty, !searchText.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+                .padding(.top, 40)
         }
     }
 
@@ -242,6 +277,7 @@ private struct SeriesRowView: View {
         HStack(spacing: 12) {
             SeriesThumbnailView(name: series.name, size: 48, seriesID: series.id)
 
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(series.name)
                     .font(.subheadline)
@@ -271,5 +307,7 @@ private struct SeriesRowView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 }

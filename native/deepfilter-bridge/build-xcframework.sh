@@ -11,8 +11,9 @@
 # API changes that its own source does not compile against). Do not run
 # `cargo update` without re-verifying the build.
 #
-# Requires: rustup, and the three iOS targets:
-#   rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+# Requires: rustup, and the iOS and Mac Catalyst targets:
+#   rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios \
+#     aarch64-apple-ios-macabi x86_64-apple-ios-macabi
 
 set -euo pipefail
 
@@ -26,6 +27,8 @@ LIB_NAME="libdeepfilter_bridge.a"
 # objects with the host SDK's version, and every one of them draws a linker
 # warning about being built for a newer iOS than the app targets.
 export IPHONEOS_DEPLOYMENT_TARGET=18.0
+# The *-macabi targets read this too: Mac Catalyst 18.0 is macOS 15.0, matching
+# MACOSX_DEPLOYMENT_TARGET in project.yml (`vtool -show-build` reports MACCATALYST 18.0).
 
 cd "${CRATE_DIR}"
 
@@ -34,8 +37,10 @@ cd "${CRATE_DIR}"
 # `xcodebuild -configuration Release` fail to link for x86_64.
 DEVICE_TARGET=aarch64-apple-ios
 SIM_TARGETS=(aarch64-apple-ios-sim x86_64-apple-ios)
+# Universal for the same reason: Release Catalyst builds link arm64 and x86_64.
+CATALYST_TARGETS=(aarch64-apple-ios-macabi x86_64-apple-ios-macabi)
 
-for target in "${DEVICE_TARGET}" "${SIM_TARGETS[@]}"; do
+for target in "${DEVICE_TARGET}" "${SIM_TARGETS[@]}" "${CATALYST_TARGETS[@]}"; do
   echo "==> Building ${target}"
   # --locked so a stale index cannot silently upgrade the pinned tract version.
   cargo build --release --locked --target "${target}"
@@ -49,6 +54,14 @@ lipo -create \
   "${CRATE_DIR}/target/x86_64-apple-ios/release/${LIB_NAME}" \
   -output "${SIM_UNIVERSAL}/${LIB_NAME}"
 
+echo "==> Creating universal Mac Catalyst library"
+CATALYST_UNIVERSAL="${CRATE_DIR}/target/universal-maccatalyst"
+mkdir -p "${CATALYST_UNIVERSAL}"
+lipo -create \
+  "${CRATE_DIR}/target/aarch64-apple-ios-macabi/release/${LIB_NAME}" \
+  "${CRATE_DIR}/target/x86_64-apple-ios-macabi/release/${LIB_NAME}" \
+  -output "${CATALYST_UNIVERSAL}/${LIB_NAME}"
+
 echo "==> Packaging XCFramework"
 rm -rf "${OUTPUT}"
 mkdir -p "${REPO_ROOT}/Vendor"
@@ -56,6 +69,8 @@ xcodebuild -create-xcframework \
   -library "${CRATE_DIR}/target/${DEVICE_TARGET}/release/${LIB_NAME}" \
   -headers "${CRATE_DIR}/include" \
   -library "${SIM_UNIVERSAL}/${LIB_NAME}" \
+  -headers "${CRATE_DIR}/include" \
+  -library "${CATALYST_UNIVERSAL}/${LIB_NAME}" \
   -headers "${CRATE_DIR}/include" \
   -output "${OUTPUT}"
 

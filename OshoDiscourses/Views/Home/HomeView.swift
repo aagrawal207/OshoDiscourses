@@ -5,7 +5,11 @@ struct HomeView: View {
     @Environment(DownloadService.self) private var downloads
     @Environment(PlaybackStateService.self) private var playbackState
     @Environment(AudioPlayerService.self) private var player
+    @Environment(AppNavigation.self) private var navigation: AppNavigation?
+    @Environment(\.horizontalSizeClass) private var sizeClass
     private var settings = UserSettings.shared
+
+    private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
 
     private var popularEnglish: [SeriesInfo] {
         guard !settings.hideEnglish else { return [] }
@@ -30,30 +34,48 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    if !continueListening.isEmpty {
-                        continueListeningSection
-                    }
+                LazyVStack(alignment: .leading, spacing: isRegular ? 28 : 18) {
+                    if isRegular, !continueListening.isEmpty || !recentlyCompleted.isEmpty {
+                        // Side by side on a wide window: both are short lists,
+                        // and stacking them pushed the shelves below the fold.
+                        HStack(alignment: .top, spacing: 0) {
+                            if !continueListening.isEmpty {
+                                continueListeningSection
+                            }
+                            if !recentlyCompleted.isEmpty {
+                                recentlyCompletedSection
+                            }
+                            if continueListening.isEmpty || recentlyCompleted.isEmpty {
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                            }
+                        }
+                    } else {
+                        if !continueListening.isEmpty {
+                            continueListeningSection
+                        }
 
-                    if !recentlyCompleted.isEmpty {
-                        recentlyCompletedSection
+                        if !recentlyCompleted.isEmpty {
+                            recentlyCompletedSection
+                        }
                     }
 
                     if !popularEnglish.isEmpty {
-                        SeriesSectionView(title: "Popular in English", series: popularEnglish)
+                        SeriesSectionView(title: "Popular in English", series: popularEnglish, isRegular: isRegular)
                     }
                     if !beginnerEnglish.isEmpty {
-                        SeriesSectionView(title: "Beginner Friendly (English)", series: beginnerEnglish)
+                        SeriesSectionView(title: "Beginner Friendly (English)", series: beginnerEnglish, isRegular: isRegular)
                     }
                     if !popularHindi.isEmpty {
-                        SeriesSectionView(title: "Popular in Hindi", series: popularHindi)
+                        SeriesSectionView(title: "Popular in Hindi", series: popularHindi, isRegular: isRegular)
                     }
                     if !beginnerHindi.isEmpty {
-                        SeriesSectionView(title: "Beginner Friendly (Hindi)", series: beginnerHindi)
+                        SeriesSectionView(title: "Beginner Friendly (Hindi)", series: beginnerHindi, isRegular: isRegular)
                     }
                 }
                 .padding(.top, 12)
                 .padding(.bottom, 70)
+                .frame(maxWidth: isRegular ? AppLayout.gridMaxWidth : .infinity)
+                .frame(maxWidth: .infinity)
             }
             // Grouped background (light gray in light mode, true black in dark)
             // so the section cards below read as distinct blocks. Fixes the
@@ -63,11 +85,11 @@ struct HomeView: View {
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToSeries)) { notification in
-                if let series = notification.object as? SeriesInfo {
-                    navigationPath = NavigationPath()
-                    navigationPath.append(series)
-                }
+            .onChange(of: navigation?.pendingSeries, initial: true) { _, series in
+                guard let series else { return }
+                navigation?.pendingSeries = nil
+                navigationPath = NavigationPath()
+                navigationPath.append(series)
             }
         }
     }
@@ -215,8 +237,10 @@ struct HomeView: View {
                             .accessibilityLabel("Remove from Recently Completed")
                         }
                         .padding(.vertical, 8)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
 
                     if item.id != recentlyCompleted.last?.id {
                         Divider().padding(.leading, 68)
@@ -231,8 +255,8 @@ struct HomeView: View {
         // Children already carry 16pt side padding, so the section is capped at
         // the content width plus that padding. Keeps the header's "Clear All"
         // on the same right edge as the card instead of flung to the iPad's
-        // far edge.
-        .frame(maxWidth: contentMaxWidth + 32, alignment: .leading)
+        // far edge. Regular width splits the row with Continue Listening.
+        .frame(maxWidth: isRegular ? .infinity : contentMaxWidth + 32, alignment: .leading)
     }
 
     // MARK: - Continue Listening
@@ -285,7 +309,7 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal)
         }
-        .frame(maxWidth: contentMaxWidth + 32, alignment: .leading)
+        .frame(maxWidth: isRegular ? .infinity : contentMaxWidth + 32, alignment: .leading)
     }
 }
 
@@ -294,26 +318,88 @@ struct HomeView: View {
 private struct SeriesSectionView: View {
     let title: String
     let series: [SeriesInfo]
+    var isRegular = false
+    @ScaledMetric(relativeTo: .subheadline) private var tileMinWidth = AppLayout.gridMinimumCardWidth
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: isRegular ? 12 : 8) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(isRegular ? .title3.bold() : .subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
+                .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 8) {
+            if isRegular {
+                // A grid rather than a shelf: a pointer or trackpad has no
+                // natural horizontal scroll, and eight series fit in two rows.
+                LazyVGrid(columns: SeriesTileView.columns(minimum: tileMinWidth), spacing: 12) {
                     ForEach(series) { item in
                         NavigationLink(value: item) {
-                            SeriesCardView(series: item)
+                            SeriesTileView(series: item)
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal)
+            } else {
+                shelf
             }
         }
+    }
+
+    private var shelf: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 8) {
+                ForEach(series) { item in
+                    NavigationLink(value: item) {
+                        SeriesCardView(series: item)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+}
+
+// MARK: - Series Tile
+
+/// Regular-width card for Home and Library grids: a larger cover and room for
+/// a two-line name, so long titles stop truncating at 36pt thumbnails.
+struct SeriesTileView: View {
+    let series: SeriesInfo
+    @ScaledMetric(relativeTo: .subheadline) private var thumbnailSize: CGFloat = 56
+
+    /// `minimum` should come from a `@ScaledMetric` so large text gets fewer, wider tiles.
+    static func columns(minimum: CGFloat) -> [GridItem] {
+        [GridItem(.adaptive(minimum: minimum), spacing: 12, alignment: .top)]
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SeriesThumbnailView(name: series.name, size: min(thumbnailSize, 84), seriesID: series.id)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(series.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+
+                Text("\(series.count) discourses · \(series.language == .hindi ? "Hindi" : "English")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: min(thumbnailSize, 84) + 20, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -342,6 +428,7 @@ private struct SeriesCardView: View {
         .padding(.vertical, 8)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hoverEffect(.highlight)
     }
 }
 
@@ -473,6 +560,7 @@ private struct ContinueListeningHeader: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .accessibilityHint("Opens the series")
     }
 }

@@ -2,20 +2,28 @@ import SwiftUI
 
 struct PlayerView: View {
     @Environment(AudioPlayerService.self) private var player
+    /// Optional so previews and any host without a window model still work.
+    @Environment(AppNavigation.self) private var navigation: AppNavigation?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isDragging = false
     @State private var dragTime: TimeInterval = 0
     @State private var showSpeedPicker = false
     @State private var showSleepTimer = false
-    @State private var showDenoisePicker = false
+    @State private var showAudioEnhancement = false
     @State private var showQueue = false
     @State private var showTranscript = false
+    /// The wide player's reading pane; the listener's choice persists.
+    @AppStorage("player.transcriptPaneVisible") private var showsTranscriptPane = true
     private var sleepTimer = SleepTimerService.shared
     private var transcripts = TranscriptService.shared
     @State private var showBookmarkSheet = false
     @State private var bookmarkTimestamp: TimeInterval = 0
     @State private var showBookmarkAdded = false
     @State private var showTotalTime = false
+    /// Whether this window has room for the reading pane beside or below the controls.
+    @State private var paneFits = false
     private var bookmarks = BookmarkService.shared
 
     // Scale the fixed artwork/glyph sizes with Dynamic Type, capped so the
@@ -28,106 +36,86 @@ struct PlayerView: View {
         isDragging ? dragTime : player.currentTime
     }
 
-    /// Boost steps offered by the control. Above unity the peaks are limited
-    /// rather than clipped, which is what makes anything past 2x usable at all —
-    /// a plain multiply on a source already at full scale just distorts.
-    private static let boostSteps: [Float] = [1.0, 1.5, 2.0, 3.0, 4.0]
+    private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
 
-    /// Cycles up through the steps and wraps back to off, so one button covers
-    /// the range without needing a slider in the transport row.
-    private var nextBoostLevel: Float {
-        let current = player.volume
-        let next = Self.boostSteps.first { $0 > current + 0.01 }
-        return next ?? Self.boostSteps[0]
+    private var hasOpenSheet: Bool {
+        showQueue || showAudioEnhancement || showTranscript || showBookmarkSheet
     }
 
-    private var boostLabel: String {
-        let value = player.volume
-        // 1.5x reads better than "1.5×" truncated; whole numbers stay compact.
-        return value == value.rounded()
-            ? "\(Int(value))×"
-            : String(format: "%.1f×", value)
+    /// How the player uses the space it was given. Phones and narrow windows
+    /// keep the single column; regular width reads along beside or below it.
+    enum Arrangement: Equatable {
+        case single
+        case sideBySide
+        case stacked
+    }
+
+    /// Accessibility text sizes skip the stacked layout: its fixed-height
+    /// controls band would need its own scrolling.
+    static func arrangement(for size: CGSize, isRegular: Bool, showsTranscript: Bool, largeText: Bool = false) -> Arrangement {
+        guard isRegular, showsTranscript else { return .single }
+        if size.width >= 900, size.width >= size.height { return .sideBySide }
+        if size.height >= 900, !largeText { return .stacked }
+        return .single
     }
 
     var body: some View {
         NavigationStack {
-            // GeometryReader + minHeight keeps the Spacer()-driven layout
-            // identical when everything fits (default text size), while the
-            // ScrollView keeps the transport controls reachable once Dynamic
-            // Type pushes the column taller than the screen.
             GeometryReader { proxy in
-                // The column is sized from the space actually available: a
-                // 375pt phone and the ~580x650pt iPad form sheet both used to
-                // overflow because artwork, paddings and the transport row were
-                // all fixed. Artwork absorbs the slack; paddings tighten when
-                // the sheet is short.
-                let artwork = artworkEdge(in: proxy.size)
-                let sidePadding: CGFloat = proxy.size.width < 380 ? 16 : 24
-                let tight = proxy.size.height < 700
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Drag handle
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.5))
-                            .frame(width: 36, height: 5)
-                            .padding(.top, 8)
-                            .accessibilityHidden(true)
-
-                        // Top row: output route (AirPlay) + Up Next queue
-                        topBar
-                            .padding(.top, 8)
-
-                        Spacer()
-
-                        // Artwork
-                        artworkView(edge: artwork)
-
-                        Spacer()
-
-                        // Track info
-                        trackInfo
-
-                        // Return to position button
-                        if player.hasPreviousPosition {
-                            Button {
-                                player.returnToPreviousPosition()
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "arrow.uturn.backward")
-                                        .font(.caption)
-                                    Text("Back to \(formatTime(player.previousPosition ?? 0))")
-                                        .font(.caption.weight(.medium))
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(UserSettings.shared.effectiveAccentTheme.color.opacity(0.15))
-                                .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
-                                .clipShape(Capsule())
-                            }
-                            .padding(.top, 12)
+                let arrangement = Self.arrangement(
+                    for: proxy.size,
+                    isRegular: isRegular,
+                    showsTranscript: hasTranscript && showsTranscriptPane,
+                    largeText: dynamicTypeSize.isAccessibilitySize
+                )
+                Group {
+                    switch arrangement {
+                    case .single:
+                        controlsColumn(size: proxy.size, arrangement: arrangement)
+                            .frame(maxWidth: isRegular ? 560 : .infinity)
+                            .frame(maxWidth: .infinity)
+                    case .sideBySide:
+                        let columnWidth = min(max(proxy.size.width * 0.4, 380), 500)
+                        HStack(spacing: 0) {
+                            controlsColumn(size: CGSize(width: columnWidth, height: proxy.size.height), arrangement: arrangement)
+                                .frame(width: columnWidth)
+                            Divider()
+                            transcriptPane
                         }
-
-                        // Seek slider
-                        seekSlider
-                            .padding(.top, tight ? 12 : 24)
-
-                        // Transport controls
-                        transportControls(width: proxy.size.width - sidePadding * 2)
-                            .padding(.top, tight ? 12 : 24)
-
-                        // Bottom controls
-                        bottomControls
-                            .padding(.top, tight ? 16 : 32)
-
-                        Spacer()
+                    case .stacked:
+                        // Enough for the controls with a 260pt cover; the reader gets the rest.
+                        let controlsHeight = min(max(proxy.size.height * 0.46, 540), 620)
+                        VStack(spacing: 0) {
+                            controlsColumn(size: CGSize(width: min(proxy.size.width, 640), height: controlsHeight), arrangement: arrangement)
+                                .frame(maxWidth: 640, maxHeight: controlsHeight)
+                                .frame(maxWidth: .infinity)
+                            Divider()
+                            transcriptPane
+                        }
                     }
-                    .padding(.horizontal, sidePadding)
-                    .frame(minHeight: proxy.size.height)
+                }
+                .onChange(of: navigation?.wantsTranscript) { _, _ in consumeTranscriptRequest() }
+                .onChange(of: proxy.size, initial: true) { _, size in
+                    paneFits = Self.arrangement(
+                        for: size, isRegular: isRegular, showsTranscript: true, largeText: dynamicTypeSize.isAccessibilitySize
+                    ) != .single
+                    consumeTranscriptRequest()
                 }
             }
             .background(Color(.systemBackground))
+            .background {
+                if isRegular {
+                    EscapeKeyHandler { if navigation?.canClosePlayer ?? true { closePlayer() } }
+                        .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .presentationDragIndicator(.hidden)
+        .onAppear(perform: consumeBookmarkRequest)
+        .onChange(of: hasOpenSheet, initial: true) { _, open in navigation?.isPlayerCovered = open }
+        .onDisappear { navigation?.isPlayerCovered = false }
+        .onChange(of: navigation?.pendingBookmark) { _, _ in consumeBookmarkRequest() }
         .sheet(isPresented: $showQueue) {
             // Re-injected for the same reason as the full player in ContentView:
             // a sheet gets a fresh PresentationHostingController whose graph
@@ -136,6 +124,22 @@ struct PlayerView: View {
             QueueView()
                 .environment(player)
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showAudioEnhancement) {
+            NavigationStack {
+                AudioEnhancementView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showAudioEnhancement = false }
+                                .accessibilityIdentifier("audioEnhancement.done")
+                        }
+                    }
+            }
+            .environment(player)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            // A dense settings page; the default iPad form sheet cut it off at the boost row.
+            .presentationSizing(.page)
         }
         .sheet(isPresented: $showTranscript) {
             if let id = player.currentTrackId {
@@ -146,15 +150,17 @@ struct PlayerView: View {
             }
         }
         .sheet(isPresented: $showBookmarkSheet) {
-            AddBookmarkSheet(
-                timestamp: bookmarkTimestamp,
-                discourseID: player.currentTrackId ?? "",
-                seriesName: player.currentSeries,
-                title: player.currentTitle
-            ) {
-                showBookmarkAdded = true
+            if let id = player.currentTrackId {
+                AddBookmarkSheet(
+                    timestamp: bookmarkTimestamp,
+                    discourseID: id,
+                    seriesName: player.currentSeries,
+                    title: player.currentTitle
+                ) {
+                    showBookmarkAdded = true
+                }
+                .presentationDetents([.medium])
             }
-            .presentationDetents([.medium])
         }
         .overlay(alignment: .top) {
             if showBookmarkAdded {
@@ -177,14 +183,134 @@ struct PlayerView: View {
         .animation(.easeInOut, value: showBookmarkAdded)
     }
 
+    // MARK: - Columns
+
+    /// Artwork, track info and transport. `size` is the space this column
+    /// owns, which in the wide layouts is less than the whole window.
+    private func controlsColumn(size: CGSize, arrangement: Arrangement) -> some View {
+        // GeometryReader + minHeight keeps the Spacer()-driven layout
+        // identical when everything fits (default text size), while the
+        // ScrollView keeps the transport controls reachable once Dynamic
+        // Type pushes the column taller than the screen.
+        let artwork = artworkEdge(in: size, arrangement: arrangement)
+        let sidePadding: CGFloat = size.width < 380 ? 16 : 24
+        let tight = size.height < 700 || arrangement == .stacked
+        return ScrollView {
+            VStack(spacing: 0) {
+                if !isRegular {
+                    // Drag handle
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.5))
+                        .frame(width: 36, height: 5)
+                        .padding(.top, 8)
+                        .accessibilityHidden(true)
+                }
+
+                // Top row: close (full-window player), output route (AirPlay) + Up Next queue
+                topBar
+                    .padding(.top, 8)
+
+                Spacer()
+
+                // Artwork
+                artworkView(edge: artwork)
+
+                Spacer()
+
+                // Track info
+                trackInfo
+
+                // Return to position button
+                if player.hasPreviousPosition {
+                    Button {
+                        player.returnToPreviousPosition()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.caption)
+                            Text("Back to \(formatTime(player.previousPosition ?? 0))")
+                                .font(.caption.weight(.medium))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(UserSettings.shared.effectiveAccentTheme.color.opacity(0.15))
+                        .foregroundStyle(UserSettings.shared.effectiveAccentTheme.color)
+                        .clipShape(Capsule())
+                    }
+                    .padding(.top, 12)
+                }
+
+                // Seek slider
+                seekSlider
+                    .padding(.top, tight ? 12 : 24)
+
+                // Transport controls
+                transportControls(width: size.width - sidePadding * 2)
+                    .padding(.top, tight ? 12 : 24)
+
+                // Bottom controls
+                bottomControls(arrangement: arrangement)
+                    .padding(.top, tight ? 16 : 32)
+
+                if player.isNoiseReductionEnabled, player.audioProcessingStatus.isIssue {
+                    Text(player.audioProcessingStatus.label)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 8)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, sidePadding)
+            .frame(minHeight: size.height)
+        }
+    }
+
+    @ViewBuilder
+    private var transcriptPane: some View {
+        if let id = player.currentTrackId {
+            TranscriptView(discourseID: id, presentation: .embedded)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("player.transcriptPane")
+        }
+    }
+
+    /// Menu and keyboard requests to read along.
+    private func consumeTranscriptRequest() {
+        guard let navigation, navigation.wantsTranscript else { return }
+        navigation.wantsTranscript = false
+        guard hasTranscript else { return }
+        if paneFits { showsTranscriptPane = true } else { showTranscript = true }
+    }
+
+    private func closePlayer() {
+        if let navigation { navigation.isPlayerPresented = false } else { dismiss() }
+    }
+
+    private func consumeBookmarkRequest() {
+        guard let navigation, let draft = navigation.pendingBookmark else { return }
+        navigation.pendingBookmark = nil
+        guard draft.discourseID == player.currentTrackId else { return }
+        bookmarkTimestamp = draft.timestamp
+        showBookmarkSheet = true
+    }
+
     // MARK: - Artwork
 
     /// Artwork is the one elastic block in the column, so it takes the leftover
     /// space rather than a fixed 280pt. Capped by width on narrow phones and by
     /// height in the short iPad form sheet — the old width-only cap is what
     /// clipped the bottom row and forced scrolling on iPad.
-    private func artworkEdge(in size: CGSize) -> CGFloat {
-        max(150, min(artworkSize, size.width - 48, size.height * 0.34))
+    private func artworkEdge(in size: CGSize, arrangement: Arrangement) -> CGFloat {
+        // A full iPad window has room for a larger cover than the phone's 280pt.
+        let preferred = isRegular ? max(artworkSize, 400) : artworkSize
+        if arrangement == .stacked {
+            // The rest of the column needs about 340pt at default text size.
+            return max(150, min(260, preferred, size.height - 340))
+        }
+        return max(150, min(preferred, size.width - 48, size.height * 0.34))
     }
 
     private func artworkView(edge: CGFloat) -> some View {
@@ -197,7 +323,7 @@ struct PlayerView: View {
             .accessibilityHidden(true)
             // Lyrics-style shortcut: the artwork is the biggest tap target on
             // the screen, so it opens the transcript when there is one.
-            .onTapGesture { if hasTranscript { showTranscript = true } }
+            .onTapGesture { if hasTranscript, !(paneFits && showsTranscriptPane) { openTranscript() } }
     }
 
     /// oshoworld.com publishes a transcript for the playing discourse.
@@ -206,28 +332,41 @@ struct PlayerView: View {
         return transcripts.availability(for: id) != .unavailable
     }
 
+    /// The wide player opens its reading pane; elsewhere the transcript sheet.
+    private func openTranscript() {
+        if paneFits {
+            showsTranscriptPane.toggle()
+        } else {
+            showTranscript = true
+        }
+    }
+
     // MARK: - Top Bar (AirPlay + Up Next)
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 8) {
+            if isRegular {
+                // The full-window player has no swipe-down, so it closes here or with Escape.
+                Button {
+                    closePlayer()
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Close player")
+                .accessibilityIdentifier("player.close")
+            }
+
             AirPlayRoutePicker(tintColor: UIColor(UserSettings.shared.effectiveAccentTheme.color))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .accessibilityLabel("AirPlay and output device")
 
             Spacer()
-
-            Button {
-                showTranscript = true
-            } label: {
-                Image(systemName: "doc.plaintext")
-                    .font(.title3)
-                    .foregroundStyle(.primary)
-                    .frame(width: 40, height: 40)
-            }
-            .accessibilityLabel("Transcript")
-            .accessibilityHint(hasTranscript ? "Reads along with the discourse" : "No transcript for this discourse")
-            .disabled(!hasTranscript)
-            .opacity(hasTranscript ? 1 : 0.35)
 
             Button {
                 showQueue = true
@@ -235,8 +374,10 @@ struct PlayerView: View {
                 Image(systemName: "list.bullet")
                     .font(.title3)
                     .foregroundStyle(.primary)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .hoverEffect(.highlight)
             .accessibilityLabel("Up Next")
             .accessibilityHint("Shows the playback queue")
             .disabled(player.queue.count <= 1)
@@ -291,12 +432,10 @@ struct PlayerView: View {
 
         if let series = currentEntry?.series {
             Button {
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    NotificationCenter.default.post(
-                        name: .navigateToSeries,
-                        object: series
-                    )
+                if let navigation {
+                    navigation.openSeries(series)
+                } else {
+                    dismiss()
                 }
             } label: {
                 // Primary rather than accent now that it is the title; the
@@ -428,6 +567,7 @@ struct PlayerView: View {
                     .font(.system(size: max(44, min(playGlyphSize, width * 0.18))))
             }
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+            .accessibilityIdentifier("player.playPause")
 
             Spacer(minLength: 8)
 
@@ -458,7 +598,7 @@ struct PlayerView: View {
 
     // MARK: - Bottom Controls
 
-    private var bottomControls: some View {
+    private func bottomControls(arrangement: Arrangement) -> some View {
         HStack(spacing: 0) {
             playerControlButton(
                 icon: "speedometer",
@@ -474,43 +614,26 @@ struct PlayerView: View {
             .accessibilityValue(formatSpeed(player.playbackRate))
 
             playerControlButton(
-                icon: player.isNoiseReductionEnabled ? "waveform.slash" : "waveform",
-                label: denoiseButtonLabel,
-                isActive: player.isNoiseReductionEnabled
+                icon: player.audioProcessingStatus.isIssue ? "exclamationmark.triangle" : "waveform",
+                label: "DeNoise",
+                isActive: player.audioProcessingStatus.isActive
             ) {
-                showDenoisePicker.toggle()
+                showAudioEnhancement = true
             }
-            .popover(isPresented: $showDenoisePicker) {
-                denoisePickerContent
-            }
-            .accessibilityLabel("Denoise")
-            .accessibilityValue(
-                player.isNoiseReductionEnabled
-                    ? "On, \(player.noiseReductionMode.displayName), \(player.denoiseStrength.label)"
-                    : "Off"
-            )
+            .accessibilityLabel("DeNoise")
+            .accessibilityValue(player.noiseReductionAccessibilityValue)
+            .accessibilityHint("Adjusts noise reduction, quiet speech and volume boost")
+            .accessibilityIdentifier("player.audioEnhancement")
 
-            playerControlButton(
-                icon: player.isBoostAvailable && player.volume > 1.0
-                    ? "speaker.wave.3.fill" : "speaker.wave.2",
-                label: player.isBoostAvailable && player.volume > 1.0
-                    ? boostLabel : "Boost",
-                isActive: player.isBoostAvailable && player.volume > 1.0
-            ) {
-                player.setVolume(nextBoostLevel)
+            playerControlButton(icon: "doc.plaintext", label: "Transcript", isActive: arrangement != .single) {
+                openTranscript()
             }
-            .disabled(!player.isBoostAvailable)
-            .accessibilityLabel("Volume boost")
-            .accessibilityValue(
-                player.isBoostAvailable && player.volume > 1.0
-                    ? "\(boostLabel)"
-                    : (player.volume > 1.0 ? "\(boostLabel) paused" : "Off")
-            )
-            .accessibilityHint(
-                player.isBoostAvailable
-                    ? "Steps filtered audio above the system maximum, then back off"
-                    : "Available when Noise Reduction is active"
-            )
+            .accessibilityValue(paneFits ? (arrangement != .single ? "Shown" : "Hidden") : "")
+            .accessibilityLabel("Transcript")
+            .accessibilityHint(hasTranscript ? "Reads along with the playing audio" : "No transcript for this discourse")
+            .accessibilityIdentifier("player.transcript")
+            .disabled(!hasTranscript)
+            .opacity(hasTranscript ? 1 : 0.35)
 
             playerControlButton(
                 icon: sleepTimer.isActive ? "moon.fill" : "moon",
@@ -536,6 +659,8 @@ struct PlayerView: View {
             .accessibilityLabel("Add bookmark")
             .accessibilityHint("Saves the current position")
         }
+        // Short control labels must fit five columns on narrow screens.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func playerControlButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
@@ -547,7 +672,8 @@ struct PlayerView: View {
                 Text(label)
                     .font(.caption2.weight(.medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 4)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -581,123 +707,6 @@ struct PlayerView: View {
             }
         }
         .frame(width: 160)
-        .padding(.vertical, 8)
-        .presentationCompactAdaptation(.popover)
-    }
-
-    // MARK: - Denoise Picker
-
-    private var denoisePickerContent: some View {
-        VStack(spacing: 4) {
-            Text("Noise Reduction")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 2)
-
-            // Off row — the toggle that used to be the whole control.
-            Button {
-                player.isNoiseReductionEnabled = false
-                showDenoisePicker = false
-            } label: {
-                HStack {
-                    Text("Off")
-                        .font(.body)
-                    Spacer()
-                    if !player.isNoiseReductionEnabled {
-                        Image(systemName: "checkmark")
-                            .font(.caption)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            }
-            .buttonStyle(.plain)
-
-            Divider()
-
-            ForEach(NoiseReductionMode.allCases) { mode in
-                Button {
-                    player.noiseReductionMode = mode
-                    player.isNoiseReductionEnabled = true
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(mode.displayName)
-                                .font(.body)
-                            // For DeepFilterNet, show live state once selected —
-                            // the model loads asynchronously, so "Loading…" or an
-                            // error is more useful than a static description.
-                            Text(statusDescriptor(for: mode))
-                                .font(.caption)
-                                .foregroundStyle(
-                                    mode == player.noiseReductionMode && player.isDeepFilterBypassing
-                                        ? .orange
-                                        : .secondary
-                                )
-                        }
-                        Spacer()
-                        if player.isNoiseReductionEnabled, player.noiseReductionMode == mode {
-                            Image(systemName: "checkmark")
-                                .font(.caption)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Divider()
-
-            // DeepFilterNet is always fully wet, so a dry/wet "strength" does
-            // not apply. It gets the voice-forward variants instead, switchable
-            // mid-discourse so they can be compared on the same passage.
-            if player.noiseReductionMode == .deepFilterNet {
-                ForEach(VoiceFocusPreset.allCases) { preset in
-                    Button {
-                        player.voiceFocusPreset = preset
-                        player.isNoiseReductionEnabled = true
-                    } label: {
-                        HStack {
-                            Text(preset.displayName)
-                                .font(.body)
-                            Spacer()
-                            if player.isNoiseReductionEnabled, player.voiceFocusPreset == preset {
-                                Image(systemName: "checkmark")
-                                    .font(.caption)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } else {
-                ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
-                    Button {
-                        player.denoiseStrength = strength
-                        player.isNoiseReductionEnabled = true
-                        showDenoisePicker = false
-                    } label: {
-                        HStack {
-                            Text(strength.label)
-                                .font(.body)
-                            Spacer()
-                            if player.isNoiseReductionEnabled, player.denoiseStrength == strength {
-                                Image(systemName: "checkmark")
-                                    .font(.caption)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .frame(width: 220)
         .padding(.vertical, 8)
         .presentationCompactAdaptation(.popover)
     }
@@ -772,28 +781,6 @@ struct PlayerView: View {
     }
 
     // MARK: - Helpers
-
-    /// Player button caption. While comparing DeepFilterNet variants the active
-    /// preset matters more than the processor name, so show that instead.
-    private var denoiseButtonLabel: String {
-        guard player.isNoiseReductionEnabled else { return "Denoise" }
-        if player.noiseReductionMode == .deepFilterNet {
-            return player.voiceFocusPreset.displayName
-        }
-        return player.noiseReductionMode.playerLabel
-    }
-
-    /// Subtitle for a processor row. DeepFilterNet reports its real runtime state
-    /// while selected so a listener never assumes audio is being processed when
-    /// the model is still loading or failed to load.
-    private func statusDescriptor(for mode: NoiseReductionMode) -> String {
-        guard mode == .deepFilterNet,
-              player.isNoiseReductionEnabled,
-              player.noiseReductionMode == .deepFilterNet else {
-            return mode.shortDescriptor
-        }
-        return player.deepFilterStatus.label
-    }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite && seconds >= 0 else { return "0:00" }

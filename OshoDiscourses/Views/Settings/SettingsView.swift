@@ -1,10 +1,17 @@
 import SwiftUI
+#if canImport(WatchConnectivity) && !targetEnvironment(macCatalyst)
+import WatchConnectivity
+#endif
 
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
     @Environment(AudioPlayerService.self) private var player
-    #if DEBUG
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    // Transaction listening outlives the support sheet, including delayed approvals.
+    private let tips = TipJarService.shared
     @State private var showTipJar = false
+    @ScaledMetric(relativeTo: .subheadline) private var miniPlayerClearance: CGFloat = 70
+    #if DEBUG
     /// `-debugTipJar` opens the tip sheet on launch for layout checks.
     private var debugTipJar: Bool { ProcessInfo.processInfo.arguments.contains("-debugTipJar") }
     #endif
@@ -14,13 +21,17 @@ struct SettingsView: View {
             Form {
                 contentSection
                 playerSection
-                noiseReductionSection
+                audioEnhancementSection
+                #if canImport(WatchConnectivity) && !targetEnvironment(macCatalyst)
+                appleWatchSection
+                #endif
                 appearanceSection
                 moreAppsSection
                 aboutSection
             }
+            .readableScrollColumn(sizeClass, maxWidth: 680)
+            .sheet(isPresented: $showTipJar) { TipJarView(tips: tips) }
             #if DEBUG
-            .sheet(isPresented: $showTipJar) { TipJarView() }
             .task {
                 guard debugTipJar else { return }
                 try? await Task.sleep(for: .seconds(2))   // after the tab switch
@@ -32,8 +43,11 @@ struct SettingsView: View {
             // black + dark-gray cards in dark mode. (An earlier systemBackground
             // override flattened the cards to invisible in light mode.)
             .navigationTitle("Settings")
-            .safeAreaInset(edge: .bottom) {
-                Spacer().frame(height: 70)
+        }
+        // The floating player sits above the Settings navigation container.
+        .safeAreaInset(edge: .bottom) {
+            if player.currentTrackId != nil {
+                Spacer().frame(height: miniPlayerClearance)
             }
         }
     }
@@ -70,63 +84,59 @@ struct SettingsView: View {
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 
-    // MARK: - Noise Reduction
+    // MARK: - Apple Watch
 
+    #if canImport(WatchConnectivity) && !targetEnvironment(macCatalyst)
     @ViewBuilder
-    private var noiseReductionSection: some View {
-        @Bindable var player = player
+    private var appleWatchSection: some View {
+        // iPad and Mac can't pair a Watch; WCSession reports that directly.
+        if WCSession.isSupported(), UIDevice.current.userInterfaceIdiom == .phone {
+            Section {
+                NavigationLink {
+                    AppleWatchView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "applewatch")
+                            .foregroundStyle(Color.accent)
+                        Text("Apple Watch")
+                    }
+                }
+                .accessibilityIdentifier("settings.appleWatch")
+            } footer: {
+                Text("Control playback from your wrist, or keep discourses on Apple Watch to listen without your iPhone.")
+            }
+            .listRowBackground(Color(.secondarySystemGroupedBackground))
+        }
+    }
+    #endif
+
+    // MARK: - Audio Enhancement
+
+    private var audioEnhancementSection: some View {
         Section {
-            Toggle("Noise Reduction", isOn: $player.isNoiseReductionEnabled)
-
-            if player.isNoiseReductionEnabled {
-                Picker("Method", selection: $player.noiseReductionMode) {
-                    ForEach(NoiseReductionMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+            NavigationLink {
+                AudioEnhancementView(bottomScrollClearance: player.currentTrackId == nil ? nil : miniPlayerClearance + 16)
+                    .environment(player)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform")
+                        .foregroundStyle(Color.accent)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("DeNoise")
+                        Text(player.isNoiseReductionEnabled
+                             ? player.noiseReductionMode.displayName
+                             : "Noise reduction and volume boost")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-
-                // "Strength" is a dry/wet control, which is meaningless for
-                // DeepFilterNet (it is always fully wet). That mode gets the
-                // voice-forward variant picker instead.
-                if player.noiseReductionMode == .deepFilterNet {
-                    Picker("Voice Focus", selection: $player.voiceFocusPreset) {
-                        ForEach(VoiceFocusPreset.allCases) { preset in
-                            Text(preset.displayName).tag(preset)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(player.voiceFocusPreset.detail)
-                        .font(.caption)
+                    Spacer(minLength: 0)
+                    Text(player.isNoiseReductionEnabled ? "On" : "Off")
                         .foregroundStyle(.secondary)
-                } else {
-                    Picker("Strength", selection: $player.denoiseStrength) {
-                        ForEach(AudioPlayerService.DenoiseStrength.allCases, id: \.self) { strength in
-                            Text(strength.label).tag(strength)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(player.noiseReductionMode.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                // DeepFilterNet loads a bundled model asynchronously and can be
-                // unavailable, so report what is actually happening instead of
-                // letting the listener assume the audio is being processed.
-                if player.noiseReductionMode == .deepFilterNet {
-                    LabeledContent("Status") {
-                        Text(player.deepFilterStatus.label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(player.deepFilterStatus.isBypassing ? .orange : .secondary)
-                    }
                 }
             }
+            .accessibilityIdentifier("settings.audioEnhancement")
         } header: {
-            Text("Noise Reduction")
-        } footer: {
-            Text("DeepFilterNet is the strongest and also clears steady tape hiss, at a higher battery cost. RNNoise handles varied noise but may soften the voice. Cadence targets hum and long noisy pauses more conservatively.")
+            Text("Sound")
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -262,17 +272,15 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
-            // TipJarView and its service are Debug-only until the products
-            // and purchase flow are ready to launch together.
-            // Button { showTipJar = true } label: {
-            //     linkRow("Support Development", icon: "cup.and.saucer.fill", tint: Color.accent, trailing: "chevron.right")
-            // }
+            Button { showTipJar = true } label: {
+                linkRow("Support Development", icon: "cup.and.saucer.fill", tint: settings.effectiveAccentTheme.color, trailing: "chevron.right")
+            }
 
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }
 
-            Link(destination: URL(string: "mailto:agraabhi@gmail.com?subject=Osho%20Talks%20Feedback")!) {
+            Link(destination: URL(string: "mailto:aagrawal207@gmail.com?subject=Osho%20Talks%20Feedback")!) {
                 linkRow("Send Feedback", icon: "envelope")
             }
         } header: {

@@ -5,6 +5,7 @@ struct BookmarksView: View {
     @Environment(DownloadService.self) private var downloads
     private var bookmarkService = BookmarkService.shared
     @State private var filterCategory: BookmarkCategory? = nil
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var displayedBookmarks: [Bookmark] {
         if let cat = filterCategory {
@@ -93,6 +94,7 @@ struct BookmarksView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .readableScrollColumn(sizeClass)
     }
 }
 

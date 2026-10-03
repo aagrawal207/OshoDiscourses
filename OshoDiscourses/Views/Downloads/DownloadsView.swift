@@ -4,6 +4,7 @@ struct DownloadsView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
     @Environment(PlaybackStateService.self) private var playbackState
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Bindable private var settings = UserSettings.shared
     private var bookmarkService = BookmarkService.shared
     @State private var searchText = ""
@@ -62,6 +63,7 @@ struct DownloadsView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .readableScrollColumn(sizeClass, maxWidth: AppLayout.listMaxWidth)
             .environment(\.editMode, $editMode)
             .navigationTitle("Downloads")
             .navigationDestination(for: SeriesInfo.self) { series in
@@ -209,7 +211,6 @@ struct DownloadsView: View {
                     }
                 }
             }
-
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -422,6 +423,7 @@ private struct DownloadedDiscourseRow: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadService.self) private var downloads
     @Environment(\.editMode) private var editMode
+    @Environment(AppNavigation.self) private var navigation: AppNavigation?
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
     let sizeText: String?
@@ -482,6 +484,30 @@ private struct DownloadedDiscourseRow: View {
         .accessibilityAction {
             guard !isEditing else { return }
             playDiscourse()
+        }
+        .hoverEffect(.highlight)
+        .contextMenu {
+            if !isEditing {
+                Button {
+                    if isCurrentlyPlaying { player.togglePlayPause() } else { playDiscourse() }
+                } label: {
+                    let pauses = isCurrentlyPlaying && player.isPlaying
+                    Label(pauses ? "Pause" : "Play", systemImage: pauses ? "pause" : "play")
+                }
+                if isCurrentlyPlaying, let navigation {
+                    Button {
+                        navigation.addBookmark()
+                    } label: {
+                        Label("Add Bookmark…", systemImage: "bookmark")
+                    }
+                }
+                Divider()
+                Button(role: .destructive) {
+                    try? downloads.deleteDownload(discourseID: discourse.id)
+                } label: {
+                    Label("Remove Download", systemImage: "trash")
+                }
+            }
         }
     }
 

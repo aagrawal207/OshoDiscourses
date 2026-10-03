@@ -61,6 +61,21 @@
       "productID": "com.agraabhi.oshodiscourses.tip.grand",
       "referenceName": "Grand tip",
       "type": "Consumable"
+    },
+    {
+      "displayPrice": "50.00",
+      "familyShareable": false,
+      "internalID": "6F1A2B34",
+      "localizations": [
+        {
+          "description": "Helps fund more improvements to the app.",
+          "displayName": "Patron tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.oshodiscourses.tip.patron",
+      "referenceName": "Patron tip",
+      "type": "Consumable"
     }
   ],
   "settings": {

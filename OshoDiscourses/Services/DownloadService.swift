@@ -128,6 +128,10 @@ final class DownloadService {
     /// unwinds immediately.
     private var queueWaiters: [String: CheckedContinuation<Void, Error>] = [:]
 
+    /// Ids the listener cancelled in this process. A finished file with no row
+    /// is discarded only for these; any other one survived a quit or kill.
+    private var cancelledIDs: Set<String> = []
+
     // Maps discourse ID → relative path from Documents
     private var pathMap: [String: String] = [:]
 
@@ -267,8 +271,11 @@ final class DownloadService {
             return
         }
         // Adopted/relaunched transfer with no awaiting call: honor a cancel
-        // that happened meanwhile (no activeDownloads row) by discarding.
-        guard activeDownloads[id] != nil else {
+        // that happened meanwhile by discarding. A transfer that finished while
+        // the app was not running has no row yet (macOS keeps it going after Quit).
+        if Self.discardsUnclaimedFile(hasRow: activeDownloads[id] != nil,
+                                      wasCancelled: cancelledIDs.contains(id),
+                                      isDownloaded: downloadedIDs.contains(id)) {
             try? FileManager.default.removeItem(at: stagedURL)
             activeTasks.removeValue(forKey: id)
             return
@@ -280,6 +287,11 @@ final class DownloadService {
             activeDownloads[id] = DownloadProgress(status: .failed(error.localizedDescription))
         }
         activeTasks.removeValue(forKey: id)
+    }
+
+    /// Whether a finished file nobody is awaiting should be thrown away.
+    nonisolated static func discardsUnclaimedFile(hasRow: Bool, wasCancelled: Bool, isDownloaded: Bool) -> Bool {
+        !hasRow && (wasCancelled || isDownloaded)
     }
 
     private func transferFailed(id: String, taskID: Int, error: Error) {
@@ -447,6 +459,7 @@ final class DownloadService {
         // suspension (SE-0420 isolation inheritance), so nothing can interleave
         // between the eligibility check and registering the waiter — exactly one
         // queued item advances at a time.
+        cancelledIDs.remove(discourse.id)
         activeDownloads[discourse.id] = DownloadProgress(status: .queued)
         pendingQueue.append(discourse.id)
         if pendingQueue.first != discourse.id || isAnyTransferActive(excluding: discourse.id) {
@@ -619,6 +632,8 @@ final class DownloadService {
         pathMap.removeValue(forKey: discourseID)
         saveManifest()
         activeDownloads.removeValue(forKey: discourseID)
+        // A late finish from a superseded transfer must not bring the file back.
+        cancelledIDs.insert(discourseID)
         onDownloadDeleted?(discourseID)
     }
 
@@ -708,6 +723,7 @@ final class DownloadService {
     }
 
     func cancelDownload(discourseID: String) {
+        cancelledIDs.insert(discourseID)
         activeTasks[discourseID]?.cancel()
         activeTasks.removeValue(forKey: discourseID)
         // Unwind the awaiting download() directly instead of relying on the

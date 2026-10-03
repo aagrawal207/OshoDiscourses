@@ -8,9 +8,17 @@ import SwiftUI
 /// speech alignment, or failing both from a text-length estimate. The
 /// listener's own "Audio is here" anchors correct any of the three.
 struct TranscriptView: View {
+    enum Presentation {
+        /// Its own navigation bar, close button and transport.
+        case sheet
+        /// A pane inside the wide player, which already shows the transport.
+        case embedded
+    }
+
     /// The discourse to read. Playback controls and the highlight only engage
     /// when this is what the player is playing.
     let discourseID: String
+    let presentation: Presentation
 
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.dismiss) private var dismiss
@@ -62,8 +70,9 @@ struct TranscriptView: View {
     @State private var toast: String?
     @FocusState private var searchFocused: Bool
 
-    init(discourseID: String) {
+    init(discourseID: String, presentation: Presentation = .sheet) {
         self.discourseID = discourseID
+        self.presentation = presentation
     }
 
     private var entry: (discourse: CatalogDiscourse, series: SeriesInfo)? {
@@ -123,44 +132,7 @@ struct TranscriptView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { toolbarContent }
-                // Applied before the insets so the pill floats over the text,
-                // not over the transport bar or the search field.
-                .overlay(alignment: .bottom) {
-                    if isPlayingThis, transcript != nil, !isFollowing, !isSearching {
-                        nowPlayingPill
-                            .padding(.bottom, 12)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    VStack(spacing: 0) {
-                        if isSearching { searchBar }
-                        if aligner.discourseID == discourseID, aligner.status.isActive {
-                            alignmentProgressRow
-                        }
-                    }
-                }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if isPlayingThis, transcript != nil { transportBar }
-                }
-                .overlay(alignment: .top) {
-                    if let toast {
-                        Text(toast)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .padding(.top, isSearching ? 56 : 8)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: isFollowing)
-                .animation(.easeInOut(duration: 0.2), value: toast)
-        }
+        container
         .task(id: discourseID) { await load() }
         // Reading along means no touches for minutes at a time, so the idle
         // timer would dim the page mid-paragraph. Held only while this
@@ -215,6 +187,84 @@ struct TranscriptView: View {
     }
 
     @ViewBuilder
+    private var container: some View {
+        switch presentation {
+        case .sheet:
+            NavigationStack {
+                decoratedContent
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { toolbarContent }
+            }
+        case .embedded:
+            decoratedContent
+        }
+    }
+
+    private var decoratedContent: some View {
+        content
+            // Applied before the insets so the pill floats over the text,
+            // not over the transport bar or the search field.
+            .overlay(alignment: .bottom) {
+                if isPlayingThis, transcript != nil, !isFollowing, !isSearching {
+                    nowPlayingPill
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    if presentation == .embedded { embeddedHeader }
+                    if isSearching { searchBar }
+                    if aligner.discourseID == discourseID, aligner.status.isActive {
+                        alignmentProgressRow
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if presentation == .sheet, isPlayingThis, transcript != nil { transportBar }
+            }
+            .overlay(alignment: .top) {
+                if let toast {
+                    Text(toast)
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.top, (isSearching ? 56 : 8) + (presentation == .embedded ? 52 : 0))
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: isFollowing)
+            .animation(.easeInOut(duration: 0.2), value: toast)
+    }
+
+    /// Stands in for the sheet's navigation bar inside the wide player.
+    private var embeddedHeader: some View {
+        HStack(spacing: 4) {
+            Text("Transcript")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            searchToggleButton
+                .frame(minWidth: 44, minHeight: 44)
+                .hoverEffect(.highlight)
+            optionsMenu
+                .frame(minWidth: 44, minHeight: 44)
+                .hoverEffect(.highlight)
+        }
+        .font(.title3)
+        // Matches the reader's column so the title sits over the text edge.
+        .padding(.leading, 28)
+        .padding(.trailing, 12)
+        .padding(.vertical, 4)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .bottom) { Divider() }
+        .background(Color(.systemBackground))
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    @ViewBuilder
     private var content: some View {
         if let transcript {
             reader(transcript)
@@ -259,6 +309,9 @@ struct TranscriptView: View {
             .scrollTargetLayout()
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            // Long lines tire the eye; a wide pane keeps a book-like measure.
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
         }
         .scrollPosition(id: $scrolledID, anchor: UnitPoint(x: 0.5, y: 0.35))
         .onScrollPhaseChange { old, phase, context in
@@ -584,78 +637,85 @@ struct TranscriptView: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            Button {
-                withAnimation { isSearching.toggle() }
-                if isSearching { searchFocused = true } else { searchText = "" }
-            } label: {
-                Image(systemName: "magnifyingglass")
-            }
-            .disabled(transcript == nil)
-            .accessibilityLabel("Search transcript")
-
-            Menu {
-                Section("Text size") {
-                    Button {
-                        stepFontSize(-1)
-                    } label: { Label("Smaller", systemImage: "textformat.size.smaller") }
-                        .disabled(settings.transcriptFontSize <= UserSettings.transcriptFontSizes.first!)
-                    Button {
-                        stepFontSize(1)
-                    } label: { Label("Larger", systemImage: "textformat.size.larger") }
-                        .disabled(settings.transcriptFontSize >= UserSettings.transcriptFontSizes.last!)
-                }
-                Section("Layout") {
-                    Toggle(isOn: Binding(
-                        get: { settings.transcriptSentenceLayout },
-                        set: { settings.transcriptSentenceLayout = $0 }
-                    )) {
-                        Label("One sentence per line", systemImage: "text.justify.leading")
-                    }
-                }
-                if isPlayingThis {
-                    Section("Timing") {
-                        if let shipped = shippedAlignmentInUse {
-                            Text("Synced from speech: \(shipped.matchedCount) of \(shipped.paragraphCount) paragraphs")
-                        } else if speechSyncSupported {
-                            Toggle(isOn: Binding(
-                                get: { settings.transcriptSpeechSync },
-                                set: { on in
-                                    settings.transcriptSpeechSync = on
-                                    if on, let transcript { startAlignmentIfWanted(transcript) } else { aligner.cancel() }
-                                }
-                            )) {
-                                Label("Sync from speech on this device", systemImage: "waveform.badge.magnifyingglass")
-                            }
-                            if let alignment = discourseState?.alignment {
-                                if settings.transcriptSpeechSync {
-                                    Text("Synced from speech: \(alignment.matchedCount) of \(alignment.starts.count) paragraphs")
-                                }
-                                Button(role: .destructive) {
-                                    stateService.clearAlignment(discourseID: discourseID)
-                                    if settings.transcriptSpeechSync, let transcript { startAlignmentIfWanted(transcript) }
-                                } label: { Label("Redo speech sync", systemImage: "arrow.clockwise") }
-                            }
-                        } else {
-                            Text("Estimated from text length. Tap a paragraph and choose “Audio is here” to correct it.")
-                        }
-                        if let anchors = discourseState?.anchors, !anchors.isEmpty {
-                            Button(role: .destructive) {
-                                stateService.clearAnchors(discourseID: discourseID)
-                                rebuildModel()
-                            } label: { Label("Clear \(anchors.count) sync anchor\(anchors.count == 1 ? "" : "s")", systemImage: "scope") }
-                        }
-                    }
-                }
-                if let catalogEntry = TranscriptCatalog.entry(for: discourseID), let url = TranscriptCatalog.pageURL(for: catalogEntry) {
-                    Section {
-                        Link(destination: url) { Label("Open on oshoworld.com", systemImage: "safari") }
-                    }
-                }
-            } label: {
-                Image(systemName: "textformat.size")
-            }
-            .accessibilityLabel("Transcript options")
+            searchToggleButton
+            optionsMenu
         }
+    }
+
+    private var searchToggleButton: some View {
+        Button {
+            withAnimation { isSearching.toggle() }
+            if isSearching { searchFocused = true } else { searchText = "" }
+        } label: {
+            Image(systemName: "magnifyingglass")
+        }
+        .disabled(transcript == nil)
+        .accessibilityLabel("Search transcript")
+    }
+
+    private var optionsMenu: some View {
+        Menu {
+            Section("Text size") {
+                Button {
+                    stepFontSize(-1)
+                } label: { Label("Smaller", systemImage: "textformat.size.smaller") }
+                    .disabled(settings.transcriptFontSize <= UserSettings.transcriptFontSizes.first!)
+                Button {
+                    stepFontSize(1)
+                } label: { Label("Larger", systemImage: "textformat.size.larger") }
+                    .disabled(settings.transcriptFontSize >= UserSettings.transcriptFontSizes.last!)
+            }
+            Section("Layout") {
+                Toggle(isOn: Binding(
+                    get: { settings.transcriptSentenceLayout },
+                    set: { settings.transcriptSentenceLayout = $0 }
+                )) {
+                    Label("One sentence per line", systemImage: "text.justify.leading")
+                }
+            }
+            if isPlayingThis {
+                Section("Timing") {
+                    if let shipped = shippedAlignmentInUse {
+                        Text("Synced from speech: \(shipped.matchedCount) of \(shipped.paragraphCount) paragraphs")
+                    } else if speechSyncSupported {
+                        Toggle(isOn: Binding(
+                            get: { settings.transcriptSpeechSync },
+                            set: { on in
+                                settings.transcriptSpeechSync = on
+                                if on, let transcript { startAlignmentIfWanted(transcript) } else { aligner.cancel() }
+                            }
+                        )) {
+                            Label("Sync from speech on this device", systemImage: "waveform.badge.magnifyingglass")
+                        }
+                        if let alignment = discourseState?.alignment {
+                            if settings.transcriptSpeechSync {
+                                Text("Synced from speech: \(alignment.matchedCount) of \(alignment.starts.count) paragraphs")
+                            }
+                            Button(role: .destructive) {
+                                stateService.clearAlignment(discourseID: discourseID)
+                                if settings.transcriptSpeechSync, let transcript { startAlignmentIfWanted(transcript) }
+                            } label: { Label("Redo speech sync", systemImage: "arrow.clockwise") }
+                        }
+                    } else {
+                        Text("Estimated from text length. Tap a paragraph and choose “Audio is here” to correct it.")
+                    }
+                    if let anchors = discourseState?.anchors, !anchors.isEmpty {
+                        Button(role: .destructive) {
+                            stateService.clearAnchors(discourseID: discourseID)
+                            rebuildModel()
+                        } label: { Label("Clear \(anchors.count) sync anchor\(anchors.count == 1 ? "" : "s")", systemImage: "scope") }
+                    }
+                }
+            }
+            if let catalogEntry = TranscriptCatalog.entry(for: discourseID), let url = TranscriptCatalog.pageURL(for: catalogEntry) {
+                Section {
+                    Link(destination: url) { Label("Open on oshoworld.com", systemImage: "safari") }
+                }
+            }
+        } label: {
+            Image(systemName: "textformat.size")
+        }
+        .accessibilityLabel("Transcript options")
     }
 
     private func stepFontSize(_ direction: Int) {

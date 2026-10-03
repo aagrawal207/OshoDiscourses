@@ -60,6 +60,22 @@ struct CloudSyncTests {
         #expect(service.getPosition(discourseId: "d-1") == 120)
     }
 
+    @Test func cloudPositionIsNotListeningOnThisDevice() {
+        let name = "cloud-saved-at-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = PlaybackStateService(defaults: defaults, recordListeningTime: { _ in }, saveListeningStats: {})
+        let earlier = Date(timeIntervalSince1970: 1_700_000_000)
+        service.savePosition(discourseId: "d-1", position: 30, duration: 600, savedAt: earlier)
+
+        var snapshot = CloudSnapshot()
+        snapshot.positions = ["d-1": 120]
+        service.mergeCloudSnapshot(snapshot)
+
+        #expect(service.getPosition(discourseId: "d-1") == 120)
+        #expect(service.lastSaved(discourseId: "d-1") == earlier)
+    }
+
     @Test func mergeDoesNotRewindLocalAheadOfCloud() {
         let service = makeFreshService()
         service.savePosition(discourseId: "d-1", position: 200, duration: 600)

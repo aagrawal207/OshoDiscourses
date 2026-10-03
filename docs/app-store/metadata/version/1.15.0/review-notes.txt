@@ -1,0 +1,29 @@
+No app account or login is required. All browsing, downloads, playback and transcript features are available without a purchase.
+
+This resubmission uses version 1.15.0, build 26, with the in-app feedback address corrected to aagrawal207@gmail.com. The five tips are enabled in this build.
+
+This update adds five optional, repeatable consumable tips. To find them, open Settings, scroll to About and tap Support Development. The tiers are Small tip, Generous tip, Big tip, Grand tip and Patron tip. Tips use Apple's in-app purchase flow, show localized prices, and unlock no features or content. There are no subscriptions or external payment links. Each IAP has its own review screenshot and notes.
+
+Attached walkthrough: "WhatsApp Video 2026-09-18 at 11.32.19 AM.mp4" is a 60.66-second physical-iPhone recording from the TestFlight test of version 1.15.0 (25). It begins on the iPhone Home Screen with app icons and shows Osho Talks launching, the core app flow and a successful Small tip sandbox purchase.
+
+Approximate timestamps:
+0:00-0:05: iPhone Home Screen and app launch.
+0:06-0:12: Home, Library and series browsing.
+0:16-0:30: Brief play/pause, full player, transcript, DeNoise, sleep timer, speed and bookmark controls.
+0:33-0:42: Downloads, Listening Stats, Bookmarks and Settings > About, showing version 1.15.0.
+0:43-0:44: Support Development with all five tiers and prices.
+0:47-0:49: Small tip at US$3.00. Apple's purchase sheet states: "For testing purposes only. You will not be charged for confirming this purchase."
+0:52-0:56: Apple's purchase-success confirmation, the app's "Thank you" message and the tip count increasing from two to three.
+
+All five tip amounts use this same consumable purchase flow. There are no other paid feature or content purchase flows.
+
+The Support URL has been updated to https://github.com/aagrawal207/OshoDiscourses/blob/main/SUPPORT.md. This public page provides aagrawal207@gmail.com and instructions for asking questions, reporting problems and getting help with purchases.
+
+The five product IDs are:
+com.agraabhi.oshodiscourses.tip.small
+com.agraabhi.oshodiscourses.tip.medium
+com.agraabhi.oshodiscourses.tip.large
+com.agraabhi.oshodiscourses.tip.grand
+com.agraabhi.oshodiscourses.tip.patron
+
+DeNoise is available in Settings and the full player. It starts off; first-use selections are Best Quality, Medium noise reduction, Medium volume boost and Gentle Lift. The Transcript button is beside DeNoise in the player.

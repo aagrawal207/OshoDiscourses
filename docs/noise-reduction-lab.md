@@ -1,25 +1,268 @@
 # Noise Reduction Lab
 
-Noise Reduction remains a beta with three processors: RNNoise (baseline),
-Cadence (the first Osho-specific experiment), and DeepFilterNet 3 with Voice
-Focus (the strongest option, now running natively on device).
+## 2026-09-15: DeNoise interface
 
-## The source audio is not 48 kHz — and that was the real bug
+Player > DeNoise and Settings > DeNoise open the shared
+`AudioEnhancementView`. The Enable DeNoise switch controls recording noise reduction
+and enables the saved boost level. Turning it off plays the original sound.
+Transcript is beside DeNoise in the player's bottom row. The compact controls cap
+Dynamic Type at xxxLarge so their labels fit on narrow screens.
+Settings supplies extra bottom scroll-content clearance to DeNoise and its mode
+and quiet-speech pages, allowing their last items to scroll above the mini-player.
+
+| Listening mode | Implementation | Position in the interface |
+| --- | --- | --- |
+| Best Quality | DeepFilterNet 3 | Recommended, with a visible “Uses more battery” note |
+| Balanced | RNNoise | Secondary option with lighter processing |
+| Gentle Cleanup | Cadence filter | Secondary option for hum and noise in pauses |
+
+First-use settings are Best Quality, Medium noise reduction, Medium volume boost
+(2×) and Gentle Lift. DeNoise starts off. Registered defaults apply when a setting
+has no saved value. Saved mode identifiers remain `deepFilterNet`, `rnnoise` and
+`cadence`. Light / Medium / Strong retain their existing processing parameters;
+attenuation limits are not part of the listening controls.
+
+Volume Boost has Off / Low / Medium / High / Max choices, mapped to gains of
+1 / 1.5 / 2 / 3 / 4. The level can be configured while playback is paused or the
+filter is preparing. “Saved level” and the accompanying explanation distinguish
+this preference from active boost. Gain still applies only to processed audio;
+loading, failure and raw bypass do not boost the recording.
+
+Fine-tune the voice opens Natural / Gentle Lift / Extra Lift, corresponding to
+the existing `focus` / `lift` / `strong` presets. This control is offered with
+Best Quality. The main page uses everyday status messages such as “Getting ready”
+and “Enhancement paused”; the service retains distinct processing outcomes.
+
+### Metrics
+
+| Signal | Emitted when | Dimensions | Purpose |
+| --- | --- | --- | --- |
+| `AudioProcessing` OSLog | Processing status changes | Existing closed mode/outcome values | Explain preparation, active cleanup and failures |
+| Processing/bypass diagnostics | Audio callbacks process or bypass a buffer | None; counters belong to each local tap | Confirm actual processing before reporting boost availability |
+
+The interface consumes existing diagnostics. Integration tests assert status and
+counter evidence; OSLog text is inspected manually rather than asserted in tests.
+
+### Test coverage
+
+| Case | Coverage | Type |
+| --- | --- | --- |
+| Saved mode keys and boost levels | `UserSettingsTests`, `DeepFilterNetTests` | Unit |
+| Raw bypass and boost ceiling | `VolumeBoostTests` | Unit/native DSP |
+| Active processing, parameter changes and unavailable boost | `AudioPlayerIntegrationTests` | AVPlayer integration |
+| Player entry, off/on dependency and reopening | `AudioEnhancementPresentationTests.testPlayerCombinesNoiseReductionAndBoostWithoutStartingPlayback` | UI integration |
+| Recommended/secondary modes, persistence and mini-player clearance | `AudioEnhancementPresentationTests.testSettingsOffersRecommendedAndSecondaryModesAndRemembersTheChoice` | UI integration |
+| Large text, dark appearance and quiet-speech selection | `AudioEnhancementPresentationTests.testLargeTextDarkAppearanceKeepsControlsReachable` | UI integration |
+
+All 61 unit/audio-integration tests passed across 66 runs in
+`build/audio-enhancement-regression-tests.xcresult`. The three UI scenarios passed
+on both iPhone 17 Pro and iPhone SE (3rd generation), iOS 26.5, in
+`build/audio-enhancement-ui-verified.xcresult`. Screenshots are attached to that
+result. The device Release build passed in
+`build/audio-enhancement-release-final.xcresult`. The battery note describes relative processing cost; sustained phone
+battery/thermal measurements remain device work.
+
+The DeNoise rename and adjacent Transcript button passed all three UI scenarios on
+both simulators in `build/denoise-player-controls.xcresult`. The follow-up Settings
+scroll check asserts that the entire footer sits above the mini-player on both
+screens: `build/denoise-settings-scroll.xcresult`.
+
+The Gentle Lift default update passed the existing `UserSettingsTests` (unit) and
+`AudioPlayerIntegrationTests` (AVPlayer integration): 24 tests / 29 runs in
+`build/denoise-defaults-tests.xcresult`. These cover preference persistence, boost
+defaults, live parameter changes and the local processing diagnostics above.
+
+To run the UI checks, substitute an installed simulator ID:
+
+```bash
+xcodegen generate
+xcodebuild -project OshoDiscourses.xcodeproj -scheme OshoDiscoursesUI \
+  -destination 'platform=iOS Simulator,id=SIMULATOR_ID' \
+  -parallel-testing-enabled NO \
+  -only-testing:OshoDiscoursesUITests/AudioEnhancementPresentationTests test
+```
+
+## 2026-09-14: RNNoise repair and stream isolation
+
+The current working tree contains unreleased DSP changes compared with baseline
+`b627551` (2026-09-13). Local measurements are saved in
+`build/noise-lab/evidence/report.json`, with validation scope in
+`build/noise-lab/evidence/validation.json`. The offline harness is in
+[`Tools/NoiseReductionLab`](../Tools/NoiseReductionLab/).
+
+### Implementation
+
+- **RNNoise had two integration defects.** It still received source-rate
+  samples at 22.05 kHz despite the earlier documentation saying both models
+  were resampled. Only DeepFilterNet used the resampler. The dry path also
+  delayed one 480-sample hop, while the vendored model needs two hops, or
+  960 samples at 48 kHz. `RNNoiseProcessor` uses `DenoiserStream` for conversion
+  to the trained rate and back, with the dry/wet mix aligned at that rate.
+- **The 16-tap resampler attenuated the upper speech band and rejected aliases
+  poorly.** `PolyphaseResampler` uses a Kaiser-windowed filter with 128 taps per
+  phase up and 280 down for 22.05 kHz / 48 kHz conversion. Its measured round
+  trip preserves the 9.5 kHz passband; stopband results are below.
+- **Model strength and Voice Focus are separate controls.** Settings and the
+  player expose DeepFilterNet Light / Medium / Strong as 6 dB / 12 dB / no cap
+  (100 dB in the bridge), independently of Focus / Lift / Strong post-processing.
+  This snapshot used Medium and Focus as defaults, with noise reduction off.
+  Strength, Voice Focus and boost changes retain the tap and neural streaming
+  history instead of rebuilding or re-priming it.
+
+`NoiseReductionProcessor` selects the current `NoiseReductionTapContext`. Each
+tap generation owns a separate `NoiseReductionStream`, model state and outcome
+counters, so an old tap cannot mutate the replacement's DSP or processing
+evidence. Each new DeepFilterNet tap loads its own model asynchronously. A short
+interval of original audio during loading is accepted. Output gain applies only
+to successfully processed buffers; loading and model-failure bypasses retain
+raw audio.
+
+Source discontinuities request deferred resets off the render path to clear
+pre-boundary history. The real AVPlayer test found seeks with no discontinuity
+flag and no new prepare callback. `SourceAudioTimeline` also checks the source
+asset time ranges, allowing rational timestamp rounding and resetting on gaps
+or loss/recovery of valid timing. Both neural methods pass the simulator seek
+test with an observed completed reset. The existing DeepFilterNet reset flush
+of eight silent hops is preserved; it does not call the upstream reset that
+accumulated latency.
+
+Diagnostics are local: fixed outcome counters cover processed, disabled,
+unprepared, invalid, model-bypassed and lock-contended buffers, plus source-read
+failures and resets. OSLog records setup and status transitions off the render
+path, with no per-callback logging or remote telemetry. The player distinguishes
+model readiness from recent processed buffers belonging to the current tap.
+Swift stream buffers are preallocated and callbacks use try-locks; the native
+tract runtime still allocates during inference.
+
+### Measured speech fidelity
+
+The comparison uses RNNoise Medium (0.5 wet), DeepFilterNet Medium (12 dB) with
+Focus, and Boost off (1x). Human male and female references come from the Open
+Speech Repository at 8 kHz, resampled to 22.05 kHz. The report's Hindi reference
+is synthetic macOS speech, not a human recording.
+
+| RNNoise reference and metric | Baseline `b627551` | Working-tree snapshot |
+| --- | ---: | ---: |
+| Clean male, SI-SDR (dB) | 0.28 | 20.81 |
+| Clean female, SI-SDR (dB) | 2.59 | 20.29 |
+| Male with hiss at 10 dB global input SNR, SI-SDR (dB) | -0.17 | 14.11 |
+| Clean male, STOI | 0.876 | 0.997 |
+
+Scale-invariant signal-to-distortion ratio (SI-SDR) measures fidelity and is
+sensitive to phase and EQ. Short-time objective intelligibility (STOI) is an
+intelligibility proxy. The clean-speech results show less distortion, not 20 dB
+of noise removal. The unprocessed hiss mixture itself scores 10.17 dB SI-SDR.
+
+For Maha Geeta #5 at **40:15-40:45**, the same high- and low-energy source
+windows give these output/input gains:
+
+| Processor | High-energy gain, before / after | Low-energy gain, before / after |
+| --- | ---: | ---: |
+| RNNoise | -5.54 / -0.87 dB | -6.01 / -6.02 dB |
+| DeepFilterNet + Focus | -3.73 / -3.62 dB | -25.05 / -25.22 dB |
+
+These windows are speech/pause proxies selected from source energy, not clean
+speech and isolated noise. They cannot establish clean-target SNR. DeepFilterNet's
+steady-state suppression on the measured recordings is broadly similar before
+and after. On the 32 kHz Bird excerpt, RNNoise reduces both window groups by
+about 6 dB, mainly changing level. These results do not establish a universal
+denoising improvement or a listening preference.
+
+### Conversion, latency and cost
+
+The resampler probe measures gain relative to the input tone:
+
+| Probe | Baseline `b627551` | Kaiser filter |
+| --- | ---: | ---: |
+| 9.5 kHz round trip, 22.05 kHz / 48 kHz | -9.14 dB | approximately 0 dB |
+| 11,025 Hz into 48 kHz to 22.05 kHz conversion | -7.49 dB | -91.85 dB |
+| 12 kHz into 48 kHz to 22.05 kHz conversion | -12.72 dB | -110.76 dB |
+
+The longer filter adds about 5.4 ms to the measured DeepFilterNet recording
+delay. The reset probe measures **58.64 ms** at both zero and twelve resets.
+The earlier **53 ms** result below belongs to the old resampler.
+
+On the 130-second, 22.05 kHz stereo Maha Geeta excerpt, the macOS release build
+measures real-time factors of **0.039 for RNNoise** and **0.071 for DeepFilterNet**.
+DeepFilterNet's p99 processing time is **4.16 ms** for a 1,024-frame buffer
+containing **46.44 ms** of audio. Model loading and file I/O are excluded.
+These offline timings do not measure phone scheduling, battery or thermals.
+
+### Validation and listening status
+
+`validation.json` records passing macOS DSP/model checks and an Address
+Sanitizer run for the captured snapshot. Unit coverage includes rate conversion,
+ragged buffers, failure preservation and Voice Focus envelopes. Native-model
+integration coverage includes RNNoise delay alignment, DeepFilterNet loading
+races, constant reset latency and raw-audio boost bypass. The sanitizer run
+covers Swift buffers; the prebuilt native libraries are not instrumented.
+Two iOS service-wiring assertions are excluded from that harness and covered
+by the app suite. The final iPhone 17 Pro / iOS 26.5 simulator run passed
+**315 test functions / 351 parameterized runs**, with no failures or skips:
+`build/tipjar-noise-final-tests.xcresult`. Release builds also passed for device
+arm64 and the universal simulator. Real AVPlayer integration covers processing
+22.05 kHz stereo audio, live settings, seeks, replacement taps and media-reset
+recovery. Source-timeline unit tests cover unflagged gaps, invalid timing and
+asset-time progression at different playback rates; these are not sustained
+phone performance measurements.
+
+Five recorded excerpts produced **50 before/after audition WAVs**, including raw,
+RNNoise and DeepFilterNet variants at native and matched levels. Matching uses
+RMS on the same high-energy source windows, with shared headroom within each
+group. Export checks found zero clipped samples and a maximum estimated 4x
+true peak of **-1.41 dBFS**; existing source clipping cannot be undone.
+No listening was performed for this comparison. Blind preference, sustained
+phone playback at 2x, and phone battery/thermal behavior remain unmeasured.
+
+### Reproduction
+
+Run from the repository root on an Apple Silicon Mac with the macOS 26.5
+toolchain and Rust. The before/after matrix reuses the saved baseline executable
+and the four trimmed source WAVs in `build/noise-lab/sources/`:
+`maha-aircraft`, `maha-quiet`, `bird-opening` and `wisdom-hiss`. Their `.wav.json`
+sidecars record the original files, cut offsets and durations.
+
+```bash
+python3 -m venv build/noise-lab/.venv
+source build/noise-lab/.venv/bin/activate
+python -m pip install -r Tools/NoiseReductionLab/requirements.txt
+python Tools/NoiseReductionLab/build.py --name current
+python Tools/NoiseReductionLab/experiments.py mixtures
+python Tools/NoiseReductionLab/experiments.py render --name baseline
+python Tools/NoiseReductionLab/experiments.py render --name current
+python Tools/NoiseReductionLab/run-tests.py
+python Tools/NoiseReductionLab/run-tests.py --sanitize address \
+  --filter 'DenoiserStreamTests|NoiseReductionProcessorTests|PolyphaseResamplerTests'
+python Tools/NoiseReductionLab/report.py --render
+```
+
+`build.py --name baseline --from-snapshot baseline` rebuilds the saved baseline
+Swift sources; `source-info.json` records source/model/library fingerprints.
+A fresh checkout needs those baseline artifacts and source cuts for this matrix.
+`prepare.py --download` fetches Maha Geeta and Bird audio and generates alignment
+probes, but does not create the four trimmed WAVs. `experiments.py mixtures`
+fetches the human references and includes synthetic Hindi only when
+`sources/hindi-reference.wav` is present. `resampler-probe.swift` measures filter
+gain; `analyze.py` compares delay-aligned outputs. `report.py` merges existing
+probe and validation JSON, so re-rendering alone does not refresh that validation
+record.
+
+## Historical source-rate diagnosis (corrected)
 
 Measured on `OSHO-Maha_Geeta_05.mp3`: **22,050 Hz, 43 kbps**. The archive.org
-mirror is byte-identical, so no better master is available.
+mirror used in the comparison is byte-identical.
 
-Both RNNoise and DeepFilterNet are 48 kHz models. Before resampling existed:
+Both RNNoise and DeepFilterNet are 48 kHz models. Their original rate defects
+were fixed at different times:
 
-- DeepFilterNet **never ran at all** on this material — it was bypassed outright,
-  so noise reduction appeared to "do nothing".
-- RNNoise ran at the wrong rate, mapping its learned bands onto the wrong
-  frequencies.
+- DeepFilterNet was bypassed on this material before its resampling path was
+  added, so noise reduction appeared to "do nothing".
+- RNNoise continued to run at the source rate through `b627551`, mapping its
+  learned bands onto the wrong frequencies. The earlier claim that
+  `PolyphaseResampler` converted both neural paths was incorrect. The
+  `RNNoiseProcessor` / `DenoiserStream` work above supplies that missing path.
 
-`PolyphaseResampler` now converts source rate → 48 kHz → back, which is what
-makes any neural filtering possible on the catalog.
-
-## Why aircraft noise cannot simply be removed
+## Historical aircraft-noise experiments
 
 Band energy at 40:20 (aircraft overhead) versus clean speech at 10:00:
 
@@ -44,7 +287,11 @@ Two approaches were measured and **rejected**:
 - **DSP without the neural stage** — measured *worse than doing nothing*
   (-7.2 dB), so the model is doing the real work.
 
-## Voice Focus
+## Historical Voice Focus experiments
+
+The measurements and listening reports in this section belong to the earlier
+experiments, with the old resampler and the attenuation settings stated below.
+The 2026-09-14 comparison has no listening results.
 
 What does work is raising speech-to-pause contrast using DeepFilterNet's own
 per-frame local SNR estimate: duck noise-dominated frames, optionally lift quiet
@@ -69,7 +316,7 @@ preserves speech better and ducks pauses more completely:
 |---|---|---|---|
 | original | — | — | +23.1 dB |
 | offline prototype (misaligned) | -3.4 dB | -14.1 dB | +33.9 dB |
-| shipping, aligned (Focus) | -2.7 dB | -20.9 dB | **+41.2 dB** |
+| earlier aligned implementation (Focus) | -2.7 dB | -20.9 dB | **+41.2 dB** |
 
 ### The gate must be slow to close, not fast
 
@@ -141,7 +388,7 @@ This reduced noise in short gaps from +3.2 dB to +2.2 dB.
 - Lift and Strong measure close together on this material; Focus is the clearly
   distinct option (no levelling, deepest ducking).
 
-### Open issues — next session starts here
+### Earlier listening feedback
 
 Reported after listening to all three presets on Maha Geeta #5 around 41:37.
 Sentence endings and overall clarity were confirmed fixed.
@@ -227,11 +474,10 @@ part noise removal and part emphasis normalisation. This is not a catalog-wide
 loudness result; limited boost can recover some perceived level by spending
 speech crest factor, not by creating peak headroom.
 
-**Note the earlier listening tests were run at full attenuation**, as
-`VoiceFocusPreset`'s doc comment says. That is the Strong setting, not the
-`medium` default the app actually ships, so those clips were harsher than what a
-default install produces. Any future preset comparison must state its
-attenuation limit or it is not reproducible.
+**The earlier listening tests were run at full attenuation.** That is the
+Strong setting, not the `medium` default, so those clips used more suppression
+than a default install. Any future preset comparison must state its attenuation
+limit or it is not reproducible.
 
 Medium was chosen on that listen: Light still left audible noise. Medium is
 already the default, so no strength default changed. DeepFilterNet is now the
@@ -257,12 +503,12 @@ Note the emphasis bell also sits inside the chirp band, and measurably makes
 exposure worse (7.9 dB model-only against 8.3 dB with Focus applied), so it is
 implicated in both issues.
 
-### The resampler is still a weak filter, on its own merits
+### Historical 16-tap resampler measurements
 
-Not the cause of the chirping, but the measurements stand and are worth fixing
-separately. Transition width is `5.5 * inputRate / tapsPerPhase`: at 16 taps
-that is ~7.6 kHz upsampling and ~16.5 kHz downsampling. Measured rejection of a
-tone that should vanish entirely:
+The old filter was not the cause of that chirping, but it had weak rejection.
+Transition width was `5.5 * inputRate / tapsPerPhase`: at 16 taps
+that was ~7.6 kHz upsampling and ~16.5 kHz downsampling. The historical
+tone-probe readings were:
 
 | tone (48 kHz in) | folds to | 16 taps | 256 taps |
 | --- | --- | --- | --- |
@@ -270,18 +516,16 @@ tone that should vanish entirely:
 | 14 kHz | 8,050 Hz | -29.8 dB | -125.3 dB |
 | 15 kHz | 7,050 Hz | -36.7 dB | -127.1 dB |
 
--18.8 dB is only 13 dB below the tone itself. This is inert in the current
-pipeline solely because the 22.05 kHz source has nothing up there — it would
-bite immediately on 44.1 kHz input, or if anything in the chain ever generated
-high-frequency content. `suppressesContentAboveTheOutputNyquist` asserts only
-~17 dB, which is why it passed.
+-18.8 dB was only 13 dB below the tone itself. The sampled 22.05 kHz pipeline
+had little energy above its Nyquist limit, but 44.1 kHz input or generated
+high-frequency content could expose the defect.
+`suppressesContentAboveTheOutputNyquist` required only about 17 dB then.
 
-Fix when convenient: ~128 taps up / ~256 down for roughly a 1 kHz transition,
-Kaiser window with a specified stopband, then tighten that test to demand real
-rejection. Cost is a few million multiply-adds per second against a 0.123
-real-time factor.
+The proposed follow-up was about 128 taps up / 256 down, a Kaiser window with
+a specified stopband, and a stronger rejection test. The Kaiser implementation
+and measurements at the top of this document complete that follow-up.
 
-### Measured cost
+### Historical measured cost
 
 Full chain (resample → model → focus → resample) at 22,050 Hz: **real-time
 factor 0.123**, about 8x faster than playback, with zero bypassed blocks and
@@ -295,9 +539,10 @@ reproduce nearly the same signal twice, because measured on Maha Geeta #5 the tw
 channels differ by only **-18.4 dB**. It is a near-dual-mono source in a stereo
 container.
 
-The channels are now mixed to mono, denoised once, and the result written back to
-both. That halves the CPU, the battery and the model memory, and it removes an
-artifact the per-channel version could produce: two independent gates ducking at
+The channels were mixed to mono, denoised once, and the result written back to
+both. That halved model instances and roughly halved measured inference cost;
+phone battery savings were not measured. It also removed an artifact the
+per-channel version could produce: two independent gates ducking at
 slightly different moments make the stereo image wander, which is worse on a voice
 recording than having no width at all. The cost is that genuine stereo content in
 the source is collapsed, which is an accepted trade for spoken word.
@@ -307,8 +552,8 @@ fixed — see below.
 
 ### The reset path used to leak latency
 
-`reset()` runs on every track change, seek and settings toggle. It forwarded to
-`dfb_reset`, which forwards to upstream's `DfTract::init()`, and that method is
+The old reset path ran on track changes, seeks and settings toggles. It forwarded
+to `dfb_reset`, which forwards to upstream's `DfTract::init()`, and that method is
 not idempotent: it clears `rolling_spec_buf_y` before re-priming it but never
 clears `rolling_spec_buf_x`, so each call appends another `df_order` (5) frames
 to the noisy-spectrum buffer.
@@ -329,10 +574,11 @@ it overflowed, `push` began returning false, and DeepFilterNet fell back to
 passthrough for the rest of the session. Anyone who seeked a few times silently
 lost noise reduction.
 
-`resetStreamState` now displaces the stale spectra by pushing 8 hops of silence
-through the model instead of calling `dfb_reset`. Latency is constant at 1,174
-frames across any number of resets, and the baseline dropped to 53 ms because the
-startup path had been paying one spurious `init()` too.
+`resetStreamState` displaced stale spectra with 8 hops of silence instead of
+calling `dfb_reset`. With the earlier resampler, the measured delay stayed at
+1,174 frames, about 53 ms, across repeated resets. The startup path had been
+paying one spurious `init()` too. The flush is preserved in the current code;
+the Kaiser-filter reset probe above measures about 58.6 ms.
 
 `rolling_spec_buf_x` is private, so it cannot be cleared from the bridge. The
 alternative fix — destroying and recreating the native handle — is also correct
@@ -352,12 +598,12 @@ Device app bundle grows from roughly 4 MB to 32 MB (static tract code plus the
 - Pumping or breathing on Strong, especially in long pauses.
 - Underruns at 1.75x–2x playback (headroom says no, but confirm).
 - Battery and thermals over a full discourse.
-- Status must never read `Active` while audio is audibly unprocessed.
+- `Enhancement is on` must be backed by recent processed buffers from the current tap.
 
-Settings and the player both show the runtime's real state (`Loading…`,
-`Active`, `Model missing`, `Failed to load`, `Unsupported rate`,
-`Stopped on error`). Anything other than `Active` means audio is passing through
-untouched, and no failure ever silently substitutes RNNoise.
+The service distinguishes loading, model-ready, processing, bypass and error
+states. The interface groups preparation states under “Getting ready”. A loaded
+model alone does not activate boost. Gain is gated again per processed buffer,
+and a DeepFilterNet failure does not substitute RNNoise.
 
 ## Listening Set
 

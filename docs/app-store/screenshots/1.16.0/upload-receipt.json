@@ -1,0 +1,51 @@
+{
+  "verifiedOn": "2026-09-19",
+  "appID": "6774409039",
+  "version": "1.16.0",
+  "versionID": "a84ca361-bc0d-4f5a-8d1c-d9b91865f43b",
+  "versionState": "PREPARE_FOR_SUBMISSION",
+  "locale": "en-US",
+  "localizationID": "6c54bb18-3fab-423b-abc7-44e89092de24",
+  "appInfoID": "59482fd4-cdf1-4ecf-a4ac-ec035e9c41e8",
+  "appInfoLocalizationID": "bc081a5a-1402-4dff-adf6-59b43da0f040",
+  "assetCommit": "1401d6d61f746bfd0504f4dc5779af000ad0416a",
+  "deliveryState": "COMPLETE",
+  "checksumsAndOrderMatchManifest": true,
+  "metadataMatchesCanonicalFiles": true,
+  "submitted": false,
+  "sets": [
+    {
+      "displayType": "APP_IPHONE_67",
+      "requestedDisplayType": "IPHONE_69",
+      "setID": "d94c9fe2-c4fe-44ac-9287-0854cff2f027",
+      "count": 9,
+      "imageIDsInOrder": [
+        "2d237536-59d3-46af-9254-393e9fccad35",
+        "aec95536-2f1c-41f3-9250-a8e6f37f67bf",
+        "b3834422-cd97-4ffa-92c3-a975f73ece3f",
+        "2d2cb3ca-df8e-482c-a63e-cd358fa0ea3d",
+        "140735ac-7fdf-410b-9659-1e2b804b5e05",
+        "40b18a05-633c-4934-830f-84d642d404fa",
+        "f537039e-70d7-4bc5-ad85-bd5b50df839b",
+        "530a204d-2954-4a0b-b042-72cf4536813b",
+        "16897735-52e1-4530-ba95-12be773322e0"
+      ]
+    },
+    {
+      "displayType": "APP_IPAD_PRO_3GEN_129",
+      "setID": "1f7850c8-1286-42d0-b458-cb99c005133a",
+      "count": 9,
+      "imageIDsInOrder": [
+        "92485e27-c77e-435d-b8bd-d630c46b6a94",
+        "023bb4c0-6ef1-4480-ad5f-abcba7891028",
+        "180c3509-3cc6-4fa0-86e6-e768d99aa5ab",
+        "7b80c678-4683-46a6-87e6-7a14cbf299eb",
+        "ac007ab9-1051-46eb-9bd9-ab21acf22660",
+        "bf3bdc46-89a8-4402-bffb-5bc7aa2b49bf",
+        "d4d1cae6-044a-4ac1-91bc-19d5a4217d7e",
+        "c57328da-a620-4fc6-b34c-42ea8c1ba874",
+        "5b2aac76-85fb-4340-a534-60aba4cdc36b"
+      ]
+    }
+  ]
+}

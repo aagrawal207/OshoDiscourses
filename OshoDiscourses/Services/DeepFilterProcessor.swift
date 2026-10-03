@@ -1,35 +1,8 @@
 import Foundation
 import os
 
-/// DeepFilterNet 3 speech enhancement, running natively through the Rust/tract
-/// bridge in `Vendor/DeepFilterBridge.xcframework`.
-///
-/// The discourse archive is **not** 48 kHz — the Hindi talks are 22,050 Hz
-/// 43 kbps MP3s — and DeepFilterNet is a 48 kHz model. So this processor
-/// resamples into the model's rate and back out again. Without that the model
-/// cannot run at all on most of the catalog, which is exactly why noise
-/// reduction previously seemed to do nothing on those recordings.
-///
-/// Signal path per channel:
-///
-///     source rate -> upsample 48 kHz -> DeepFilterNet (480-sample hops)
-///         -> VoiceFocusChain (duck / lift / emphasis) -> downsample -> source rate
-///
-/// Two deliberate design decisions:
-///
-/// 1. **No dry/wet blending.** The model exposes its own strength control —
-///    `atten_lim_db`, a cap on how far it may attenuate — which is trained-in
-///    and spectrally aware. Crossfading in the untouched signal would instead
-///    reintroduce exactly the broadband noise the model just removed, and would
-///    require sample-aligning against the model's internal lookahead.
-/// 2. **Loading never blocks audio.** Parsing three ONNX graphs out of a
-///    compressed archive takes ~230 ms, far too long for the render thread, so
-///    it happens on a background queue and audio passes through untouched until
-///    the model is installed.
-///
-/// Failures degrade to passthrough and are reported through `Status` so the UI
-/// can tell the listener the truth about whether DeepFilterNet is actually
-/// running. Nothing here ever substitutes a different denoiser silently.
+/// DeepFilterNet 3 at its trained 48 kHz clock, with source-rate conversion.
+/// Model parsing is asynchronous; failures are observable, transparent passthrough.
 final class DeepFilterProcessor: @unchecked Sendable {
 
     /// The rate DeepFilterNet 3 operates at. Other rates are resampled to it.
@@ -52,6 +25,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
         case initializationFailed
         /// Source rate is implausible, so resampling was refused.
         case unsupportedSampleRate(Double)
+        case unsupportedAudioFormat
         /// A frame failed mid-playback; audio is passing through.
         case runtimeFailure
 
@@ -67,6 +41,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
             case .modelMissing: return "Model missing"
             case .initializationFailed: return "Failed to load"
             case .unsupportedSampleRate: return "Unsupported rate"
+            case .unsupportedAudioFormat: return "Unsupported format"
             case .runtimeFailure: return "Stopped on error"
             }
         }
@@ -89,32 +64,10 @@ final class DeepFilterProcessor: @unchecked Sendable {
     private final class Voice {
         let handle: OpaquePointer
         let hopSize: Int
-        private(set) var sourceRate: Double = 0
-        private(set) var maxFrames: Int = 0
-
-        /// nil when the source is already 48 kHz.
-        private var upsampler: PolyphaseResampler?
-        private var downsampler: PolyphaseResampler?
         let focus: VoiceFocusChain
-
-        /// 48 kHz samples waiting to fill a model hop.
-        private var modelIn: UnsafeMutablePointer<Float>
-        private var modelInCount = 0
-        private var modelInCapacity = 0
-        /// Model output for one hop, at 48 kHz.
-        private var frameBuffer: UnsafeMutablePointer<Float>
-        /// Scratch for resampler output.
-        private var upBuffer: UnsafeMutablePointer<Float>
-        private var upCapacity = 0
-        private var downBuffer: UnsafeMutablePointer<Float>
-        private var downCapacity = 0
-        /// Processed audio at source rate, waiting to be emitted.
-        private var outBuffer: UnsafeMutablePointer<Float>
-        private var outCount = 0
-        private var outCapacity = 0
-        /// Constant latency held in the output FIFO so every callback can emit
-        /// as many samples as it was handed.
-        private var primeCount = 0
+        private var stream: DenoiserStream?
+        private let silence: UnsafeMutablePointer<Float>
+        private let discardedOutput: UnsafeMutablePointer<Float>
 
         init(handle: OpaquePointer, hopSize: Int, parameters: VoiceFocusChain.Parameters) {
             self.handle = handle
@@ -123,194 +76,66 @@ final class DeepFilterProcessor: @unchecked Sendable {
                 sampleRate: DeepFilterProcessor.modelSampleRate,
                 parameters: parameters
             )
-            frameBuffer = .allocate(capacity: hopSize)
-            frameBuffer.initialize(repeating: 0, count: hopSize)
-            // Real buffers are sized in `reconfigure`; start valid but empty.
-            modelIn = .allocate(capacity: 1); modelIn.initialize(repeating: 0, count: 1)
-            upBuffer = .allocate(capacity: 1); upBuffer.initialize(repeating: 0, count: 1)
-            downBuffer = .allocate(capacity: 1); downBuffer.initialize(repeating: 0, count: 1)
-            outBuffer = .allocate(capacity: 1); outBuffer.initialize(repeating: 0, count: 1)
+            silence = .allocate(capacity: hopSize)
+            silence.initialize(repeating: 0, count: hopSize)
+            discardedOutput = .allocate(capacity: hopSize)
+            discardedOutput.initialize(repeating: 0, count: hopSize)
         }
 
         deinit {
             dfb_destroy(handle)
-            modelIn.deallocate()
-            frameBuffer.deallocate()
-            upBuffer.deallocate()
-            downBuffer.deallocate()
-            outBuffer.deallocate()
+            silence.deallocate()
+            discardedOutput.deallocate()
         }
 
-        var isConfigured: Bool { sourceRate > 0 && maxFrames > 0 }
+        var isConfigured: Bool { stream != nil }
+        var maxFrames: Int { stream?.maxFrames ?? 0 }
 
         func matches(sourceRate: Double, maxFrames: Int) -> Bool {
-            self.sourceRate == sourceRate && self.maxFrames >= maxFrames
+            stream?.sourceRate == sourceRate && self.maxFrames >= maxFrames
         }
 
-        /// Build (or rebuild) resamplers and FIFOs for a stream format.
         func reconfigure(sourceRate: Double, maxFrames: Int) {
-            self.sourceRate = sourceRate
-            self.maxFrames = maxFrames
-            let modelRate = Int(DeepFilterProcessor.modelSampleRate)
-            let source = Int(sourceRate.rounded())
-
-            if source == modelRate {
-                upsampler = nil
-                downsampler = nil
-            } else {
-                upsampler = PolyphaseResampler(
-                    inputRate: source, outputRate: modelRate, maxInputFrames: maxFrames
-                )
-                downsampler = PolyphaseResampler(
-                    inputRate: modelRate, outputRate: source, maxInputFrames: hopSize
-                )
-            }
-
-            upCapacity = (upsampler?.maximumOutputCount(forInputCount: maxFrames) ?? maxFrames) + 8
-            downCapacity = (downsampler?.maximumOutputCount(forInputCount: hopSize) ?? hopSize) + 8
-            modelInCapacity = upCapacity + 2 * hopSize + 16
-
-            // One model hop expressed at the source rate, which is the dominant
-            // term in the chain's latency.
-            let hopAtSourceRate = Int((Double(hopSize) * sourceRate / DeepFilterProcessor.modelSampleRate).rounded(.up))
-            // Two hops plus resampler slack: enough that the FIFO never runs dry
-            // between callbacks, without adding audible delay (~46 ms at 22 kHz).
-            primeCount = 2 * hopAtSourceRate + 64
-            outCapacity = primeCount + 2 * maxFrames + downCapacity + 64
-
-            reallocate(&modelIn, modelInCapacity)
-            reallocate(&upBuffer, upCapacity)
-            reallocate(&downBuffer, downCapacity)
-            reallocate(&outBuffer, outCapacity)
+            stream = DenoiserStream(
+                sourceRate: sourceRate, maxFrames: maxFrames, hopSize: hopSize,
+                bufferingHops: 2, slackFrames: 64
+            )
             resetStreamState()
-        }
-
-        private func reallocate(_ pointer: inout UnsafeMutablePointer<Float>, _ capacity: Int) {
-            pointer.deallocate()
-            pointer = .allocate(capacity: max(capacity, 1))
-            pointer.initialize(repeating: 0, count: max(capacity, 1))
         }
 
         /// Clear streaming state for a seek or track change.
         func resetStreamState() {
-            modelInCount = 0
-            upsampler?.reset()
-            downsampler?.reset()
+            stream?.reset()
             focus.reset()
             flushModelState()
-            outBuffer.update(repeating: 0, count: min(primeCount, outCapacity))
-            outCount = min(primeCount, outCapacity)
         }
 
-        /// Number of silent hops pushed through the model to displace the spectra
-        /// left over from the previous position. DeepFilterNet 3 holds `df_order`
-        /// (5) frames plus its convolution lookahead; 8 covers both with margin
-        /// and costs well under a millisecond of inference.
+        /// Eight silent hops cover the model's five-frame spectral history and
+        /// convolution lookahead without rebuilding the model.
         private static let flushHops = 8
 
-        /// Clears the model's carried-over spectra by washing silence through it,
-        /// rather than by calling `dfb_reset`.
-        ///
-        /// `dfb_reset` forwards to upstream's `DfTract::init()`, which is **not**
-        /// idempotent. It clears `rolling_spec_buf_y` before re-priming it but
-        /// never clears `rolling_spec_buf_x`, so every call appends another
-        /// `df_order` frames to the noisy-spectrum buffer. Each reset therefore
-        /// added 5 hops of latency and it accumulated without bound — measured on
-        /// a 22.05 kHz source at 103, 153, 203, 253 and 303 ms over successive
-        /// resets. Since `reset()` runs on every track change, seek and settings
-        /// toggle, the output FIFO overflowed after roughly eight of them, `push`
-        /// began failing, and DeepFilterNet dropped to passthrough for the rest of
-        /// the session.
-        ///
-        /// Pushing silence displaces the stale frames instead of re-priming them,
-        /// so latency stays put. The alternative — destroying and recreating the
-        /// native handle — is correct too, but re-parses the ONNX model on every
-        /// seek for about 230 ms of unprocessed audio each time.
-        ///
-        /// The running normalisation states are deliberately left alone. They are
-        /// not part of the latency, they re-adapt within a few frames, and keeping
-        /// them means a seek does not start from a cold estimate.
+        /// Upstream init() appends spectra on each call, so dfb_reset grows latency.
+        /// Displace stale spectra with silence; retain the running normalisation.
         private func flushModelState() {
             guard hopSize > 0 else { return }
-            let silence = UnsafeMutablePointer<Float>.allocate(capacity: hopSize)
-            defer { silence.deallocate() }
-            silence.initialize(repeating: 0, count: hopSize)
             var snr: Float = 0
             for _ in 0..<Self.flushHops {
-                guard dfb_process_frame(handle, silence, frameBuffer, hopSize, &snr) == DFB_OK else {
+                guard dfb_process_frame(handle, silence, discardedOutput, hopSize, &snr) == DFB_OK else {
                     return
                 }
             }
         }
 
-        /// Push `count` source-rate samples through the chain. Returns false if a
-        /// model frame failed, in which case the caller must bypass.
-        func push(samples: UnsafePointer<Float>, count: Int) -> Bool {
-            // 1. Into the model's rate.
-            var producedUp = 0
-            if let upsampler {
-                producedUp = upsampler.process(
-                    input: samples, count: count, output: upBuffer, outputCapacity: upCapacity
-                )
-            } else {
-                producedUp = min(count, upCapacity)
-                upBuffer.update(from: samples, count: producedUp)
-            }
-            guard modelInCount + producedUp <= modelInCapacity else { return true }
-            (modelIn + modelInCount).update(from: upBuffer, count: producedUp)
-            modelInCount += producedUp
-
-            // 2. Drain whole hops through the model, focus, and back down.
-            var consumed = 0
-            var snr: Float = 0
-            while modelInCount - consumed >= hopSize {
-                let status = dfb_process_frame(
-                    handle, modelIn + consumed, frameBuffer, hopSize, &snr
-                )
-                guard status == DFB_OK else { return false }
-                consumed += hopSize
-
-                // The model's own local SNR estimate drives the focus chain; it
-                // is what separates speech from noise in time when the two
-                // overlap in frequency.
-                focus.process(frame: frameBuffer, count: hopSize, localSnrDb: snr)
-
-                var producedDown = 0
-                if let downsampler {
-                    producedDown = downsampler.process(
-                        input: frameBuffer, count: hopSize,
-                        output: downBuffer, outputCapacity: downCapacity
-                    )
-                } else {
-                    producedDown = min(hopSize, downCapacity)
-                    downBuffer.update(from: frameBuffer, count: producedDown)
+        func process(samples: UnsafeMutablePointer<Float>, count: Int) -> Bool {
+            guard let stream else { return false }
+            return stream.process(samples: samples, count: count) { input, output in
+                var snr: Float = 0
+                guard dfb_process_frame(self.handle, input, output, self.hopSize, &snr) == DFB_OK else {
+                    return false
                 }
-                if outCount + producedDown <= outCapacity {
-                    (outBuffer + outCount).update(from: downBuffer, count: producedDown)
-                    outCount += producedDown
-                }
+                self.focus.process(frame: output, count: self.hopSize, localSnrDb: snr)
+                return true
             }
-            if consumed > 0 {
-                let remaining = modelInCount - consumed
-                if remaining > 0 {
-                    memmove(modelIn, modelIn + consumed, remaining * MemoryLayout<Float>.size)
-                }
-                modelInCount = remaining
-            }
-            return true
-        }
-
-        /// Emit `count` processed samples. Returns false if the FIFO is short,
-        /// which would mean the priming estimate was wrong.
-        func emit(into samples: UnsafeMutablePointer<Float>, count: Int) -> Bool {
-            guard outCount >= count else { return false }
-            samples.update(from: outBuffer, count: count)
-            let leftover = outCount - count
-            if leftover > 0 {
-                memmove(outBuffer, outBuffer + count, leftover * MemoryLayout<Float>.size)
-            }
-            outCount = leftover
-            return true
         }
     }
 
@@ -323,15 +148,34 @@ final class DeepFilterProcessor: @unchecked Sendable {
     private var parameters: VoiceFocusChain.Parameters = .focus
     private var sourceRate: Double = 0
     private var maxFrames = 0
+    private var requestedChannels = 1
     private var isLoading = false
+    private var loadGeneration: UInt64 = 0
+    private var retired = false
     /// Set once a load attempt has completed so a failure is not retried on
     /// every track change. Cleared by `invalidate()`.
     private var hasCompletedLoadAttempt = false
     private var statusObserver: (@Sendable (Status) -> Void)?
+    private let runtimeNotifications: DispatchSourceUserDataAdd
 
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "DeepFilterNet")
 
-    init() {}
+    init() {
+        runtimeNotifications = DispatchSource.makeUserDataAddSource(queue: .global(qos: .utility))
+        runtimeNotifications.setEventHandler { [weak self] in self?.publishRuntimeFailure() }
+        runtimeNotifications.resume()
+    }
+
+    deinit { runtimeNotifications.cancel() }
+
+    private func publishRuntimeFailure() {
+        lock.lock()
+        guard status == .runtimeFailure else { lock.unlock(); return }
+        let observer = statusObserver
+        lock.unlock()
+        Self.log.error("DeepFilterNet frame processing failed; passing audio through")
+        observer?(.runtimeFailure)
+    }
 
     // MARK: - Model file
 
@@ -376,20 +220,15 @@ final class DeepFilterProcessor: @unchecked Sendable {
         return statusObserver
     }
 
-    private func updateStatus(_ new: Status) {
-        lock.lock()
-        let observer = setStatusLocked(new)
-        let value = status
-        lock.unlock()
-        observer?(value)
-    }
-
     // MARK: - Configuration
 
-    /// Model strength, as the attenuation limit in dB.
+    /// Upstream blends aligned noisy/enhanced spectra to cap suppression.
+    /// Its handle owns that delay; an external source-time dry mix would be wrong.
     func setAttenuationLimit(_ db: Float) {
+        guard db.isFinite, db >= 0 else { return }
         lock.lock()
         defer { lock.unlock() }
+        guard !retired else { return }
         attenuationLimitDb = db
         for voice in voices {
             _ = dfb_set_atten_lim(voice.handle, db)
@@ -401,6 +240,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
         let params = VoiceFocusChain.Parameters.forPreset(preset)
         lock.lock()
         defer { lock.unlock() }
+        guard !retired else { return }
         parameters = params
         for voice in voices {
             voice.focus.update(parameters: params)
@@ -418,6 +258,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
               maxFrames > 0 else {
             Self.log.error("Refusing implausible source rate \(sampleRate, format: .fixed(precision: 0)) Hz")
             lock.lock()
+            guard !retired else { lock.unlock(); return }
             // Record the latest request even when unsupported. Otherwise an
             // older in-flight load can complete afterwards and publish Active
             // with its stale, valid format.
@@ -431,9 +272,11 @@ final class DeepFilterProcessor: @unchecked Sendable {
         }
 
         lock.lock()
+        guard !retired else { lock.unlock(); return }
         self.sourceRate = sampleRate
         self.maxFrames = maxFrames
         let channels = max(channelCount, 1)
+        requestedChannels = channels
         if !voices.isEmpty {
             // Already loaded: re-fit resamplers/FIFOs to this stream and clear
             // streaming state for the new position.
@@ -445,7 +288,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
                 }
             }
             let missing = channels - voices.count
-            let observer = status.isActive ? nil : setStatusLocked(.active)
+            let observer = setStatusLocked(missing > 0 ? .loading : .active)
             let value = status
             lock.unlock()
             observer?(value)
@@ -464,23 +307,32 @@ final class DeepFilterProcessor: @unchecked Sendable {
     }
 
     private func loadModel(channelCount: Int, replaceExisting: Bool) {
-        guard let modelURL = Self.modelURL() else {
-            Self.log.error("DeepFilterNet model is not present in the app bundle")
-            lock.lock()
-            hasCompletedLoadAttempt = true
+        let modelURL = Self.modelURL()
+        lock.lock()
+        guard !retired, !isLoading else { lock.unlock(); return }
+        guard sourceRate >= Self.minimumSourceRate,
+              sourceRate <= Self.maximumSourceRate, maxFrames > 0 else {
             lock.unlock()
-            updateStatus(.modelMissing)
             return
         }
-
-        lock.lock()
+        guard let modelURL else {
+            hasCompletedLoadAttempt = true
+            let observer = setStatusLocked(.modelMissing)
+            lock.unlock()
+            Self.log.error("DeepFilterNet model is not present in the app bundle")
+            observer?(.modelMissing)
+            return
+        }
         isLoading = true
+        loadGeneration &+= 1
+        let generation = loadGeneration
         let attenuation = attenuationLimitDb
         let params = parameters
         let rate = sourceRate
         let frames = maxFrames
+        let observer = setStatusLocked(.loading)
         lock.unlock()
-        updateStatus(.loading)
+        observer?(.loading)
 
         // Build handles off the audio path, then install them under the lock so
         // the render thread only ever sees a fully constructed set.
@@ -509,6 +361,10 @@ final class DeepFilterProcessor: @unchecked Sendable {
             }
 
             self.lock.lock()
+            guard generation == self.loadGeneration else {
+                self.lock.unlock()
+                return
+            }
             self.isLoading = false
             self.hasCompletedLoadAttempt = true
             // `activate` may have received a newer tap format while ONNX parsing
@@ -516,16 +372,27 @@ final class DeepFilterProcessor: @unchecked Sendable {
             // not the format captured when loading began.
             let installedRate = self.sourceRate
             let installedFrames = self.maxFrames
+            let installedAttenuation = self.attenuationLimitDb
             let latestFormatIsSupported = installedRate >= Self.minimumSourceRate
                 && installedRate <= Self.maximumSourceRate
                 && installedFrames > 0
-            if !failed, latestFormatIsSupported {
-                for voice in built
-                where !voice.matches(sourceRate: installedRate, maxFrames: installedFrames) {
-                    voice.reconfigure(sourceRate: installedRate, maxFrames: installedFrames)
+            if !failed {
+                for voice in built {
+                    // A picker change during ONNX loading must affect the installed
+                    // handle as well as the stored preference.
+                    if dfb_set_atten_lim(voice.handle, installedAttenuation) != DFB_OK {
+                        failed = true
+                    }
+                    voice.focus.update(parameters: self.parameters)
+                    voice.focus.reset()
+                    if latestFormatIsSupported,
+                       !voice.matches(sourceRate: installedRate, maxFrames: installedFrames) {
+                        voice.reconfigure(sourceRate: installedRate, maxFrames: installedFrames)
+                    }
                 }
             }
             var observer: (@Sendable (Status) -> Void)?
+            var missing = 0
             if failed || built.isEmpty {
                 observer = self.setStatusLocked(.initializationFailed)
             } else {
@@ -534,19 +401,26 @@ final class DeepFilterProcessor: @unchecked Sendable {
                 } else {
                     self.voices.append(contentsOf: built)
                 }
+                missing = max(0, self.requestedChannels - self.voices.count)
                 observer = self.setStatusLocked(
-                    latestFormatIsSupported ? .active : .unsupportedSampleRate(installedRate)
+                    latestFormatIsSupported
+                        ? (missing == 0 ? .active : .loading)
+                        : .unsupportedSampleRate(installedRate)
                 )
             }
             let value = self.status
+            let installedChannels = self.voices.count
             self.lock.unlock()
 
             if case .initializationFailed = value {
                 Self.log.error("DeepFilterNet failed to initialize from \(path, privacy: .public)")
             } else if value.isActive {
-                Self.log.info("DeepFilterNet active on \(channelCount) channel(s) at \(installedRate, format: .fixed(precision: 0)) Hz")
+                Self.log.info("DeepFilterNet active on \(installedChannels) channel(s) at \(installedRate, format: .fixed(precision: 0)) Hz, attenuation limit \(installedAttenuation) dB")
             }
             observer?(value)
+            if missing > 0, latestFormatIsSupported {
+                self.loadModel(channelCount: missing, replaceExisting: false)
+            }
         }
     }
 
@@ -554,6 +428,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
     func reset() {
         lock.lock()
         defer { lock.unlock() }
+        guard !retired else { return }
         for voice in voices where voice.isConfigured {
             voice.resetStreamState()
         }
@@ -562,6 +437,9 @@ final class DeepFilterProcessor: @unchecked Sendable {
     /// Drop the model and allow a future load attempt to retry.
     func invalidate() {
         lock.lock()
+        guard !retired else { lock.unlock(); return }
+        loadGeneration &+= 1
+        isLoading = false
         voices.removeAll()   // Voice.deinit frees the native handle
         hasCompletedLoadAttempt = false
         let observer = setStatusLocked(.idle)
@@ -570,14 +448,36 @@ final class DeepFilterProcessor: @unchecked Sendable {
         observer?(value)
     }
 
+    /// Cancel stale preparation when the tap cannot supply native Float32 PCM.
+    func rejectAudioFormat() {
+        lock.lock()
+        guard !retired else { lock.unlock(); return }
+        loadGeneration &+= 1
+        isLoading = false
+        hasCompletedLoadAttempt = false
+        sourceRate = 0
+        maxFrames = 0
+        let observer = setStatusLocked(.unsupportedAudioFormat)
+        lock.unlock()
+        observer?(.unsupportedAudioFormat)
+    }
+
+    /// A retired tap's in-flight preparation must never start another model load.
+    func retire() {
+        lock.lock()
+        retired = true
+        loadGeneration &+= 1
+        isLoading = false
+        voices.removeAll()
+        let observer = setStatusLocked(.idle)
+        lock.unlock()
+        observer?(.idle)
+    }
+
     // MARK: - Realtime processing
 
-    /// Denoise one channel in place.
-    ///
-    /// Returns false when the caller must leave the audio alone (model still
-    /// loading, unavailable, or a frame failed) — the samples are untouched in
-    /// that case. Runs on the audio render thread: no allocation, and it never
-    /// waits on the lock.
+    /// Denoises in place; false leaves the caller's buffer untouched.
+    /// Swift buffers are preallocated and acquiring the control lock never blocks.
     @discardableResult
     func process(samples: UnsafeMutablePointer<Float>, count: Int, channelIndex: Int) -> Bool {
         guard count > 0 else { return false }
@@ -585,7 +485,7 @@ final class DeepFilterProcessor: @unchecked Sendable {
         // simply means this one callback passes through.
         guard lock.try() else { return false }
 
-        guard status.isActive, channelIndex < voices.count else {
+        guard status.isActive, channelIndex >= 0, channelIndex < voices.count else {
             lock.unlock()
             return false
         }
@@ -595,20 +495,12 @@ final class DeepFilterProcessor: @unchecked Sendable {
             return false
         }
 
-        guard voice.push(samples: samples, count: count) else {
-            // Stop touching audio rather than emitting garbage, and surface it.
-            let observer = setStatusLocked(.runtimeFailure)
-            let value = status
+        guard voice.process(samples: samples, count: count) else {
+            // Status polling sees the failure immediately; callbacks and logging
+            // are delivered by a pre-created source off the render thread.
+            _ = setStatusLocked(.runtimeFailure)
             lock.unlock()
-            Self.log.error("DeepFilterNet frame processing failed; passing audio through")
-            observer?(value)
-            return false
-        }
-
-        guard voice.emit(into: samples, count: count) else {
-            // Priming should make this unreachable; pass through rather than
-            // inserting a gap.
-            lock.unlock()
+            runtimeNotifications.add(data: 1)
             return false
         }
 
