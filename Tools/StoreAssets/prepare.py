@@ -36,7 +36,8 @@ def screenshots(version_id):
 
 
 def expected_set(group, sets):
-    types = {"APP_IPHONE_67", "APP_IPHONE_69"} if group["family"] == "iphone" else {"APP_IPAD_PRO_3GEN_129"}
+    types = {"iphone": {"APP_IPHONE_67", "APP_IPHONE_69"}, "ipad": {"APP_IPAD_PRO_3GEN_129"},
+             "watch": {"APP_WATCH_SERIES_10"}}[group["family"]]
     return [entry for entry in sets if entry["set"]["attributes"]["screenshotDisplayType"] in types]
 
 

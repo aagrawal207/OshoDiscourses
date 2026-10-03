@@ -1,7 +1,8 @@
 # Store and GitHub artwork
 
 The [1.16.0 bundle](../../docs/app-store/screenshots/1.16.0/README.md) contains nine
-iPhone and nine iPad posters, their raw captures, and a checksum manifest. The
+iPhone and nine iPad posters, five Apple Watch captures, their raw captures, and a
+checksum manifest. The
 GitHub README uses a separate hero and three gallery strips.
 
 ## Tools
@@ -27,10 +28,25 @@ and **Osho Store iPad** (iPad Pro 13-inch M4). Install the app's Debug simulator
 build on each fresh, signed-out simulator. The capture recipes target the 1.15.0
 UI used in build 26; rerendering only needs the committed raw images.
 
-The tools cover iPhone and iPad only. 1.16.0 (28) needs new captures for the iPad
-sidebar and two-column player, plus new Mac and Apple Watch sets; `seed.py`,
-`scenes.py` and `story.json` do not yet support the Mac or the Watch. See the
-[screenshot bundle](../../docs/app-store/screenshots/1.16.0/README.md).
+The iPad set was recaptured from 1.16.0 (28), mostly in landscape so the sidebar and
+the player's transcript pane appear. `simctl` cannot rotate a simulator and this Xcode
+has no Simulator app, so a throwaway UI test that only sets
+`XCUIDevice.shared.orientation` was built with `build-for-testing`, removed, and run
+with `test-without-building -only-testing:` on the store iPad. The orientation
+persists after the test, and accessibility frames are reported in the rotated
+coordinate space. After rotating back to portrait, AXe's accessibility tree was empty
+until the next relaunch, so the Hindi capture paused through a coordinate tap.
+
+The renderer accepts 2752 × 2064 iPad captures and centres the shorter frame together
+with its text. Mac capture is not scripted yet.
+
+Watch captures are raw simulator images, not posters. `seed.py` and `scenes.py` do
+not cover the Watch; the 1.16.0 set was taken with AXe taps on a paired store Watch.
+The phone simulator held A Bird on the Wing #1-#3 as downloads. Because the simulator
+never delivers `transferFile`, saved talks were placed directly in the Watch app's
+`Application Support/Offline/` with an `index.json` matching `OfflineEntry`. The
+watchOS simulator does not support `status_bar` overrides. WatchConnectivity
+replies sometimes stopped arriving; rebooting the Watch simulator restored them.
 
 The scripts invoke [Cameron Cooke's AXe](https://github.com/cameroncooke/AXe)
 explicitly at `build/store-capture-tools/axe`. A different program named `axe` may
@@ -76,6 +92,7 @@ was checked against the shipped alignment data.
 swift Tools/StoreAssets/render.swift 1.16.0
 asc screenshots validate --path docs/app-store/screenshots/1.16.0/iphone --device-type IPHONE_69
 asc screenshots validate --path docs/app-store/screenshots/1.16.0/ipad --device-type IPAD_PRO_3GEN_129
+asc screenshots validate --path docs/app-store/screenshots/1.16.0/watch --device-type APP_WATCH_SERIES_10
 python3 Tools/StoreAssets/prepare.py
 ```
 
@@ -83,7 +100,7 @@ The renderer keeps the raw app image intact inside a rounded frame. Headlines us
 the system serif design and captions use the system sans-serif font, obtained
 through AppKit's font APIs. Review both overview images and the README hero after
 changing the story or source captures. The upload directories contain only the
-nine ordered PNGs for each device family.
+nine ordered PNGs for iPhone and iPad, and the Watch PNGs in file-name order.
 
 `prepare.py` checks that 1.15.0 has released before any remote write. It resolves
 the new localization and an editable app-info record, previews changes, and

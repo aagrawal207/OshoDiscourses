@@ -176,22 +176,26 @@ for family in ["iphone", "ipad"] {
         let canvas = Canvas(tablet ? 2064 : 1320, tablet ? 2752 : 2868)
         let palette = Palette(night: slide.style == "night")
         canvas.background(palette)
+        let source = tablet ? (slide.ipadSource ?? slide.source) : slide.source
+        let image = load(directory.appendingPathComponent("raw/\(family)/\(source).png"))
+        let landscape = tablet && image.width == 2752 && image.height == 2064
+        precondition(landscape || (image.width == (tablet ? 2064 : 1320) && image.height == (tablet ? 2752 : 2868)))
+        let frameWidth: CGFloat = landscape ? 1944 : (tablet ? 1544 : 1038)
+        // A landscape iPad frame is shorter, so the text and frame move down together, just above centre.
+        let frameHeight = (frameWidth - 28) * CGFloat(image.height) / CGFloat(image.width) + 28
+        let shift: CGFloat = landscape ? ((canvas.height - 602 - frameHeight - 60) * 0.42).rounded() : 0
         let margin: CGFloat = tablet ? 140 : 86
-        canvas.text(["OSHO TALKS"], x: margin, top: tablet ? 60 : 48,
+        canvas.text(["OSHO TALKS"], x: margin, top: (tablet ? 60 : 48) + shift,
                     maxWidth: canvas.width - margin * 2, maxHeight: 55,
                     size: tablet ? 31 : 25, minimum: 23, color: palette.accent, tracking: 4)
-        canvas.text(slide.title, x: margin, top: tablet ? 136 : 120,
+        canvas.text(slide.title, x: margin, top: (tablet ? 136 : 120) + shift,
                     maxWidth: canvas.width - margin * 2, maxHeight: tablet ? 334 : 292,
                     size: tablet ? 156 : 130, minimum: tablet ? 112 : 91,
                     serif: true, color: palette.text)
-        canvas.text([slide.subtitle], x: margin, top: tablet ? 495 : 432,
+        canvas.text([slide.subtitle], x: margin, top: (tablet ? 495 : 432) + shift,
                     maxWidth: canvas.width - margin * 2, maxHeight: 76,
                     size: tablet ? 57 : 43, minimum: tablet ? 42 : 34, color: palette.secondary)
-        let source = tablet ? (slide.ipadSource ?? slide.source) : slide.source
-        let image = load(directory.appendingPathComponent("raw/\(family)/\(source).png"))
-        precondition(image.width == (tablet ? 2064 : 1320) && image.height == (tablet ? 2752 : 2868))
-        let frameWidth: CGFloat = tablet ? 1544 : 1038
-        canvas.framed(image, x: (canvas.width - frameWidth) / 2, top: tablet ? 602 : 552,
+        canvas.framed(image, x: (canvas.width - frameWidth) / 2, top: (tablet ? 602 : 552) + shift,
                       width: frameWidth, tablet: tablet)
         try canvas.save(directory.appendingPathComponent("\(family)/\(slide.id).png"))
     }
@@ -260,39 +264,50 @@ for family in ["iphone", "ipad"] {
 }
 
 var sets: [[String: Any]] = []
-var sourceBuilds = Set<String>()
+func record(_ relative: String, capture capturePath: String, builds: inout Set<String>) throws -> [String: Any] {
+    let data = try Data(contentsOf: directory.appendingPathComponent(relative))
+    let source = CGImageSourceCreateWithData(data as CFData, nil)!
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)! as NSDictionary
+    precondition(properties[kCGImagePropertyHasAlpha] as? Bool != true)
+    let captureData = try Data(contentsOf: directory.appendingPathComponent(capturePath + ".json"))
+    let captureMetadata = try JSONSerialization.jsonObject(with: captureData) as! [String: Any]
+    builds.insert(captureMetadata["appBuild"] as! String)
+    return [
+        "file": relative,
+        "sourceCapture": capturePath + ".png",
+        "bytes": data.count,
+        "width": properties[kCGImagePropertyPixelWidth] as! Int,
+        "height": properties[kCGImagePropertyPixelHeight] as! Int,
+        "sha256": SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
+        "md5": Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined(),
+    ]
+}
 for family in ["iphone", "ipad"] {
+    var builds = Set<String>()
     let files: [[String: Any]] = try story.map { slide in
-        let relative = "\(family)/\(slide.id).png"
-        let url = directory.appendingPathComponent(relative)
-        let data = try Data(contentsOf: url)
-        let source = CGImageSourceCreateWithData(data as CFData, nil)!
-        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)! as NSDictionary
-        precondition(properties[kCGImagePropertyHasAlpha] as? Bool != true)
         let captureName = family == "ipad" ? (slide.ipadSource ?? slide.source) : slide.source
-        let capturePath = "raw/\(family)/\(captureName)"
-        let captureData = try Data(contentsOf: directory.appendingPathComponent(capturePath + ".json"))
-        let captureMetadata = try JSONSerialization.jsonObject(with: captureData) as! [String: Any]
-        sourceBuilds.insert(captureMetadata["appBuild"] as! String)
-        return [
-            "file": relative,
-            "sourceCapture": capturePath + ".png",
-            "bytes": data.count,
-            "width": properties[kCGImagePropertyPixelWidth] as! Int,
-            "height": properties[kCGImagePropertyPixelHeight] as! Int,
-            "sha256": SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
-            "md5": Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined(),
-        ]
+        return try record("\(family)/\(slide.id).png", capture: "raw/\(family)/\(captureName)", builds: &builds)
     }
+    precondition(builds.count == 1, "Review mixed-build captures before preparing a listing")
     sets.append(["family": family,
                  "displayType": family == "iphone" ? "IPHONE_69" : "IPAD_PRO_3GEN_129",
-                 "files": files])
+                 "sourceBuild": builds.first!, "files": files])
 }
-precondition(sourceBuilds.count == 1, "Review mixed-build captures before preparing a listing")
+// Watch images are unframed captures, copied opaque from raw/watch.
+let watchNames = try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("watch").path)
+    .filter { $0.hasSuffix(".png") }.sorted()
+if !watchNames.isEmpty {
+    var builds = Set<String>()
+    let files = try watchNames.map { name in
+        try record("watch/\(name)", capture: "raw/watch/\((name as NSString).deletingPathExtension)", builds: &builds)
+    }
+    precondition(builds.count == 1 && files.allSatisfy { $0["width"] as! Int == 416 && $0["height"] as! Int == 496 })
+    sets.append(["family": "watch", "displayType": "APP_WATCH_SERIES_10",
+                 "sourceBuild": builds.first!, "files": files])
+}
 let manifest: [String: Any] = [
-    "appID": "6774409039", "version": version, "locale": "en-US",
-    "sourceBuild": sourceBuilds.first!, "sets": sets,
+    "appID": "6774409039", "version": version, "locale": "en-US", "sets": sets,
 ]
 let manifestData = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
 try manifestData.write(to: directory.appendingPathComponent("manifest.json"), options: .atomic)
-print("Recorded checksums and verified opaque output for all \(story.count * 2) store images")
+print("Recorded checksums and verified opaque output for \(sets.reduce(0) { $0 + ($1["files"] as! [Any]).count }) store images")

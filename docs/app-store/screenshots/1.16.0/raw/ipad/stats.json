@@ -1,7 +1,12 @@
 {
   "name": "stats",
   "device": "Osho Store iPad",
-  "udid": "527ADC06-EE10-4CC5-B775-FE2506DBA906",
-  "capturedAt": "2026-09-19T16:14:43.268207+00:00",
-  "appBuild": "1.15.0 (26)"
+  "udid": "E3D556AA-7927-479B-AFBA-C2E0E769E26F",
+  "capturedAt": "2026-10-03T01:40:57.201865+00:00",
+  "appBuild": "1.16.0 (28)",
+  "model": "iPad Pro 13-inch (M4)",
+  "os": "iOS 26.5 (23F77)",
+  "configuration": "Debug (simulator)",
+  "gitHead": "e31cba9e84a9dbb9743e5a68288490a4d4bac284",
+  "orientation": "landscape"
 }
