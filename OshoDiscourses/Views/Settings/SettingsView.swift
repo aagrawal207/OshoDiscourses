@@ -276,6 +276,11 @@ struct SettingsView: View {
                 linkRow("Support Development", icon: "cup.and.saucer.fill", tint: settings.effectiveAccentTheme.color, trailing: "chevron.right")
             }
 
+            Link(destination: ReviewRequestService.writeReviewURL) {
+                linkRow("Rate Osho Talks", icon: "star")
+            }
+            .accessibilityIdentifier("settings.rateApp")
+
             Link(destination: URL(string: "https://github.com/aagrawal207/OshoDiscourses")!) {
                 linkRow("Source Code", icon: "chevron.left.forwardslash.chevron.right")
             }

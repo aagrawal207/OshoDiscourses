@@ -560,6 +560,7 @@ struct PlayerView: View {
             // Play/Pause
             Button {
                 player.togglePlayPause()
+                if !player.isPlaying { ReviewRequestService.listenerDidPause() }
             } label: {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     // Scaled with Dynamic Type but clamped to the real width so

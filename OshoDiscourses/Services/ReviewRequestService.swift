@@ -3,19 +3,24 @@ import StoreKit
 import UIKit
 
 /// Asks for an App Store rating at a good moment: after the listener has used the
-/// app on a handful of distinct days, and never more than once per app version.
+/// app on a few distinct days, and never more than once per app version.
 ///
-/// We gate on our own version check on top of `requestReview` because iOS already
-/// throttles the prompt (at most a few times a year, and silently no-ops if it
-/// won't show). Combining "N active days" with "once per version" means we only
-/// spend a prompt on someone who's actually a returning listener, right after a
-/// satisfying moment (finishing a discourse), not on a cold first launch.
+/// iOS throttles the prompt itself; the version gate keeps us from spending it on a
+/// cold launch. Good moments are a natural, idle completion or a manual pause after
+/// a long listen, both when the listener has already stopped the audio.
 @MainActor
 enum ReviewRequestService {
 
-    /// Distinct days of listening before the first ask. Five matches the common
-    /// "engaged, not brand-new" bar without waiting so long that goodwill fades.
-    nonisolated static let activeDaysThreshold = 5
+    /// Distinct days of listening before the first ask. Talks run 60-90 minutes, so
+    /// three days is already several hours of returning use.
+    nonisolated static let activeDaysThreshold = 3
+
+    /// Listening today before a manual pause counts as a good moment. Few listeners
+    /// let a 90-minute talk end with auto-advance off, so completion alone rarely asks.
+    nonisolated static let pauseMomentListening: TimeInterval = 20 * 60
+
+    nonisolated static let writeReviewURL =
+        URL(string: "https://apps.apple.com/app/id6774409039?action=write-review")!
 
     private static let defaults = UserDefaults.standard
     private static let lastPromptedVersionKey = "review.lastPromptedVersion"
@@ -38,6 +43,19 @@ enum ReviewRequestService {
         sleepTimerWasArmed: Bool
     ) -> Bool {
         completionWasNatural && !playbackContinues && !sleepTimerWasArmed
+    }
+
+    nonisolated static func isGoodPauseMoment(listenedToday: TimeInterval, sleepTimerWasArmed: Bool) -> Bool {
+        listenedToday >= pauseMomentListening && !sleepTimerWasArmed
+    }
+
+    /// Call after the listener pauses from an on-screen control.
+    static func listenerDidPause() {
+        guard isGoodPauseMoment(
+            listenedToday: ListeningStatsService.shared.totalToday,
+            sleepTimerWasArmed: SleepTimerService.shared.isActive
+        ) else { return }
+        requestReviewIfAppropriate()
     }
 
     /// Call after a natural high point (e.g. finishing a discourse). Requests a

@@ -136,6 +136,7 @@ struct MiniPlayerView: View {
     private var playPauseButton: some View {
         Button {
             player.togglePlayPause()
+            if !player.isPlaying { ReviewRequestService.listenerDidPause() }
         } label: {
             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                 .font(.title3)
