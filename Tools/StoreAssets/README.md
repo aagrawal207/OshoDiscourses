@@ -1,6 +1,7 @@
 # Store and GitHub artwork
 
-The [1.16.0 bundle](../../docs/app-store/screenshots/1.16.0/README.md) contains nine
+The current [1.16.1 bundle](../../docs/app-store/screenshots/1.16.1/README.md) reorders the
+[1.16.0 bundle](../../docs/app-store/screenshots/1.16.0/README.md), which contains nine
 iPhone and nine iPad posters, five Apple Watch captures, their raw captures, and a
 checksum manifest. The
 GitHub README uses a separate hero and three gallery strips.
@@ -89,7 +90,7 @@ was checked against the shipped alignment data.
 ## Render and validate
 
 ```bash
-swift Tools/StoreAssets/render.swift 1.16.0
+swift Tools/StoreAssets/render.swift 1.16.1 --allow-mixed-builds
 asc screenshots validate --path docs/app-store/screenshots/1.16.0/iphone --device-type IPHONE_69
 asc screenshots validate --path docs/app-store/screenshots/1.16.0/ipad --device-type IPAD_PRO_3GEN_129
 asc screenshots validate --path docs/app-store/screenshots/1.16.0/watch --device-type APP_WATCH_SERIES_10

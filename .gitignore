@@ -36,3 +36,4 @@ native/deepfilter-bridge/.cargo/
 
 # Python
 __pycache__/
+.asc/

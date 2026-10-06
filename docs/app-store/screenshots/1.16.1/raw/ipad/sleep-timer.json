@@ -1,0 +1,12 @@
+{
+  "name": "sleep-timer",
+  "device": "Osho Store iPad",
+  "udid": "E3D556AA-7927-479B-AFBA-C2E0E769E26F",
+  "capturedAt": "2026-10-03T01:41:25.674629+00:00",
+  "appBuild": "1.16.0 (28)",
+  "model": "iPad Pro 13-inch (M4)",
+  "os": "iOS 26.5 (23F77)",
+  "configuration": "Debug (simulator)",
+  "gitHead": "e31cba9e84a9dbb9743e5a68288490a4d4bac284",
+  "orientation": "landscape"
+}

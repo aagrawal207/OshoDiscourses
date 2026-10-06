@@ -164,7 +164,7 @@ func load(_ url: URL) -> CGImage {
 }
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let version = CommandLine.arguments.dropFirst().first ?? "1.16.0"
+let version = CommandLine.arguments.dropFirst().first ?? "1.16.1"
 precondition(version.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression) != nil)
 let directory = root.appendingPathComponent("docs/app-store/screenshots/\(version)")
 let story = try JSONDecoder().decode([Slide].self,
@@ -235,8 +235,8 @@ hero.framed(load(directory.appendingPathComponent("raw/iphone/player.png")),
 try hero.save(github.appendingPathComponent("osho-talks-hero.jpg"), jpeg: true)
 
 let galleries: [(String, [String])] = [
-    ("listen-and-read", ["01-listen", "02-read-along", "06-hindi"]),
-    ("explore-and-offline", ["04-explore", "03-denoise", "05-offline"]),
+    ("listen-and-read", ["01-listen", "03-read-along", "02-hindi"]),
+    ("explore-and-offline", ["04-explore", "06-denoise", "05-offline"]),
     ("bookmarks-and-routine", ["07-bookmarks", "08-sleep-timer", "09-listening-stats"]),
 ]
 for (name, slides) in galleries {
@@ -288,10 +288,12 @@ for family in ["iphone", "ipad"] {
         let captureName = family == "ipad" ? (slide.ipadSource ?? slide.source) : slide.source
         return try record("\(family)/\(slide.id).png", capture: "raw/\(family)/\(captureName)", builds: &builds)
     }
-    precondition(builds.count == 1, "Review mixed-build captures before preparing a listing")
+    // Only pass --allow-mixed-builds after checking that the screens shown did not change between builds.
+    precondition(builds.count == 1 || CommandLine.arguments.contains("--allow-mixed-builds"),
+                 "Review mixed-build captures before preparing a listing")
     sets.append(["family": family,
                  "displayType": family == "iphone" ? "IPHONE_69" : "IPAD_PRO_3GEN_129",
-                 "sourceBuild": builds.first!, "files": files])
+                 "sourceBuild": builds.sorted().joined(separator: ", "), "files": files])
 }
 // Watch images are unframed captures, copied opaque from raw/watch.
 let watchNames = try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("watch").path)

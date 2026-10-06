@@ -336,7 +336,8 @@ Features from the RN version — port status:
 
 ## Dev notes
 
-- 1.16.0 (28) was submitted for review on 2026-10-03 (`WAITING_FOR_REVIEW`, release after approval) with CarPlay, Apple Watch and iPad; the Mac app is a later submission. See [the release record](docs/app-store/releases/1.16.0.md).nshots captured from 1.15.0 (26). No 1.16.0 build is attached or submitted. iPad, Mac and Watch screenshots and the What's New text still need to be updated in the draft. See [the release record](docs/app-store/releases/1.16.0.md).
+- 1.16.0 (28) was approved and released on 2026-10-03 with CarPlay, Apple Watch and iPad; the Mac app is a later submission. See [the release record](docs/app-store/releases/1.16.0.md).
+- 1.16.1 (29) is a `PREPARE_FOR_SUBMISSION` draft with no build attached. It adds en-GB and Hindi store listings, new keywords, reordered screenshots, Health & Fitness as the secondary category, a Settings > About > Rate Osho Talks link and a broader review prompt. See [the release record](docs/app-store/releases/1.16.1.md).
 - 1.15.0 (26) is released, and all five consumable tips are approved, verified on 2026-09-19. Build 26 includes the corrected feedback email. This follows build 25's rejection under 2.1(b) (tips could not be found) and 1.5 (Support URL). The attached 60.66-second TestFlight build 25 walkthrough starts on the iPhone Home Screen, demonstrates core screens and completes a US$3 Small tip sandbox purchase with the count increasing from two to three. `SUPPORT.md` is published in commit `9304509`, and the App Store Support URL points to it. Build 26 passed 413 functions / 512 runs, five iPhone SE UI scenarios and Release signing/content checks. See [the release record](docs/app-store/releases/1.15.0.md) for evidence, submission IDs, artifacts and the replacement signing setup.
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`

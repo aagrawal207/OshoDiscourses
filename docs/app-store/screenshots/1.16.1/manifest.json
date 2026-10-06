@@ -1,0 +1,235 @@
+{
+  "appID" : "6774409039",
+  "locale" : "en-US",
+  "sets" : [
+    {
+      "displayType" : "IPHONE_69",
+      "family" : "iphone",
+      "files" : [
+        {
+          "bytes" : 1745645,
+          "file" : "iphone\/01-listen.png",
+          "height" : 2868,
+          "md5" : "efc9497e510fe3e98c4ee8c444b45c64",
+          "sha256" : "145850b84d8ef5deb75fd155e11418354d6316c58be43333af41ac308d21819a",
+          "sourceCapture" : "raw\/iphone\/player.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1845755,
+          "file" : "iphone\/02-hindi.png",
+          "height" : 2868,
+          "md5" : "f9e2369c46e3194dc7741d4978b17443",
+          "sha256" : "914bc6518e0241de351d9476496373bb0250a84c456fa03f48be5ef557f07d18",
+          "sourceCapture" : "raw\/iphone\/transcript-hindi.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1972958,
+          "file" : "iphone\/03-read-along.png",
+          "height" : 2868,
+          "md5" : "37849fa13357f8d7d6858f3ee9a0ecb4",
+          "sha256" : "7383eaea8e74b1d9e5aaaf7a7ac89e0c9c69edb4314b83322a6bbd07d494ca7d",
+          "sourceCapture" : "raw\/iphone\/transcript-english.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1381337,
+          "file" : "iphone\/04-explore.png",
+          "height" : 2868,
+          "md5" : "fbcbea5e9156a91c4569554773f70c9b",
+          "sha256" : "8462dd4e27085c4ef69990e95b1856da0117d526695c219da84038baa4fabbc3",
+          "sourceCapture" : "raw\/iphone\/library.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1294288,
+          "file" : "iphone\/05-offline.png",
+          "height" : 2868,
+          "md5" : "f5d2a10158efb81067f3b1a3b083f710",
+          "sha256" : "eb25502e43053020107368af9f1fea4ed2ae9fb6b5aea7379497ca6f42d104d6",
+          "sourceCapture" : "raw\/iphone\/downloads.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1323800,
+          "file" : "iphone\/06-denoise.png",
+          "height" : 2868,
+          "md5" : "a51261de2f1ecaaa59991dceef9b6903",
+          "sha256" : "1ee0a7fc3638b0101ee82afbb39714cd2175ad5b4b1cf84811931a3984759a87",
+          "sourceCapture" : "raw\/iphone\/denoise.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1471218,
+          "file" : "iphone\/07-bookmarks.png",
+          "height" : 2868,
+          "md5" : "1257eb26c383ff92de257f9d256efe68",
+          "sha256" : "dd998e6627203e5cc4d7fc236eb6c7e9f09084e39685dfb9ed562a1cb50e0d50",
+          "sourceCapture" : "raw\/iphone\/bookmarks.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1933787,
+          "file" : "iphone\/08-sleep-timer.png",
+          "height" : 2868,
+          "md5" : "3771c04605d1c5ed307d1568d019de61",
+          "sha256" : "eba66c8872e5ef0f156ddbb33b4cbe87797543b3255f0db85968cc7b98edc065",
+          "sourceCapture" : "raw\/iphone\/sleep-timer.png",
+          "width" : 1320
+        },
+        {
+          "bytes" : 1188040,
+          "file" : "iphone\/09-listening-stats.png",
+          "height" : 2868,
+          "md5" : "f25cd313db9745a93ff0e75c24255ff0",
+          "sha256" : "a20397ae4a78f26f349114c17c18e9b0af45ed5781fd723a2f164ce516c8b6ec",
+          "sourceCapture" : "raw\/iphone\/stats.png",
+          "width" : 1320
+        }
+      ],
+      "sourceBuild" : "1.15.0 (26)"
+    },
+    {
+      "displayType" : "IPAD_PRO_3GEN_129",
+      "family" : "ipad",
+      "files" : [
+        {
+          "bytes" : 2892420,
+          "file" : "ipad\/01-listen.png",
+          "height" : 2752,
+          "md5" : "6da9152c2db3c24ac29683c630eea3b5",
+          "sha256" : "41557a6ed6a03bca764acfc8501d1b9b26985545c878f74175bd7914f3b9995a",
+          "sourceCapture" : "raw\/ipad\/home.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2837633,
+          "file" : "ipad\/02-hindi.png",
+          "height" : 2752,
+          "md5" : "e56d9b0f3f3f6d583f206a4f93f2285e",
+          "sha256" : "30767be0e1e68cf8252c906726a50190aebe1c34092ed46790e10ce00d19f7b3",
+          "sourceCapture" : "raw\/ipad\/transcript-hindi.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 3120247,
+          "file" : "ipad\/03-read-along.png",
+          "height" : 2752,
+          "md5" : "5c98650b2145c5c7223f4d8f13bc4a97",
+          "sha256" : "883afc1870128d78538d758c20e004fe76215d09c7c62f997e791c701b883653",
+          "sourceCapture" : "raw\/ipad\/transcript-english.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2810579,
+          "file" : "ipad\/04-explore.png",
+          "height" : 2752,
+          "md5" : "980c8aee95ea804ee27de4c48df10628",
+          "sha256" : "ad2e136177860aaf8427484d3f28186be87e2468192c7d11e3e2c35d9afc458b",
+          "sourceCapture" : "raw\/ipad\/home-popular.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2347268,
+          "file" : "ipad\/05-offline.png",
+          "height" : 2752,
+          "md5" : "469fdbec14da57655dc9ef0494ee28ef",
+          "sha256" : "76009be215538676c2ee762cb8a4006c63cf72a070afd19ca3cb06cb74fb2b9c",
+          "sourceCapture" : "raw\/ipad\/downloads.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2573779,
+          "file" : "ipad\/06-denoise.png",
+          "height" : 2752,
+          "md5" : "9ebb72d8f017669bcf413175bb50b807",
+          "sha256" : "e672b1dc9e99e49d73f2a76030ae63d037ddb2f88d9b8f68e17cd822df55fd4a",
+          "sourceCapture" : "raw\/ipad\/denoise.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2622430,
+          "file" : "ipad\/07-bookmarks.png",
+          "height" : 2752,
+          "md5" : "baba49f5b7c79501b7d94f21816b46cd",
+          "sha256" : "9a798ece85a94944d1f7683143a00fbc564c97349dde5c4943453d97b8e1c82d",
+          "sourceCapture" : "raw\/ipad\/bookmarks.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 3186778,
+          "file" : "ipad\/08-sleep-timer.png",
+          "height" : 2752,
+          "md5" : "08179a924a01008f87880b4fb5b24573",
+          "sha256" : "41bdc69bc44388a230c7b85574b585b54d90c5fd928f6b58ad22dc46da49f542",
+          "sourceCapture" : "raw\/ipad\/sleep-timer.png",
+          "width" : 2064
+        },
+        {
+          "bytes" : 2305935,
+          "file" : "ipad\/09-listening-stats.png",
+          "height" : 2752,
+          "md5" : "7bd34da98aeb39bd6528d0df72d5878b",
+          "sha256" : "291842805f49b1c65ebf85bfca08ea32c0bf275e5b360664408f7fc759cf21ee",
+          "sourceCapture" : "raw\/ipad\/stats.png",
+          "width" : 2064
+        }
+      ],
+      "sourceBuild" : "1.16.0 (28), 1.16.1 (29)"
+    },
+    {
+      "displayType" : "APP_WATCH_SERIES_10",
+      "family" : "watch",
+      "files" : [
+        {
+          "bytes" : 32129,
+          "file" : "watch\/01-now-playing.png",
+          "height" : 496,
+          "md5" : "66211260edf31bf4febd16c891607fe0",
+          "sha256" : "1522a3fb50a29ca022ade6559931d2a88fede2f2d7bda6eb8fde6a17cd3c6993",
+          "sourceCapture" : "raw\/watch\/01-now-playing.png",
+          "width" : 416
+        },
+        {
+          "bytes" : 30502,
+          "file" : "watch\/02-home.png",
+          "height" : 496,
+          "md5" : "c4f6055f5e180778925f901dc0489f26",
+          "sha256" : "4af62d30e55d38634208886b0e8f428fbab6f1d65a063c5447bb05e76846424a",
+          "sourceCapture" : "raw\/watch\/02-home.png",
+          "width" : 416
+        },
+        {
+          "bytes" : 45721,
+          "file" : "watch\/03-save-to-watch.png",
+          "height" : 496,
+          "md5" : "00a153ae6d640f40044da18cfcb61ba6",
+          "sha256" : "663e1e04bd9117c39f6e9e5e9e71d60b6b1ac2779f52ca6c484e680596f875cb",
+          "sourceCapture" : "raw\/watch\/03-save-to-watch.png",
+          "width" : 416
+        },
+        {
+          "bytes" : 43342,
+          "file" : "watch\/04-on-watch.png",
+          "height" : 496,
+          "md5" : "f6c483b8e7868e81e7ec3fa2dbecd21e",
+          "sha256" : "d0664dac29f74261b452261c2ce570d07b4de6127d0b124b714327aafb2bc166",
+          "sourceCapture" : "raw\/watch\/04-on-watch.png",
+          "width" : 416
+        },
+        {
+          "bytes" : 32890,
+          "file" : "watch\/05-watch-player.png",
+          "height" : 496,
+          "md5" : "b954f7258f2bbea243348f4b310ce9b2",
+          "sha256" : "cc1012c888b2317053f5ed515f2986595e97d5380dfacb541e8fd122dc54f5e3",
+          "sourceCapture" : "raw\/watch\/05-watch-player.png",
+          "width" : 416
+        }
+      ],
+      "sourceBuild" : "1.16.0 (28)"
+    }
+  ],
+  "version" : "1.16.1"
+}
