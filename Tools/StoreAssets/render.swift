@@ -234,6 +234,17 @@ hero.framed(load(directory.appendingPathComponent("raw/iphone/player.png")),
             x: 1270, top: 84, width: 550)
 try hero.save(github.appendingPathComponent("osho-talks-hero.jpg"), jpeg: true)
 
+// Product page header (21:9). The focal cluster stays centred because the App Store crops
+// headers differently by device, and the lower band stays quiet for the name and Get button.
+let header = Canvas(3840, 1646)
+header.background(palette)
+let headerRaw = directory.appendingPathComponent("raw/iphone")
+header.framed(load(headerRaw.appendingPathComponent("transcript-hindi.png")), x: 1220, top: 250, width: 520)
+header.framed(load(headerRaw.appendingPathComponent("transcript-english.png")), x: 2100, top: 250, width: 520)
+header.framed(load(headerRaw.appendingPathComponent("player.png")), x: 1600, top: 120, width: 640)
+let creative = root.appendingPathComponent("docs/app-store/creative")
+try header.save(creative.appendingPathComponent("product-page-header-21x9.png"))
+
 let galleries: [(String, [String])] = [
     ("listen-and-read", ["01-listen", "03-read-along", "02-hindi"]),
     ("explore-and-offline", ["04-explore", "06-denoise", "05-offline"]),

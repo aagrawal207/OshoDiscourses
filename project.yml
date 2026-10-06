@@ -121,7 +121,7 @@ targets:
           # App Store archive: the CarPlay entitlement exists only in this profile.
           "CODE_SIGN_STYLE[sdk=iphoneos*]": Manual
           "CODE_SIGN_IDENTITY[sdk=iphoneos*]": Apple Distribution
-          "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": Osho Talks App Store CarPlay 2026-10-02
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": Osho Talks App Store CarPlay 2026-10-06
     dependencies:
       # Static library XCFramework (DeepFilterNet via Rust/tract) — linked, not
       # embedded. Rebuild with native/deepfilter-bridge/build-xcframework.sh.
@@ -187,7 +187,7 @@ targets:
         Release-CarPlay:
           "CODE_SIGN_STYLE[sdk=watchos*]": Manual
           "CODE_SIGN_IDENTITY[sdk=watchos*]": Apple Distribution
-          "PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]": Osho Talks Watch App Store 2026-10-02
+          "PROVISIONING_PROFILE_SPECIFIER[sdk=watchos*]": Osho Talks Watch App Store 2026-10-06
     info:
       path: WatchApp/Info.plist
       properties:
