@@ -2,6 +2,10 @@
   "name": "home-popular",
   "device": "Osho Store iPad",
   "udid": "5EF273C4-144A-4CED-A8B2-BEB9759EDD9C",
-  "capturedAt": "2026-10-06T12:38:11.228010+00:00",
-  "appBuild": "1.16.1 (29)"
+  "capturedAt": "2026-10-06T18:03:48.167505+00:00",
+  "appBuild": "1.16.1 (30)",
+  "model": "iPad Pro 13-inch (M4)",
+  "os": "iOS 26.5 (23F77)",
+  "configuration": "Debug (simulator)",
+  "orientation": "portrait"
 }

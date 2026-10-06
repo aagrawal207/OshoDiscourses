@@ -1,6 +1,6 @@
 No app account or login is required. All browsing, downloads, playback and transcript features are available without a purchase.
 
-Version 1.16.1 (29) adds a Rate Osho Talks link under Settings > About, which opens this app's App Store review page, and adjusts when the standard system rating prompt may appear. It also adds en-GB and Hindi store listings. The Apple Watch app, CarPlay and iPad layout from 1.16.0 are unchanged.
+Version 1.16.1 (30) adds a Rate Osho Talks link under Settings > About, which opens this app's App Store review page, and adjusts when the standard system rating prompt may appear. Home shows its Popular and Beginner collections as larger covers, and every page leaves room above the mini-player for its last row. It also adds en-GB and Hindi store listings. The Apple Watch app, CarPlay and iPad layout from 1.16.0 are unchanged.
 
 TO TRY ON IPHONE FIRST
 Open Library, choose any series (for example "A Bird on the Wing"), and tap the download button on one or two discourses. Play one. CarPlay and the Watch list only downloaded discourses.

@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct AudioEnhancementView: View {
-    var bottomScrollClearance: CGFloat? = nil
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -21,7 +20,7 @@ struct AudioEnhancementView: View {
                 voiceSection
             }
         }
-        .contentMargins(.bottom, bottomScrollClearance, for: .scrollContent)
+        .reservesMiniPlayerSpace()
         .navigationTitle("DeNoise")
         .navigationBarTitleDisplayMode(.inline)
         .tint(Color.accent)
@@ -60,7 +59,7 @@ struct AudioEnhancementView: View {
     private var modeSection: some View {
         Section {
             NavigationLink {
-                AudioEnhancementModeView(bottomScrollClearance: bottomScrollClearance)
+                AudioEnhancementModeView()
                     .environment(player)
             } label: {
                 EnhancementModeLabel(mode: player.noiseReductionMode)
@@ -140,7 +139,7 @@ struct AudioEnhancementView: View {
     private var voiceSection: some View {
         Section {
             NavigationLink {
-                AudioEnhancementVoiceView(bottomScrollClearance: bottomScrollClearance)
+                AudioEnhancementVoiceView()
                     .environment(player)
             } label: {
                 LabeledContent("Fine-tune the voice", value: player.voiceFocusPreset.displayName)
@@ -187,7 +186,6 @@ struct AudioEnhancementView: View {
 }
 
 private struct AudioEnhancementVoiceView: View {
-    let bottomScrollClearance: CGFloat?
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.dismiss) private var dismiss
 
@@ -223,14 +221,13 @@ private struct AudioEnhancementVoiceView: View {
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        .contentMargins(.bottom, bottomScrollClearance, for: .scrollContent)
+        .reservesMiniPlayerSpace()
         .navigationTitle("Quiet Speech")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 private struct AudioEnhancementModeView: View {
-    let bottomScrollClearance: CGFloat?
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.dismiss) private var dismiss
 
@@ -251,7 +248,7 @@ private struct AudioEnhancementModeView: View {
                 Text("Try a lighter option if you prefer its sound or want to save battery.")
             }
         }
-        .contentMargins(.bottom, bottomScrollClearance, for: .scrollContent)
+        .reservesMiniPlayerSpace()
         .navigationTitle("Listening Mode")
         .navigationBarTitleDisplayMode(.inline)
     }

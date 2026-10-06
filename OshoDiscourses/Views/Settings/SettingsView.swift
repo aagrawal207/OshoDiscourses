@@ -10,7 +10,6 @@ struct SettingsView: View {
     // Transaction listening outlives the support sheet, including delayed approvals.
     private let tips = TipJarService.shared
     @State private var showTipJar = false
-    @ScaledMetric(relativeTo: .subheadline) private var miniPlayerClearance: CGFloat = 70
     #if DEBUG
     /// `-debugTipJar` opens the tip sheet on launch for layout checks.
     private var debugTipJar: Bool { ProcessInfo.processInfo.arguments.contains("-debugTipJar") }
@@ -30,6 +29,7 @@ struct SettingsView: View {
                 aboutSection
             }
             .readableScrollColumn(sizeClass, maxWidth: 680)
+            .reservesMiniPlayerSpace()
             .sheet(isPresented: $showTipJar) { TipJarView(tips: tips) }
             #if DEBUG
             .task {
@@ -43,12 +43,6 @@ struct SettingsView: View {
             // black + dark-gray cards in dark mode. (An earlier systemBackground
             // override flattened the cards to invisible in light mode.)
             .navigationTitle("Settings")
-        }
-        // The floating player sits above the Settings navigation container.
-        .safeAreaInset(edge: .bottom) {
-            if player.currentTrackId != nil {
-                Spacer().frame(height: miniPlayerClearance)
-            }
         }
     }
 
@@ -115,7 +109,7 @@ struct SettingsView: View {
     private var audioEnhancementSection: some View {
         Section {
             NavigationLink {
-                AudioEnhancementView(bottomScrollClearance: player.currentTrackId == nil ? nil : miniPlayerClearance + 16)
+                AudioEnhancementView()
                     .environment(player)
             } label: {
                 HStack(spacing: 12) {

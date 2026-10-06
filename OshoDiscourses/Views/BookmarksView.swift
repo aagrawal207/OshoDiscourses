@@ -39,9 +39,7 @@ struct BookmarksView: View {
             }
             .background(Color(.systemBackground))
             .navigationTitle("Bookmarks")
-            .safeAreaInset(edge: .bottom) {
-                Spacer().frame(height: 70)
-            }
+            .reservesMiniPlayerSpace()
         }
     }
 

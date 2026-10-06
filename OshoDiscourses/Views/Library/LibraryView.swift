@@ -158,7 +158,7 @@ struct LibraryView: View {
                         .padding(.horizontal)
                         noResults
                     }
-                    .padding(.bottom, 70)
+                    .padding(.bottom, 16)
                     .frame(maxWidth: AppLayout.gridMaxWidth)
                     .frame(maxWidth: .infinity)
                 } else {
@@ -177,11 +177,12 @@ struct LibraryView: View {
                         }
                         noResults
                     }
-                    .padding(.bottom, 70)
+                    .padding(.bottom, 16)
                 }
             }
             // Grouped background on the grid so the tiles read as cards.
             .background(isRegular ? Color(.systemGroupedBackground) : Color(.systemBackground))
+            .reservesMiniPlayerSpace()
             .navigationTitle("Library")
             .searchable(text: $searchText, prompt: "Search by name or topic")
             .navigationDestination(for: SeriesInfo.self) { series in

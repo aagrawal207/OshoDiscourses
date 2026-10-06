@@ -27,11 +27,12 @@ struct SeriesDetailView: View {
                 }
                 discourseList
             }
-            .padding(.bottom, isRegular ? 70 : 0)
+            .padding(.bottom, 16)
             .frame(maxWidth: isRegular ? Self.regularColumnWidth : .infinity)
             .frame(maxWidth: .infinity)
         }
         .background(Color(.systemBackground))
+        .reservesMiniPlayerSpace()
         .navigationTitle(seriesInfo.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

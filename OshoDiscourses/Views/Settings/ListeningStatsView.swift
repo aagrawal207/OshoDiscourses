@@ -16,9 +16,7 @@ struct ListeningStatsView: View {
         .background(Color(.systemBackground))
         .navigationTitle("Listening Stats")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            Spacer().frame(height: 70)
-        }
+        .reservesMiniPlayerSpace()
         .onAppear {
             stats.save()
         }

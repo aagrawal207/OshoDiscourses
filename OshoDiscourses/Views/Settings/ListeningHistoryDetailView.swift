@@ -35,9 +35,7 @@ struct ListeningHistoryDetailView: View {
         .background(Color(.systemBackground))
         .navigationTitle("Listening History")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            Spacer().frame(height: 70)
-        }
+        .reservesMiniPlayerSpace()
     }
 
     // MARK: - Daily Breakdown

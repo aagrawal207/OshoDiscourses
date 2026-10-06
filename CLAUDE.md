@@ -317,6 +317,7 @@ Translated narration is not on `main`. It is preserved on branch
 - **Optional tips use StoreKit consumables.** App Review rejected this app's earlier buymeacoffee link under 3.1.1. The chosen replacement is five repeatable, one-time purchases that unlock no features or content. The implementation is enabled in Release, and the products and review assets are configured in App Store Connect. A physical-device TestFlight walkthrough verifies a Small tip sandbox purchase; broader purchase-flow coverage remains release work. See [Tip jar release](#tip-jar-release).
 - **No database** — catalog is static structs, downloads tracked by filesystem, settings in UserDefaults.
 - **Services as @Observable** — injected via .environment(), shared app-wide.
+- **Every scrolling page in a tab calls `.reservesMiniPlayerSpace()`.** The floating mini-player overlays the tabs, so each page adds a bottom inset sized from the measured player (it follows Dynamic Type). A safe-area inset on the tab itself does not reach pages pushed inside its NavigationStack, so the height travels as the `miniPlayerClearance` environment value instead. It is zero in the player sheet and where the iOS 26.1 tab accessory hosts the player. `MiniPlayerClearanceTests` checks the last row of Home, Series, Library, Settings and Listening Stats.
 - **Apple Music dark UI** — true black, white text, .ultraThinMaterial for glass, SF Symbols.
 
 ## Previous React Native version

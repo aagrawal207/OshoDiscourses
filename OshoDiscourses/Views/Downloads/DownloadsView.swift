@@ -73,12 +73,9 @@ struct DownloadsView: View {
             .task(id: downloads.downloadedIDs) { sizesByID = await downloads.downloadedSizes() }
             .toolbar { downloadsToolbar }
             .safeAreaInset(edge: .bottom) {
-                if isEditing {
-                    multiSelectDeleteBar
-                } else {
-                    Spacer().frame(height: 70)
-                }
+                if isEditing { multiSelectDeleteBar }
             }
+            .reservesMiniPlayerSpace()
             .confirmationDialog(
                 "Delete all \(downloads.downloadedIDs.count) downloaded discourses?",
                 isPresented: $showDeleteAllConfirm,

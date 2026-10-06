@@ -22,6 +22,7 @@ struct ContentView: View {
     /// root's own inset; their difference is the tab bar the mini player clears.
     @State private var tabContentBottomInset: CGFloat?
     @State private var rootBottomInset: CGFloat = 0
+    @State private var miniPlayerHeight: CGFloat = 64
     @Bindable private var settings = UserSettings.shared
     #if DEBUG
     /// `-debugTranscript <discourseID>` on the launch arguments plays that
@@ -58,6 +59,7 @@ struct ContentView: View {
             if player.currentTrackId != nil, !usesBottomAccessory {
                 MiniPlayerView(showFullPlayer: $navigation.isPlayerPresented)
                     .frame(maxWidth: isRegular ? AppLayout.floatingMaxWidth : contentMaxWidth)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { miniPlayerHeight = $0 }
                     // Phones clear the bottom tab bar, measured since its height varies by
                     // OS and device; regular width has its tabs at the top or in the sidebar.
                     .padding(.bottom, isRegular ? 12 : miniPlayerTabBarClearance)
@@ -107,6 +109,13 @@ struct ContentView: View {
         )
     }
 
+    /// Space every tab reserves above its bottom edge so the last row can scroll clear of the
+    /// floating player. Measured, so it follows Dynamic Type; zero where the tab accessory insets content.
+    private var miniPlayerScrollClearance: CGFloat {
+        guard player.currentTrackId != nil, !usesBottomAccessory else { return 0 }
+        return miniPlayerHeight + (isRegular ? 12 : 6) + 12
+    }
+
     private var miniPlayerTabBarClearance: CGFloat {
         guard let tabContentBottomInset else { return 56 }
         return max(0, tabContentBottomInset - rootBottomInset) + 6
@@ -117,16 +126,20 @@ struct ContentView: View {
     private var tabs: some View {
         TabView(selection: $navigation.selectedTab) {
             Tab(AppTab.home.title, systemImage: AppTab.home.systemImage, value: AppTab.home) {
-                HomeView().modifier(TabContentInsetReader(inset: $tabContentBottomInset))
+                HomeView().environment(\.miniPlayerClearance, miniPlayerScrollClearance)
+                    .modifier(TabContentInsetReader(inset: $tabContentBottomInset))
             }
             Tab(AppTab.library.title, systemImage: AppTab.library.systemImage, value: AppTab.library) {
-                LibraryView().modifier(TabContentInsetReader(inset: $tabContentBottomInset))
+                LibraryView().environment(\.miniPlayerClearance, miniPlayerScrollClearance)
+                    .modifier(TabContentInsetReader(inset: $tabContentBottomInset))
             }
             Tab(AppTab.downloads.title, systemImage: AppTab.downloads.systemImage, value: AppTab.downloads) {
-                DownloadsView().modifier(TabContentInsetReader(inset: $tabContentBottomInset))
+                DownloadsView().environment(\.miniPlayerClearance, miniPlayerScrollClearance)
+                    .modifier(TabContentInsetReader(inset: $tabContentBottomInset))
             }
             Tab(AppTab.settings.title, systemImage: AppTab.settings.systemImage, value: AppTab.settings) {
-                SettingsView().modifier(TabContentInsetReader(inset: $tabContentBottomInset))
+                SettingsView().environment(\.miniPlayerClearance, miniPlayerScrollClearance)
+                    .modifier(TabContentInsetReader(inset: $tabContentBottomInset))
             }
             // Bookmarks is one tap deep in Downloads on a phone; the sidebar
             // has room to make it a destination of its own. Included only
@@ -134,7 +147,7 @@ struct ContentView: View {
             if isRegular {
                 TabSection("Your Listening") {
                     Tab(AppTab.bookmarks.title, systemImage: AppTab.bookmarks.systemImage, value: AppTab.bookmarks) {
-                        BookmarksView()
+                        BookmarksView().environment(\.miniPlayerClearance, miniPlayerScrollClearance)
                     }
                 }
                 .defaultVisibility(.hidden, for: .tabBar)
@@ -250,6 +263,29 @@ struct ContentView: View {
         case .dark: return .dark
         case .light: return .light
         case .system: return nil
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// Height a tab's pages reserve for the floating mini-player; zero in sheets and with no player.
+    @Entry var miniPlayerClearance: CGFloat = 0
+}
+
+extension View {
+    /// Apply to each scrolling page, not the tab: a safe-area inset outside a NavigationStack
+    /// does not reach the pages it pushes, while the environment value does.
+    func reservesMiniPlayerSpace() -> some View {
+        modifier(MiniPlayerSpace())
+    }
+}
+
+private struct MiniPlayerSpace: ViewModifier {
+    @Environment(\.miniPlayerClearance) private var clearance
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            if clearance > 0 { Color.clear.frame(height: clearance).allowsHitTesting(false) }
         }
     }
 }

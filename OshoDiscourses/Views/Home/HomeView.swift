@@ -73,7 +73,7 @@ struct HomeView: View {
                     }
                 }
                 .padding(.top, 12)
-                .padding(.bottom, 70)
+                .padding(.bottom, 16)
                 .frame(maxWidth: isRegular ? AppLayout.gridMaxWidth : .infinity)
                 .frame(maxWidth: .infinity)
             }
@@ -81,6 +81,7 @@ struct HomeView: View {
             // so the section cards below read as distinct blocks. Fixes the
             // boundary-less look where headings floated on one flat backdrop.
             .background(Color(.systemGroupedBackground))
+            .reservesMiniPlayerSpace()
             .navigationTitle("Home")
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
@@ -319,12 +320,13 @@ private struct SeriesSectionView: View {
     let title: String
     let series: [SeriesInfo]
     var isRegular = false
-    @ScaledMetric(relativeTo: .subheadline) private var tileMinWidth = AppLayout.gridMinimumCardWidth
+    @ScaledMetric(relativeTo: .subheadline) private var shelfCover: CGFloat = 132
+    @ScaledMetric(relativeTo: .subheadline) private var gridCover: CGFloat = 150
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isRegular ? 12 : 8) {
+        VStack(alignment: .leading, spacing: isRegular ? 12 : 10) {
             Text(title)
-                .font(isRegular ? .title3.bold() : .subheadline.weight(.semibold))
+                .font(.title3.bold())
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal)
@@ -332,10 +334,11 @@ private struct SeriesSectionView: View {
             if isRegular {
                 // A grid rather than a shelf: a pointer or trackpad has no
                 // natural horizontal scroll, and eight series fit in two rows.
-                LazyVGrid(columns: SeriesTileView.columns(minimum: tileMinWidth), spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: min(gridCover, 220)), spacing: 16, alignment: .top)],
+                          alignment: .leading, spacing: 20) {
                     ForEach(series) { item in
                         NavigationLink(value: item) {
-                            SeriesTileView(series: item)
+                            SeriesCoverTile(series: item)
                         }
                         .buttonStyle(.plain)
                     }
@@ -349,10 +352,11 @@ private struct SeriesSectionView: View {
 
     private var shelf: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 8) {
+            LazyHStack(alignment: .top, spacing: 12) {
                 ForEach(series) { item in
                     NavigationLink(value: item) {
-                        SeriesCardView(series: item)
+                        SeriesCoverTile(series: item)
+                            .frame(width: min(shelfCover, 190))
                     }
                     .buttonStyle(.plain)
                 }
@@ -403,32 +407,41 @@ struct SeriesTileView: View {
     }
 }
 
-// MARK: - Series Card
+// MARK: - Series Cover Tile
 
-private struct SeriesCardView: View {
+/// Home shelf and grid item: a square cover with the name below, so covers read at a
+/// useful size and long names wrap instead of truncating.
+private struct SeriesCoverTile: View {
     let series: SeriesInfo
 
     var body: some View {
-        HStack(spacing: 8) {
-            SeriesThumbnailView(name: series.name, size: 36, seriesID: series.id)
+        VStack(alignment: .leading, spacing: 6) {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    GeometryReader { proxy in
+                        SeriesThumbnailView(name: series.name, size: proxy.size.width, seriesID: series.id)
+                    }
+                }
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
+                // Two reserved lines keep a row of tiles aligned when some names are short.
                 Text(series.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2, reservesSpace: true)
+                    .multilineTextAlignment(.leading)
 
                 Text("\(series.count) discourses")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 12, style: .continuous))
         .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -476,12 +489,16 @@ struct SeriesThumbnailView: View {
         ]
     }
 
+    /// Large covers round in proportion; small thumbnails keep their 12pt corners.
+    private var cornerRadius: CGFloat { max(12, size * 0.1) }
+    private var isArtwork: Bool { size > 64 }
+
     private var initials: String {
         String(name.prefix(2)).uppercased()
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 12)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: gradientColors,
@@ -504,7 +521,7 @@ struct SeriesThumbnailView: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: size, height: size)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                         // The 4:1 waveform lays out wider than the frame;
                         // clipShape clips drawing but NOT hit-testing — keep
                         // the overflow from swallowing taps near the row.
@@ -513,6 +530,13 @@ struct SeriesThumbnailView: View {
                     Text(initials)
                         .font(.system(size: size * 0.3, weight: .bold))
                         .foregroundStyle(.primary)
+                }
+            }
+            // Dark covers on a dark page need a defined edge once they are artwork-sized.
+            .overlay {
+                if isArtwork {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
                 }
             }
             // Purely decorative (waveform art or initials); the row's text

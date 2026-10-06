@@ -37,7 +37,7 @@ struct AppleWatchView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Apple Watch")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) { Spacer().frame(height: 70) }
+        .reservesMiniPlayerSpace()
         .onAppear { transfers?.refresh() }
     }
 
