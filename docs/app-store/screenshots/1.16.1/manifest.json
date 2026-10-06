@@ -95,11 +95,11 @@
       "family" : "ipad",
       "files" : [
         {
-          "bytes" : 2979421,
+          "bytes" : 2892420,
           "file" : "ipad\/01-listen.png",
           "height" : 2752,
-          "md5" : "e21feeacec1fe9defcbe9dbb25906b66",
-          "sha256" : "86a62c3556871f9cce960cfc9ab41d821691394086fe798be440b4755dbeb369",
+          "md5" : "6da9152c2db3c24ac29683c630eea3b5",
+          "sha256" : "41557a6ed6a03bca764acfc8501d1b9b26985545c878f74175bd7914f3b9995a",
           "sourceCapture" : "raw\/ipad\/home.png",
           "width" : 2064
         },
@@ -122,11 +122,11 @@
           "width" : 2064
         },
         {
-          "bytes" : 3100658,
+          "bytes" : 2810579,
           "file" : "ipad\/04-explore.png",
           "height" : 2752,
-          "md5" : "09d02867c20c100dee3f2758ac492eae",
-          "sha256" : "f1029ab59ca11415b11d3f847e0ea42f71ad3e343e5eb1ee556f38ef9cfad8d6",
+          "md5" : "980c8aee95ea804ee27de4c48df10628",
+          "sha256" : "ad2e136177860aaf8427484d3f28186be87e2468192c7d11e3e2c35d9afc458b",
           "sourceCapture" : "raw\/ipad\/home-popular.png",
           "width" : 2064
         },
@@ -176,7 +176,7 @@
           "width" : 2064
         }
       ],
-      "sourceBuild" : "1.16.0 (28), 1.16.1 (30)"
+      "sourceBuild" : "1.16.0 (28), 1.16.1 (29)"
     },
     {
       "displayType" : "APP_WATCH_SERIES_10",
