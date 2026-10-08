@@ -45,6 +45,13 @@ struct TranscriptView: View {
     @State private var scrolledID: Block.ID?
     @State private var interactionStartOffset: CGFloat?
     @State private var selectedBlock: Block.ID?
+    /// Multi-passage selection: taps toggle rows instead of opening the action bar.
+    @State private var isSelecting = false
+    @State private var selection: Set<Block.ID> = []
+    /// Joined text of `selection`, kept current so the bar's ShareLink does not
+    /// rebuild it on every playback tick.
+    @State private var selectionText = ""
+    @State private var textSelection: TranscriptTextSelectionView.Item?
 
     /// One piece of a paragraph as shown on screen. Long paragraphs are split
     /// at sentence boundaries (`TranscriptBlocks`); most are a single block.
@@ -59,6 +66,8 @@ struct TranscriptView: View {
         let end: Double
         let isEmphasis: Bool
         let isLastInParagraph: Bool
+        /// Space or line break that preceded this row in its paragraph.
+        var gapBefore: String = ""
 
         var paragraph: Int { id.paragraph }
         var isFirstInParagraph: Bool { id.index == 0 }
@@ -156,6 +165,7 @@ struct TranscriptView: View {
             let paragraph = block(scrolledID)?.paragraph
             blocks = Self.blocks(for: transcript, sentences: sentences)
             selectedBlock = nil
+            stopSelecting()
             currentBlock = nil
             updateCurrentParagraph(for: player.currentTime)
             scrolledID = isFollowing ? currentBlock : paragraph.flatMap(firstBlock(ofParagraph:))
@@ -178,6 +188,7 @@ struct TranscriptView: View {
                 withAnimation { scrolledID = first }
             }
         }
+        .onChange(of: selection) { _, _ in selectionText = TranscriptPassages.text(for: selectedBlocks) }
         .onChange(of: scrolledID) { _, id in
             // Only a manual scroll changes the saved read position; following
             // the audio is the default and needs no bookmark.
@@ -205,7 +216,7 @@ struct TranscriptView: View {
             // Applied before the insets so the pill floats over the text,
             // not over the transport bar or the search field.
             .overlay(alignment: .bottom) {
-                if isPlayingThis, transcript != nil, !isFollowing, !isSearching {
+                if isPlayingThis, transcript != nil, !isFollowing, !isSearching, !isSelecting {
                     nowPlayingPill
                         .padding(.bottom, 12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -221,7 +232,15 @@ struct TranscriptView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if presentation == .sheet, isPlayingThis, transcript != nil { transportBar }
+                if isSelecting {
+                    selectionBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if presentation == .sheet, isPlayingThis, transcript != nil {
+                    transportBar
+                }
+            }
+            .sheet(item: $textSelection) { item in
+                TranscriptTextSelectionView(item: item, fontSize: fontSize)
             }
             .overlay(alignment: .top) {
                 if let toast {
@@ -236,6 +255,7 @@ struct TranscriptView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: isFollowing)
             .animation(.easeInOut(duration: 0.2), value: toast)
+            .animation(.easeInOut(duration: 0.2), value: isSelecting)
     }
 
     /// Stands in for the sheet's navigation bar inside the wide player.
@@ -339,21 +359,39 @@ struct TranscriptView: View {
     private func blockRow(_ block: Block) -> some View {
         let isCurrent = isPlayingThis && block.id == currentBlock
         let isSelected = selectedBlock == block.id
+        let isPicked = isSelecting && selection.contains(block.id)
         let isPast = isPlayingThis && (self.block(currentBlock)?.ordinal ?? 0) > block.ordinal
         return VStack(alignment: .leading, spacing: 10) {
-            Text(attributedText(for: block, isCurrent: isCurrent))
-                .font(.system(size: fontSize, weight: isCurrent ? .semibold : .regular, design: block.isEmphasis ? .serif : .default))
-                .italic(block.isEmphasis)
-                .lineSpacing(fontSize * 0.28)
-                .foregroundStyle(isCurrent || isSelected ? Color.primary : Color.primary.opacity(isPast ? 0.45 : 0.6))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if isSelecting {
+                    Image(systemName: isPicked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: min(fontSize, 22)))
+                        .foregroundStyle(isPicked ? accent : Color.secondary)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                        .accessibilityHidden(true)
+                }
+                Text(attributedText(for: block, isCurrent: isCurrent))
+                    .font(.system(size: fontSize, weight: isCurrent ? .semibold : .regular, design: block.isEmphasis ? .serif : .default))
+                    .italic(block.isEmphasis)
+                    .lineSpacing(fontSize * 0.28)
+                    .foregroundStyle(isCurrent || isSelected || isPicked ? Color.primary : Color.primary.opacity(isPast ? 0.45 : 0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .contentShape(Rectangle())
+            // On the text only, so the action chips below keep their own presses.
+            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 10).inset(by: -6))
+            .contextMenu { rowMenu(for: block) }
+            .draggable(dragText(for: block))
+            .onTapGesture {
+                if isSelecting {
+                    toggleSelection(block)
+                } else {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedBlock = isSelected ? nil : block.id
                     }
                 }
-            if isSelected {
+            }
+            if isSelected, !isSelecting {
                 actionBar(for: block)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -364,10 +402,10 @@ struct TranscriptView: View {
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(isCurrent ? accent.opacity(0.10) : (isSelected ? Color.primary.opacity(0.05) : .clear))
+                .fill(isPicked ? accent.opacity(0.14) : isCurrent ? accent.opacity(0.10) : (isSelected ? Color.primary.opacity(0.05) : .clear))
         )
         .overlay(alignment: .leading) {
-            if isCurrent {
+            if isCurrent, !isSelecting {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(accent)
                     .frame(width: 3)
@@ -376,8 +414,11 @@ struct TranscriptView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: isCurrent)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
-        .accessibilityHint(isSelected ? "" : "Tap for play, sync, copy and share")
+        .accessibilityAddTraits((isSelecting ? isPicked : isCurrent) ? .isSelected : [])
+        .accessibilityHint(isSelecting ? (isPicked ? "Tap to deselect" : "Tap to select") : (isSelected ? "" : "Tap for play, sync, copy and share"))
+        .accessibilityIdentifier("transcript.row.\(block.ordinal)")
+        .accessibilityAction(named: "Copy") { copy(isPicked ? selectedBlocks : [block]) }
+        .accessibilityAction(named: "Select Text") { openTextSelection([block]) }
     }
 
     private func attributedText(for block: Block, isCurrent: Bool) -> AttributedString {
@@ -423,9 +464,10 @@ struct TranscriptView: View {
                     }
                 }
                 actionChip("Copy", systemImage: "doc.on.doc") {
-                    UIPasteboard.general.string = block.text
-                    showToast("Copied")
-                    withAnimation { selectedBlock = nil }
+                    copy([block])
+                }
+                actionChip("Select", systemImage: "checkmark.circle") {
+                    startSelecting(with: block)
                 }
                 ShareLink(item: shareText(for: block)) {
                     chipLabel("Share", systemImage: "square.and.arrow.up")
@@ -433,6 +475,111 @@ struct TranscriptView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    // MARK: - Selection
+
+    private var selectedBlocks: [Block] {
+        blocks.filter { selection.contains($0.id) }
+    }
+
+    /// Text a drag of this row carries: the whole selection when the row is in it.
+    private func dragText(for block: Block) -> String {
+        if isSelecting, selection.contains(block.id) { return TranscriptPassages.text(for: selectedBlocks) }
+        return block.text
+    }
+
+    private func copy(_ passages: [Block]) {
+        guard !passages.isEmpty else { return }
+        UIPasteboard.general.string = TranscriptPassages.text(for: passages)
+        showToast(passages.count == 1 ? "Copied" : "Copied \(passages.count) passages")
+        withAnimation {
+            selectedBlock = nil
+            stopSelecting()
+        }
+    }
+
+    private func openTextSelection(_ passages: [Block]) {
+        guard !passages.isEmpty else { return }
+        let text = TranscriptPassages.text(for: passages)
+        textSelection = .init(text: text, shareText: shareText(text))
+    }
+
+    private func startSelecting(with block: Block?) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedBlock = nil
+            // Picking passages while the page scrolls under the finger is impossible.
+            isFollowing = false
+            isSelecting = true
+            selection = block.map { [$0.id] } ?? []
+        }
+    }
+
+    private func stopSelecting() {
+        isSelecting = false
+        selection = []
+    }
+
+    private func toggleSelection(_ block: Block) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            if selection.contains(block.id) { selection.remove(block.id) } else { selection.insert(block.id) }
+        }
+    }
+
+    @ViewBuilder
+    private func rowMenu(for block: Block) -> some View {
+        if isSelecting {
+            if !selection.isEmpty, !selection.contains(block.id) {
+                Button { withAnimation { selection = TranscriptPassages.extending(selection, to: block, in: blocks) } } label: {
+                    Label("Select Up to Here", systemImage: "arrow.up.and.down.text.horizontal")
+                }
+            }
+            let paragraphRows = blocks.filter { $0.paragraph == block.paragraph }.map(\.id)
+            if paragraphRows.count > 1, !paragraphRows.allSatisfy(selection.contains) {
+                Button { withAnimation { selection.formUnion(paragraphRows) } } label: {
+                    Label("Select Whole Paragraph", systemImage: "text.alignleft")
+                }
+            }
+        } else {
+            Button { copy([block]) } label: { Label("Copy", systemImage: "doc.on.doc") }
+            Button { openTextSelection([block]) } label: { Label("Select Text", systemImage: "character.cursor.ibeam") }
+            Button { startSelecting(with: block) } label: { Label("Select Passages", systemImage: "checkmark.circle") }
+            ShareLink(item: shareText(for: block)) { Label("Share", systemImage: "square.and.arrow.up") }
+        }
+    }
+
+    private var selectionBar: some View {
+        let count = selection.count
+        return HStack(spacing: 4) {
+            Button("Done") { withAnimation { stopSelecting() } }
+                .fontWeight(.semibold)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("transcript.selection.done")
+            Text(count == 0 ? "Tap passages" : "\(count) selected")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("transcript.selection.count")
+            Group {
+                Button { openTextSelection(selectedBlocks) } label: { Image(systemName: "character.cursor.ibeam") }
+                    .accessibilityLabel("Select Text")
+                    .accessibilityIdentifier("transcript.selection.selectText")
+                Button { copy(selectedBlocks) } label: { Image(systemName: "doc.on.doc") }
+                    .accessibilityLabel("Copy")
+                    .accessibilityIdentifier("transcript.selection.copy")
+                ShareLink(item: shareText(selectionText)) { Image(systemName: "square.and.arrow.up") }
+                    .accessibilityLabel("Share")
+            }
+            .font(.title3)
+            .frame(minWidth: 44, minHeight: 44)
+            .disabled(count == 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func actionChip(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
@@ -450,8 +597,11 @@ struct TranscriptView: View {
     }
 
     private func shareText(for block: Block) -> String {
-        guard let entry else { return block.text }
-        return "\(block.text)\n\n— Osho, \(entry.series.name) #\(entry.discourse.number)"
+        shareText(block.text)
+    }
+
+    private func shareText(_ text: String) -> String {
+        TranscriptPassages.shareText(text, series: entry?.series.name, number: entry?.discourse.number)
     }
 
     /// Pin the block to the current playback time and follow from there. A
@@ -539,6 +689,7 @@ struct TranscriptView: View {
         model = nil
         shippedAlignment = nil
         selectedBlock = nil
+        stopSelecting()
         blocks = []
         guard transcripts.availability(for: discourseID) != .unavailable else { return }
         isLoading = true
@@ -586,6 +737,14 @@ struct TranscriptView: View {
             selectedBlock = firstBlock(ofParagraph: index)
             scrolledID = selectedBlock
         }
+        // `-debugTranscriptSelecting <first> <last>` starts passage selection with
+        // that range of rows picked.
+        if let i = args.firstIndex(of: "-debugTranscriptSelecting"), args.indices.contains(i + 2),
+           let first = Int(args[i + 1]), let last = Int(args[i + 2]) {
+            startSelecting(with: nil)
+            selection = Set(blocks.filter { (min(first, last)...max(first, last)).contains($0.ordinal) }.map(\.id))
+            scrolledID = blocks.first { $0.ordinal == first }?.id
+        }
         #endif
     }
 
@@ -602,7 +761,8 @@ struct TranscriptView: View {
                     start: shares[i].start,
                     end: shares[i].end,
                     isEmphasis: paragraph.isEmphasis,
-                    isLastInParagraph: i == ranges.count - 1
+                    isLastInParagraph: i == ranges.count - 1,
+                    gapBefore: TranscriptPassages.gap(in: paragraph.text, between: i > 0 ? ranges[i - 1] : nil, and: range)
                 ))
             }
         }
@@ -664,6 +824,12 @@ struct TranscriptView: View {
                     stepFontSize(1)
                 } label: { Label("Larger", systemImage: "textformat.size.larger") }
                     .disabled(settings.transcriptFontSize >= UserSettings.transcriptFontSizes.last!)
+            }
+            Section {
+                Button { startSelecting(with: nil) } label: {
+                    Label("Select Passages", systemImage: "checkmark.circle")
+                }
+                .disabled(transcript == nil || isSelecting)
             }
             Section("Layout") {
                 Toggle(isOn: Binding(

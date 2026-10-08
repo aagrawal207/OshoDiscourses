@@ -1,0 +1,22 @@
+No app account or login is required. All browsing, downloads, playback and transcript features are available without a purchase.
+
+Version 1.16.2 (32) adds more ways to copy transcript text. To try it, open Library, choose "A Bird on the Wing", touch and hold Discourse 1 and choose Read Transcript (or play it and tap Transcript in the player). Touch and hold any passage for Copy, Share, Select Text (a text view where exact words can be selected) and Select Passages (tap several passages, then use Copy or Share in the bar at the bottom). A passage can also be dragged into another app. The first opening of a transcript loads it from oshoworld.com, so it needs a network connection. Everything else is unchanged from 1.16.1.
+
+TO TRY ON IPHONE FIRST
+Open Library, choose any series (for example "A Bird on the Wing"), and tap the download button on one or two discourses. Play one. CarPlay and the Watch list only downloaded discourses.
+
+CARPLAY (audio app, com.apple.developer.carplay-audio approved for this team on 2026-10-02)
+Connect to CarPlay (or use Xcode's CarPlay simulator) with the app installed. The app shows three tabs: Continue Listening, Downloads (by series) and Bookmarks. Choosing a row plays it on the Now Playing screen, which adds a playback-speed button and a button that bookmarks the current moment. Up Next lists the rest of the series. Only standard CarPlay list and Now Playing templates are used. With no downloads, each tab explains that discourses are downloaded on iPhone.
+
+APPLE WATCH
+Open Osho Talks on Apple Watch while the iPhone app has a discourse loaded. The Watch shows Now Playing with play/pause and 15/30-second skips that control the iPhone, and lists Continue Listening, Downloads and Bookmarks from the iPhone. In a list of discourses, swipe left on a row and tap Save to Watch to copy that downloaded discourse to the Watch; it then appears under On Watch and plays on Bluetooth headphones without the iPhone. Listening position is sent back to the iPhone.
+
+IPAD
+In landscape the app uses a sidebar (Home, Library, Downloads, Settings, Bookmarks). The full player shows the live transcript beside the controls. Keyboard shortcuts: Space play/pause, Command-Right/Left skip, Command-B bookmark, Command-T transcript.
+
+TIPS (unchanged from 1.15.0)
+Settings > About > Support Development offers five optional, repeatable consumable tips that unlock no features or content. They were approved with 1.15.0.
+
+DeNoise is available in Settings and the full player. It starts off.
+
+Support: https://github.com/aagrawal207/OshoDiscourses/blob/main/SUPPORT.md (aagrawal207@gmail.com).

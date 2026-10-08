@@ -55,7 +55,8 @@ OshoDiscourses/
 │   ├── Series/SeriesDetailView.swift   # Hero header, discourse list, download/play actions
 │   ├── Player/PlayerView.swift         # Full player: artwork, transport, speed, sleep timer; side-by-side transcript in regular width
 │   ├── Player/AudioEnhancementView.swift # Shared player/settings screen: recommended cleanup, noise amount, boost and quiet-speech options
-│   ├── Player/TranscriptView.swift     # Lyrics-style transcript sheet or embedded pane — highlight, auto-follow, anchors, search, font size
+│   ├── Player/TranscriptView.swift     # Lyrics-style transcript sheet or embedded pane — highlight, auto-follow, anchors, search, font size, passage selection
+│   ├── Player/TranscriptSelection.swift # Passage text joining + Select Text sheet (native word selection and drag-out)
 │   ├── Player/MiniPlayerView.swift     # Floating mini-player bar, or tab-bar accessory in regular width (iOS 26.1+)
 │   ├── Downloads/DownloadsView.swift   # Downloads, storage meter, stats and bookmarks
 │   ├── BookmarksView.swift             # Bookmark list (built) — filter chips, swipe-delete, play/redownload
@@ -112,7 +113,7 @@ Signing/                                # App, CarPlay (opt-in configs) and Mac 
 WatchApp/                               # watchOS app: Connectivity/, Model/, Offline/ (store, player, position reports), Views/, Debug/ fixtures
 WatchTests/                             # Protocol, request client, snapshot ordering, model, offline store, position reports, accent
 WatchUITests/                           # Fixture UI tests + opt-in paired-simulator OshoWatchConnectivityUITests
-OshoDiscoursesUITests/                  # Adaptive iPad/phone layout, DeNoise presentation, player release visibility
+OshoDiscoursesUITests/                  # Adaptive iPad/phone layout, DeNoise presentation, player release visibility, transcript copy/select/drag (needs network)
 OshoDiscoursesTests/
 ├── OshoDiscoursesTests.swift           # Catalog + URL builder tests
 ├── DeepFilterNetTests.swift            # Real model load, bridge contract, denoising, resampled 22.05kHz path, Voice Focus contrast
@@ -140,6 +141,7 @@ OshoDiscoursesTests/
 ├── CloudSyncTests.swift                # Convergent merge rules + snapshot round-trip
 ├── AudioSessionInterruptionTests.swift # Resume-after-interruption decision
 ├── SyncMergeTests.swift                # Bookmark union + daily-stats max merge
+├── TranscriptPassagesTests.swift       # Copied text rejoins rows with source spacing, reading order, Select Up to Here
 └── TranscriptTests.swift               # Parser, sync model, state merge, fetcher payloads, service cache, catalog, aligner
 ```
 
@@ -264,7 +266,8 @@ Translated narration is not on `main`. It is preserved on branch
 - [x] Downloads excluded from iCloud backup (re-downloadable content)
 - [x] Feedback (mailto) + on-device-data privacy note in Settings > About
 - [x] Tip jar (released in 1.15): Support Development is visible in Settings > About, with the service and view enabled in Release. All five optional consumables are approved and unlock nothing. A full physical-device walkthrough, including Home Screen launch, core screens and a Small tip sandbox purchase, is attached to App Review. The support page is published and the App Store Support URL is updated. See [Tip jar release](#tip-jar-release).
-- [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Share), search, font size, series-row indicator, fetched with downloads
+- [x] Transcripts — lyrics-style reader (highlight + auto-follow + "Now playing" pill), per-discourse read position, tap-a-paragraph action bar (Play from here / Audio is here / Copy / Select / Share), search, font size, series-row indicator, fetched with downloads
+- [x] Transcript copy (1.16.2): touch and hold (right-click on Mac) a row for Copy, Select Text, Select Passages and Share. Select Passages turns taps into checkmarks, with Select Up to Here and Select Whole Paragraph in the row menu and a bottom bar for Select Text, Copy and Share. Dragging a row carries its text, or the whole selection when the row is picked. Select Text opens the rows in a read-only `UITextView` for native word selection, Look Up/Translate and drag-out. Copied rows rejoin with their source spacing (`TranscriptPassages`); separate paragraphs get a blank line.
 - [x] Transcript timing shipped for every aligned discourse (AlignmentCatalog, iOS 18+, both languages) + sentence-level highlight
 - [x] Transcript shown one sentence per row (lyrics style; toggle back to 4-8 line blocks); state stays per source paragraph
 - [x] Transcript speech sync on device (iOS 26) for discourses the catalog lacks — English via SpeechTranscriber, Hindi via DictationTranscriber
@@ -338,7 +341,8 @@ Features from the RN version — port status:
 ## Dev notes
 
 - 1.16.0 (28) was approved and released on 2026-10-03 with CarPlay, Apple Watch and iPad; the Mac app is a later submission. See [the release record](docs/app-store/releases/1.16.0.md).
-- 1.16.1 (31) was submitted on 2026-10-06 (`WAITING_FOR_REVIEW`, release after approval; builds 29 and 30 were withdrawn first). It adds en-GB and Hindi store listings, new keywords, reordered screenshots, Health & Fitness as the secondary category, a Settings > About > Rate Osho Talks link, a broader review prompt and mini-player clearance on every page. See [the release record](docs/app-store/releases/1.16.1.md).
+- 1.16.2 (32) adds transcript copy options: Select Text, Select Passages and drag-out. See [the release record](docs/app-store/releases/1.16.2.md).
+- 1.16.1 (31) was released after approval (`READY_FOR_DISTRIBUTION` on 2026-10-08; builds 29 and 30 were withdrawn first). It adds en-GB and Hindi store listings, new keywords, reordered screenshots, Health & Fitness as the secondary category, a Settings > About > Rate Osho Talks link, a broader review prompt and mini-player clearance on every page. See [the release record](docs/app-store/releases/1.16.1.md).
 - 1.15.0 (26) is released, and all five consumable tips are approved, verified on 2026-09-19. Build 26 includes the corrected feedback email. This follows build 25's rejection under 2.1(b) (tips could not be found) and 1.5 (Support URL). The attached 60.66-second TestFlight build 25 walkthrough starts on the iPhone Home Screen, demonstrates core screens and completes a US$3 Small tip sandbox purchase with the count increasing from two to three. `SUPPORT.md` is published in commit `9304509`, and the App Store Support URL points to it. Build 26 passed 413 functions / 512 runs, five iPhone SE UI scenarios and Release signing/content checks. See [the release record](docs/app-store/releases/1.15.0.md) for evidence, submission IDs, artifacts and the replacement signing setup.
 - xcodegen required: `brew install xcodegen`
 - Files auto-discovered — just drop .swift files in the right directory, run `xcodegen generate`
@@ -349,7 +353,7 @@ Features from the RN version — port status:
 - CarPlay: unit tests run under `-only-testing:OshoDiscoursesTests/CarPlayTests`. This Xcode 27 install lacks the Simulator app, so there is no CarPlay external display. See [CarPlay](docs/carplay.md).
 - Broader StoreKit purchase-flow coverage, listening preference and sustained phone battery/thermal behavior remain release checks. Offline DSP evidence and reproduction commands are in [Noise Reduction Lab](docs/noise-reduction-lab.md).
 - Regenerate shipped timings: `Tools/AlignTranscripts/build.sh` then `build/AlignTranscripts/AlignTranscripts align --parallel 4` (resumable; per-discourse results in `build/alignments/`). Use `... align --parallel 2 --retry-downloads` for failed audio fetches, or `--retry-failed` to include recognition failures. `... merge` writes `AlignmentCatalog.json`; `... report` prints coverage. Needs macOS 26; the first run downloads the hi_IN and en_IN speech assets.
-- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptFollow` to ignore a saved read position, `-debugTipJar` to open the tip sheet. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
+- Debug launch arguments (DEBUG builds only): `-debugTranscript <discourseID>` plays an already-downloaded discourse and opens its transcript; add `-debugPlayer` to open the full player instead, `-debugDownload <discourseID>` to run a real download and log the source/bytes, `-debugTranscriptSearch <query>` to open search, `-debugTranscriptSelect <n>` to show a paragraph's action bar, `-debugTranscriptSelecting <first> <last>` to start passage selection with those rows picked, `-debugTranscriptFollow` to ignore a saved read position, `-debugTipJar` to open the tip sheet. `-settings.transcriptSpeechSync 1` pre-enables speech sync (UserDefaults argument domain). `-UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityL` checks large text.
 - `-debugPlayerDiscourse <discourseID>` opens a paused player with catalog metadata and no audio download. `OshoDiscoursesUI` uses it for DeNoise/Transcript and release-visibility checks. `-debugPlaySample <discourseID>` plays two minutes of generated silence under that discourse's metadata, `-debugMiniPlayer 1` leaves the player closed and `-debugTab <tab>` selects a tab.
 - Small screens: verified on `Osho iPhone SE` (3rd gen). The transcript search and transport bars cap Dynamic Type at xxxLarge so they stay on one line at 375 pt; body text uses the in-reader size control instead.
 - Transcript reader keeps the screen awake (`isIdleTimerDisabled`) only while its discourse is playing and the app is active.
