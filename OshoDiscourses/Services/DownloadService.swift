@@ -1,5 +1,7 @@
 import Foundation
+import Network
 import Observation
+import os
 
 @Observable
 @MainActor
@@ -39,6 +41,7 @@ final class DownloadService {
         case offline
         case diskFull
         case saveFailed
+        case stalled
 
         var errorDescription: String? {
             switch self {
@@ -49,6 +52,7 @@ final class DownloadService {
             case .offline:   return "No internet connection."
             case .diskFull:  return "Not enough storage on your device."
             case .saveFailed: return "Downloaded, but couldn't be saved. Try again."
+            case .stalled: return "The download stopped responding. Check your connection and try again."
             }
         }
     }
@@ -82,6 +86,16 @@ final class DownloadService {
 
     var activeDownloads: [String: DownloadProgress] = [:]
     private(set) var downloadedIDs: Set<String> = []
+
+    /// Why active downloads are not moving, when the reason is the network rather than a server.
+    enum WaitingReason: Equatable { case wifi, connection }
+    private(set) var network: DownloadNetwork = .unrestricted
+    @ObservationIgnored private let pathMonitor = NWPathMonitor()
+    @ObservationIgnored private var sourceSpeeds = DownloadSourcePolicy.loadSpeeds(from: .standard)
+    private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "Downloads")
+    #if DEBUG
+    @ObservationIgnored private var debugHoldsTransfers = false
+    #endif
     private var activeTasks: [String: URLSessionDownloadTask] = [:]
 
     /// One suspended continuation per in-flight transfer, resumed by the
@@ -176,6 +190,73 @@ final class DownloadService {
         // committed instead of discarded.
         _ = backgroundSession
         adoptOrphanedTasks()
+        startMonitoringNetwork()
+    }
+
+    /// A background session waiting for Wi-Fi or a connection reports nothing, so without
+    /// this a download on mobile data sits at 0% with no explanation.
+    var waitingReason: WaitingReason? {
+        guard activeDownloads.values.contains(where: { if case .downloading = $0.status { true } else { false } }) else {
+            return nil
+        }
+        switch network {
+        case .offline: return .connection
+        case .cellularOnly: return UserSettings.shared.allowCellularDownloads ? nil : .wifi
+        case .unrestricted: return nil
+        }
+    }
+
+    private func startMonitoringNetwork() {
+        #if DEBUG
+        // `-debugDownloadNetwork cellularOnly|offline` fakes the network for UI tests.
+        let args = ProcessInfo.processInfo.arguments
+        if let flag = args.firstIndex(of: "-debugDownloadNetwork"), args.indices.contains(flag + 1) {
+            switch args[flag + 1] {
+            case "cellularOnly": network = .cellularOnly
+            case "offline": network = .offline
+            default: break
+            }
+            // A faked network cannot stop a real transfer, so hold it on an unroutable address.
+            debugHoldsTransfers = true
+            return
+        }
+        #endif
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let network = DownloadNetwork.classify(path)
+            Task { @MainActor [weak self] in self?.networkChanged(to: network) }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "com.agraabhi.oshodiscourses.download-network", qos: .utility))
+    }
+
+    private func networkChanged(to network: DownloadNetwork) {
+        guard network != self.network else { return }
+        self.network = network
+        // Time spent without a usable network is not a stall; give each transfer a fresh window.
+        let now = Date()
+        for id in activeTasks.keys { lastProgressAt[id] = now }
+    }
+
+    /// Turns on mobile-data downloads and moves waiting transfers onto the current network.
+    func useMobileData() {
+        UserSettings.shared.allowCellularDownloads = true
+        applyCellularSetting()
+    }
+
+    /// Requests carry the cellular gate, so a running transfer keeps the old setting until replaced.
+    func applyCellularSetting() {
+        let allowed = UserSettings.shared.allowCellularDownloads
+        for (id, task) in activeTasks {
+            guard var request = transferRequests[id], request.allowsCellularAccess != allowed,
+                  transferContinuations[id] != nil else { continue }
+            request.allowsCellularAccess = allowed
+            transferRequests[id] = request
+            // Allowing data only matters while on mobile data, so Wi-Fi transfers keep their bytes.
+            // Revoking always restarts: a running task would otherwise use mobile data when Wi-Fi drops.
+            guard !allowed || network == .cellularOnly else { continue }
+            restartingIDs.insert(id)
+            task.cancel()
+            installReplacementTask(id: id, resumeData: nil, replacing: task.taskIdentifier)
+        }
     }
 
     /// Consume the delegate's event stream in arrival order. FIFO matters:
@@ -201,11 +282,17 @@ final class DownloadService {
                     if case .downloading = self.activeDownloads[id]?.status {
                         self.activeDownloads[id]?.progress = fraction
                     }
-                case .finished(let id, _, let stagedURL):
+                case .finished(let id, let taskID, let stagedURL):
+                    // Its download() already moved on to another server; accepting this file
+                    // could cancel or overwrite that attempt.
+                    if self.abandonedTaskIDs.remove(taskID) != nil {
+                        try? FileManager.default.removeItem(at: stagedURL)
+                        break
+                    }
                     // A finished file is accepted from ANY task generation —
                     // even one we were about to restart. transferFinished
                     // cancels whatever task is current for the id.
-                    self.transferFinished(id: id, stagedURL: stagedURL)
+                    self.transferFinished(id: id, taskID: taskID, stagedURL: stagedURL)
                 case .failed(let id, let taskID, let error):
                     self.transferFailed(id: id, taskID: taskID, error: error)
                 case .backgroundEventsDrained:
@@ -253,13 +340,17 @@ final class DownloadService {
     /// A transfer produced a staged file. Normally a `download()` call is
     /// suspended waiting for it; after a background relaunch there is no
     /// waiting call (the process that awaited died), so commit directly.
-    private func transferFinished(id: String, stagedURL: URL) {
+    private func transferFinished(id: String, taskID: Int, stagedURL: URL) {
         // Whatever task is registered for this id is now moot: normally it IS
         // the finishing task (cancel is a no-op), but if a stall restart was
         // in flight it's the replacement — kill it so it doesn't download the
         // same bytes again. Deregister immediately so the cancelled
         // replacement's terminal event can't be mistaken for a real outcome.
-        activeTasks[id]?.cancel()
+        if let replacement = activeTasks[id], replacement.taskIdentifier != taskID {
+            // Its cancellation event must not be read as the listener cancelling this download.
+            abandonedTaskIDs.insert(replacement.taskIdentifier)
+            replacement.cancel()
+        }
         activeTasks.removeValue(forKey: id)
         clearStallTracking(id)
         if let continuation = transferContinuations.removeValue(forKey: id) {
@@ -295,6 +386,8 @@ final class DownloadService {
     }
 
     private func transferFailed(id: String, taskID: Int, error: Error) {
+        // An abandoned task's cancellation must not touch the row of the source tried next.
+        if abandonedTaskIDs.remove(taskID) != nil { return }
         // A terminal event from a superseded task: the stall watchdog cancelled
         // it and (has installed / is installing) a replacement. While the
         // restart is mid-swap the id is marked in restartingIDs; after the
@@ -341,6 +434,21 @@ final class DownloadService {
     /// events for them are the old task dying, not a real outcome.
     private var restartingIDs: Set<String> = []
     private var watchdogTask: Task<Void, Never>?
+    /// Fewer restarts when another server can be tried: a stalled mirror should not hold
+    /// a download for many minutes while a working server waits.
+    private var transferMaxRestarts: [String: Int] = [:]
+    /// Tasks given up on or superseded by a finished file; their late events are ignored.
+    private var abandonedTaskIDs: Set<Int> = []
+
+    enum StallAction: Equatable { case none, restart, abandon }
+
+    nonisolated static func stallAction(
+        lastProgress: Date, now: Date, restartsSoFar: Int, maxRestarts: Int,
+        threshold: TimeInterval = DownloadService.stallThreshold
+    ) -> StallAction {
+        guard now.timeIntervalSince(lastProgress) >= threshold else { return .none }
+        return restartsSoFar < maxRestarts ? .restart : .abandon
+    }
 
     /// Pure stall rule, unit-testable: restart only when the transfer hasn't
     /// progressed within the threshold AND the restart budget isn't exhausted.
@@ -368,15 +476,36 @@ final class DownloadService {
 
     private func checkForStalledTransfers() {
         let now = Date()
+        // Waiting for Wi-Fi or a connection is expected; restarting cannot help.
+        if waitingReason != nil {
+            for id in activeTasks.keys { lastProgressAt[id] = now }
+            return
+        }
         for (id, task) in activeTasks where task.state == .running {
             guard case .downloading = activeDownloads[id]?.status,
                   !restartingIDs.contains(id),
-                  let last = lastProgressAt[id],
-                  Self.shouldRestartStalledTransfer(
-                      lastProgress: last, now: now, restartsSoFar: stallRestarts[id] ?? 0
-                  ) else { continue }
-            restartStalledTransfer(id: id)
+                  let last = lastProgressAt[id] else { continue }
+            switch Self.stallAction(
+                lastProgress: last, now: now, restartsSoFar: stallRestarts[id] ?? 0,
+                maxRestarts: transferMaxRestarts[id] ?? Self.maxStallRestarts
+            ) {
+            case .none: continue
+            case .restart: restartStalledTransfer(id: id)
+            case .abandon: abandonStalledTransfer(id: id)
+            }
         }
+    }
+
+    /// Ends a transfer that stayed frozen through its restarts, so the caller can try the
+    /// next server or report a failure instead of waiting out the six-hour resource timeout.
+    private func abandonStalledTransfer(id: String) {
+        guard let task = activeTasks[id], let continuation = transferContinuations.removeValue(forKey: id) else { return }
+        abandonedTaskIDs.insert(task.taskIdentifier)
+        activeTasks.removeValue(forKey: id)
+        clearStallTracking(id)
+        task.cancel()
+        Self.log.notice("stage=watchdog outcome=abandoned")
+        continuation.resume(throwing: DownloadError.stalled)
     }
 
     private func restartStalledTransfer(id: String) {
@@ -387,20 +516,23 @@ final class DownloadService {
         // for the transfer's real outcome.
         restartingIDs.insert(id)
         print("[Downloads] transfer for \(id) stalled; restarting (attempt \(stallRestarts[id] ?? 0))")
+        let stalledID = stalled.taskIdentifier
         stalled.cancel { [weak self] resumeData in
             // Completion arrives off-main; the data is Sendable.
             Task { @MainActor [weak self] in
-                self?.installReplacementTask(id: id, resumeData: resumeData)
+                self?.installReplacementTask(id: id, resumeData: resumeData, replacing: stalledID)
             }
         }
     }
 
-    private func installReplacementTask(id: String, resumeData: Data?) {
+    private func installReplacementTask(id: String, resumeData: Data?, replacing oldTaskID: Int) {
         defer { restartingIDs.remove(id) }
         // The transfer may have concluded in the cancel window (file finished
         // and resumed the continuation, or the user cancelled the download) —
         // nothing left to replace.
         guard transferContinuations[id] != nil, activeDownloads[id] != nil else { return }
+        // Another replacement already took over; installing this one would leave two live transfers.
+        guard activeTasks[id]?.taskIdentifier == oldTaskID else { return }
         let task: URLSessionDownloadTask
         if let resumeData {
             task = backgroundSession.downloadTask(withResumeData: resumeData)
@@ -419,6 +551,7 @@ final class DownloadService {
         lastProgressAt.removeValue(forKey: id)
         stallRestarts.removeValue(forKey: id)
         transferRequests.removeValue(forKey: id)
+        transferMaxRestarts.removeValue(forKey: id)
         restartingIDs.remove(id)
     }
 
@@ -515,14 +648,13 @@ final class DownloadService {
         defer { advanceQueue() }
 
         do {
-            // Prefer the Archive.org mirror (~12x faster than oshoworld.com in
-            // measurement); fall back to oshoworld for the ~10% of discourses
-            // not mirrored, or if the archive attempt fails server-side.
+            // The nearer server goes first (see DownloadSourcePolicy); the other is the
+            // fallback, including for the ~10% of discourses not on the mirror.
             let sources = downloadSources(for: discourse)
             guard !sources.isEmpty else { throw URLError(.badURL) }
 
             var localURL: URL?
-            for (index, url) in sources.enumerated() {
+            for (index, (source, url)) in sources.enumerated() {
                 // A cancel can land in the gap between one attempt failing and
                 // the next starting (its continuation resumes in an earlier
                 // MainActor job than our catch block). Starting the fallback
@@ -531,10 +663,19 @@ final class DownloadService {
                 if activeDownloads[discourse.id] == nil || Task.isCancelled {
                     throw CancellationError()
                 }
+                let started = Date()
                 do {
-                    localURL = try await downloadWithProgress(url: url, discourseID: discourse.id)
+                    let staged = try await downloadWithProgress(
+                        url: url, discourseID: discourse.id, hasFallback: index < sources.count - 1
+                    )
+                    localURL = staged
+                    recordSpeed(of: source, file: staged, started: started)
+                    Self.log.info("source=\(source.rawValue, privacy: .public) position=\(index, privacy: .public) outcome=completed")
                     break
                 } catch {
+                    if case DownloadError.stalled = error { recordSpeed(of: source, bytesPerSecond: 0) }
+                    let outcome = error is CancellationError ? "cancelled" : (error as? DownloadError).map { "\($0)" } ?? "transport"
+                    Self.log.notice("source=\(source.rawValue, privacy: .public) position=\(index, privacy: .public) outcome=\(outcome, privacy: .public)")
                     let isLast = index == sources.count - 1
                     guard !isLast, Self.shouldTryNextSource(after: error) else { throw error }
                     // Retrying from another host: rewind the progress ring so it
@@ -1004,15 +1145,30 @@ final class DownloadService {
 
     /// Download URLs to try, in order: the Archive.org mirror first (when the
     /// discourse is mapped there), then the original oshoworld.com URL.
-    private func downloadSources(for discourse: CatalogDiscourse) -> [URL] {
-        var urls: [URL] = []
+    private func downloadSources(for discourse: CatalogDiscourse) -> [(DownloadSource, URL)] {
+        var urls: [DownloadSource: URL] = [:]
         if let archive = ArchiveCatalog.audioURL(for: discourse) {
-            urls.append(archive)
+            urls[.archive] = archive
         }
         if let osho = try? encodedURL(from: discourse.audioURL) {
-            urls.append(osho)
+            urls[.oshoworld] = osho
         }
-        return urls
+        let order = DownloadSourcePolicy.order(
+            Array(urls.keys), speeds: sourceSpeeds, nearOshoworld: DownloadSourcePolicy.isNearOshoworldNow
+        )
+        return order.compactMap { source in urls[source].map { (source, $0) } }
+    }
+
+    private func recordSpeed(of source: DownloadSource, file: URL, started: Date) {
+        let elapsed = Date().timeIntervalSince(started)
+        guard elapsed > 0,
+              let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 else { return }
+        recordSpeed(of: source, bytesPerSecond: Double(size) / elapsed)
+    }
+
+    private func recordSpeed(of source: DownloadSource, bytesPerSecond: Double) {
+        sourceSpeeds[source] = DownloadSourcePolicy.blended(previous: sourceSpeeds[source], sample: bytesPerSecond)
+        DownloadSourcePolicy.saveSpeeds(sourceSpeeds, to: .standard)
     }
 
     /// Whether a failure from one source justifies trying the next one.
@@ -1024,7 +1180,7 @@ final class DownloadService {
         if error is CancellationError { return false }
         if let dl = error as? DownloadError {
             switch dl {
-            case .notFound, .serverError, .notAudio: return true
+            case .notFound, .serverError, .notAudio, .stalled: return true
             case .wifiOnly, .offline, .diskFull, .saveFailed: return false
             }
         }
@@ -1038,8 +1194,12 @@ final class DownloadService {
         return url
     }
 
-    private func downloadWithProgress(url: URL, discourseID: String) async throws -> URL {
+    private func downloadWithProgress(url: URL, discourseID: String, hasFallback: Bool) async throws -> URL {
+        #if DEBUG
+        var request = URLRequest(url: debugHoldsTransfers ? URL(string: "https://10.255.255.1/held.mp3")! : url)
+        #else
         var request = URLRequest(url: url)
+        #endif
         request.timeoutInterval = 120
         // Per-request cellular gate. The toggle lives in Settings → Player &
         // Downloads and defaults off. Note the background-session semantics:
@@ -1076,6 +1236,7 @@ final class DownloadService {
                     transferRequests[discourseID] = request
                     lastProgressAt[discourseID] = Date()
                     stallRestarts[discourseID] = 0
+                    transferMaxRestarts[discourseID] = hasFallback ? 1 : Self.maxStallRestarts
                     ensureWatchdogRunning()
                     task.resume()
                 }

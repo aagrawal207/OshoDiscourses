@@ -16,6 +16,11 @@ struct SeriesDetailView: View {
         Catalog.discourses(for: seriesInfo)
     }
 
+    /// Only this series' own downloads justify the notice here.
+    private var showsWaitingNotice: Bool {
+        downloads.waitingReason != nil && discourses.contains { downloads.isDownloading($0.id) && !downloads.isQueued($0.id) }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -24,6 +29,13 @@ struct SeriesDetailView: View {
                 } else {
                     headerSection
                     downloadAllButton
+                }
+                if showsWaitingNotice {
+                    DownloadWaitingNotice()
+                        .padding(16)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                 }
                 discourseList
             }
@@ -343,6 +355,11 @@ private struct DiscourseRowView: View {
                         .font(.caption2)
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
+                } else if downloads.isDownloading(discourse.id), !downloads.isQueued(discourse.id),
+                          let waiting = downloads.waitingReason {
+                    Text(waiting.rowLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 } else if showDownloadHint {
                     Text("Downloading...")
                         .font(.caption2)

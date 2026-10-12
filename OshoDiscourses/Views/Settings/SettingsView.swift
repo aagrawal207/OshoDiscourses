@@ -5,6 +5,7 @@ import WatchConnectivity
 
 struct SettingsView: View {
     @Bindable private var settings = UserSettings.shared
+    @Environment(DownloadService.self) private var downloads
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.horizontalSizeClass) private var sizeClass
     // Transaction listening outlives the support sheet, including delayed approvals.
@@ -70,6 +71,7 @@ struct SettingsView: View {
             Toggle("Smart Download", isOn: $settings.smartDownload)
             Toggle("Smart Delete", isOn: $settings.smartDelete)
             Toggle("Download over Cellular", isOn: $settings.allowCellularDownloads)
+                .onChange(of: settings.allowCellularDownloads) { _, _ in downloads.applyCellularSetting() }
         } header: {
             Text("Player & Downloads")
         } footer: {
