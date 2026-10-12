@@ -31,8 +31,12 @@ private let narrationSpeechLog = Logger(subsystem: "com.agraabhi.oshodiscourses"
 @MainActor
 final class NativeNarrationSpeechRenderer: NarrationSpeechRendering {
     private var operation: Task<TimeInterval, Error>?
+    /// Below 1 slows the voice; Osho's pace uses a little of this so pauses need not carry all the stretch.
+    private let rateScale: Float
 
-    init() {}
+    init(rateScale: Float = 1) {
+        self.rateScale = min(max(rateScale, 0.5), 1.5)
+    }
 
     static func availableVoices() -> [NarrationVoice] {
         var identifiers = Set<String>()
@@ -62,7 +66,7 @@ final class NativeNarrationSpeechRenderer: NarrationSpeechRendering {
                 throw NativeNarrationSpeechError.voiceUnavailable
             }
             let sink = NarrationSpeechBufferSink(outputURL: temporaryURL)
-            let session = NativeNarrationSynthesisSession(text: text, voice: voice, sink: sink)
+            let session = NativeNarrationSynthesisSession(text: text, voice: voice, rate: AVSpeechUtteranceDefaultSpeechRate * self.rateScale, sink: sink)
             defer { session.stop() }
             return try await withTaskCancellationHandler {
                 try Task.checkCancellation()
@@ -147,12 +151,12 @@ private final class NativeNarrationSynthesisSession {
     private let delegate: NativeNarrationSpeechDelegate
     private let sink: NarrationSpeechBufferSink
 
-    init(text: String, voice: AVSpeechSynthesisVoice, sink: NarrationSpeechBufferSink) {
+    init(text: String, voice: AVSpeechSynthesisVoice, rate: Float, sink: NarrationSpeechBufferSink) {
         self.sink = sink
         delegate = NativeNarrationSpeechDelegate(sink: sink)
         utterance = AVSpeechUtterance(string: text)
         utterance.voice = voice
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        utterance.rate = rate
         utterance.prefersAssistiveTechnologySettings = false
         synthesizer.delegate = delegate
         #if os(iOS)
@@ -427,7 +431,7 @@ private struct OwnedNarrationPCM: @unchecked Sendable {
     }
 }
 
-private final class NativeNarrationPCMWriter {
+final class NativeNarrationPCMWriter {
     private let sourceFormat: AVAudioFormat
     private let file: AVAudioFile
     private let converter: AVAudioConverter?
@@ -495,7 +499,7 @@ private final class NativeNarrationPCMWriter {
     func close() { file.close() }
 }
 
-private enum NarrationAudioFiles {
+enum NarrationAudioFiles {
     static func validateDestination(_ url: URL) throws {
         guard url.isFileURL, url.pathExtension.lowercased() == "m4a",
               (try? url.deletingLastPathComponent().resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {

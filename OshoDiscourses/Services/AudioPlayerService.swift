@@ -427,9 +427,10 @@ final class AudioPlayerService {
         currentIndex = 0
     }
 
-    func returnToOriginal(localURL: URL, id: String, title: String, series: String) {
+    /// `position` is the matching moment in the recording when coming from its translation.
+    func returnToOriginal(localURL: URL, id: String, title: String, series: String, at position: TimeInterval? = nil) {
         let item = QueueItem(id: id, url: localURL, title: title, series: series)
-        let position = playbackStateService?.getPosition(discourseId: id) ?? 0
+        let position = position ?? playbackStateService?.getPosition(discourseId: id) ?? 0
         guard loadAndPlay(item: item, resumeAt: position, restoreOriginalEndpoint: true) else { return }
         queue = [item]
         currentIndex = 0

@@ -24,6 +24,7 @@ struct TranslatedNarrationView: View {
     @State private var languages: [NarrationLanguageOption] = []
     @State private var selectedLanguageID = ""
     @State private var selectedVoiceID = ""
+    @State private var pace = NarrationPace.preferred
     @State private var loadingLanguages = false
     @State private var languagesChecked = false
     @State private var availabilityError: String?
@@ -44,8 +45,12 @@ struct TranslatedNarrationView: View {
 
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "NarrationTranslation")
 
-    init(discourseID: String, selectedDocumentID: String? = nil) {
+    /// Language chosen before the sheet opened, such as a series listened to in Hindi.
+    private let preferredTargetLanguage: String?
+
+    init(discourseID: String, selectedDocumentID: String? = nil, preferredTargetLanguage: String? = nil) {
         self.discourseID = discourseID
+        self.preferredTargetLanguage = preferredTargetLanguage
         _featuredVariantID = State(initialValue: selectedDocumentID)
     }
 
@@ -59,7 +64,7 @@ struct TranslatedNarrationView: View {
     private var selection: NarrationSelection? {
         guard let sourceLanguage, let target = selectedLanguage,
               let voice = target.voices.first(where: { $0.id == selectedVoiceID }) else { return nil }
-        return NarrationSelection(sourceLanguage: sourceLanguage, targetLanguage: target.id, voice: voice)
+        return NarrationSelection(sourceLanguage: sourceLanguage, targetLanguage: target.id, voice: voice, pace: pace)
     }
     private var serviceBusy: Bool { narrations.isPreparing || narrations.preparationOwner != nil }
     private var isBusy: Bool { lifetime != nil || serviceBusy || !deletingIDs.isEmpty }
@@ -370,6 +375,16 @@ struct TranslatedNarrationView: View {
                         .accessibilityIdentifier("narration.voice")
                         .disabled(isBusy)
                     }
+                    Picker("Pace", selection: $pace) {
+                        ForEach(NarrationPace.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .accessibilityIdentifier("narration.pace")
+                    .disabled(isBusy)
+                    .onChange(of: pace) { _, value in UserDefaults.standard.set(value.rawValue, forKey: NarrationPace.preferenceKey) }
+                    Text(pace == .osho
+                         ? "Pauses like the original recording, so each paragraph takes about as long as Osho's."
+                         : "Reads without the original's pauses. Shorter, but less like Osho.")
+                        .font(.footnote).foregroundStyle(.secondary)
                     Text(language.support.status == .installed
                          ? "The translation language is ready on this device."
                          : "Apple may ask to download the translation language.")
@@ -443,7 +458,7 @@ struct TranslatedNarrationView: View {
     }
 
     private func selectionLabel(_ selection: NarrationSelection) -> some View {
-        Text("\(NarrationLanguageSupport.displayName(for: selection.targetLanguage)) · \(selection.voice.narrationDisplayName)")
+        Text("\(NarrationLanguageSupport.displayName(for: selection.targetLanguage)) · \(selection.voice.narrationDisplayName) · \(selection.pace.label)")
             .font(.subheadline).foregroundStyle(.secondary)
     }
 
@@ -494,6 +509,10 @@ struct TranslatedNarrationView: View {
                 guard !Task.isCancelled, availabilityRequestID == requestID else { return }
                 languages = options
                 languagesChecked = true
+                if selectedLanguageID.isEmpty, let preferredTargetLanguage,
+                   let preferred = options.first(where: { NarrationLanguageSupport.isSameLanguage($0.id, preferredTargetLanguage) }) {
+                    selectedLanguageID = preferred.id
+                }
                 let choice = NarrationSelectionPresentation.choice(
                     sourceLanguage: sourceLanguage, languages: options,
                     languageID: selectedLanguageID, voiceID: selectedVoiceID,
@@ -665,7 +684,8 @@ struct TranslatedNarrationView: View {
             for: document, current: player.currentNarration, isPlaying: player.isPlaying,
             hasFailure: player.narrationPlaybackFailure != nil
         ) {
-        case .load: player.playNarration(document, url: url)
+        case .load:
+            Task { await TranslatedListening.play(document, url: url, player: player) }
         case .resume: player.togglePlayPause()
         case .readAlong: break
         }
@@ -677,7 +697,12 @@ struct TranslatedNarrationView: View {
             // At the end of the finished passages, resuming continues with any newer ones.
             if !player.isPlaying { player.togglePlayPause() }
         } else {
-            NarrationPreviewPlayback.shared.play(documentID: document.id, player: player)
+            let loadedTrack = player.currentTrackId
+            Task {
+                let start = await TranslatedListening.translatedStart(for: document, player: player)
+                guard player.currentTrackId == loadedTrack else { return }
+                NarrationPreviewPlayback.shared.play(documentID: document.id, player: player, resumeAt: start)
+            }
         }
         readingDocument = narrations.documents.first { $0.id == document.id } ?? document
     }
@@ -715,9 +740,22 @@ struct TranslatedNarrationView: View {
             originalAudioURL = nil
             return
         }
-        player.returnToOriginal(localURL: url, id: discourseID, title: entry.discourse.displayTitle, series: entry.series.name)
-        dismiss()
+        let title = entry.discourse.displayTitle, series = entry.series.name
+        guard let narration = player.currentNarration, narration.discourseID == discourseID else {
+            player.returnToOriginal(localURL: url, id: discourseID, title: title, series: series)
+            dismiss()
+            return
+        }
+        let translatedTime = player.currentTime
+        Task {
+            // Resume the recording where the translation was, not where the recording last stopped.
+            let original = await narrations.timeline(for: narration)?.originalTime(forTranslated: translatedTime)
+            guard player.currentNarration?.id == narration.id else { return }
+            player.returnToOriginal(localURL: url, id: discourseID, title: title, series: series, at: original)
+            dismiss()
+        }
     }
+
 }
 
 @available(macCatalyst 26.0, *)
@@ -877,7 +915,7 @@ private struct NarrationTranslationTaskHost: View {
                                 lifetime: job.lifetime
                             )
                         },
-                        renderer: NativeNarrationSpeechRenderer(), owner: job.owner,
+                        renderer: NativeNarrationSpeechRenderer(rateScale: job.selection.pace.voiceRateScale), owner: job.owner,
                         onFailure: { complete(.failure($0)) }
                     )
                     try job.lifetime.check()
@@ -918,7 +956,7 @@ private struct SavedNarrationLabel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(NarrationLanguageSupport.displayName(for: document.selection.targetLanguage)).font(.headline)
-            Text("\(document.selection.voice.narrationDisplayName) · Synthetic voice")
+            Text("\(document.selection.voice.narrationDisplayName) · \(document.selection.pace.label)")
                 .font(.subheadline).foregroundStyle(.secondary)
             Text(NarrationCachePresentation.status(for: document, isPlayable: isPlayable))
                 .font(.caption).foregroundStyle(.secondary)
@@ -959,8 +997,11 @@ private struct TranslatedNarrationReader: View {
     @Bindable private var settings = UserSettings.shared
     @State private var following = NarrationPlaybackPresentation.Following()
     @State private var audioAvailable = true
+    @State private var showSpeed = false
+    @State private var showSleepTimer = false
     private let narrations = NarrationService.shared
     private let preview = NarrationPreviewPlayback.shared
+    private var sleepTimer: SleepTimerService { SleepTimerService.shared }
 
     /// New passages keep arriving while a rendition is prepared; the reader follows the saved copy.
     private var live: NarrationDocument { narrations.documents.first { $0.id == document.id } ?? document }
@@ -1159,6 +1200,26 @@ private struct TranslatedNarrationReader: View {
                 .accessibilityValue(isCurrent && following.isFollowing ? "On" : "Off")
                 .accessibilityIdentifier("narration.followPlayback")
                 Spacer()
+                Button { showSpeed = true } label: {
+                    Text(PlaybackSpeed.label(player.playbackRate))
+                        .font(.footnote.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(PlaybackSpeed.matches(player.playbackRate, 1) ? Color.secondary : accent)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .popover(isPresented: $showSpeed) { PlaybackSpeedControl().environment(player) }
+                .accessibilityLabel("Playback speed")
+                .accessibilityValue(PlaybackSpeed.accessibilityLabel(player.playbackRate))
+                .accessibilityIdentifier("narration.speed")
+                Button { showSleepTimer = true } label: {
+                    Image(systemName: sleepTimer.isActive ? "moon.fill" : "moon")
+                        .foregroundStyle(sleepTimer.isActive ? accent : Color.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .popover(isPresented: $showSleepTimer) { SleepTimerControl { showSleepTimer = false } }
+                .accessibilityLabel("Sleep timer")
+                .accessibilityValue(sleepTimer.isActive ? sleepTimer.statusLabel : "Off")
+                .accessibilityIdentifier("narration.sleepTimer")
                 Menu {
                     Picker("Text size", selection: $settings.transcriptFontSize) {
                         ForEach(UserSettings.transcriptFontSizes, id: \.self) { size in Text("\(Int(size)) pt").tag(size) }

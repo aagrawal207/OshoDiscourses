@@ -67,6 +67,50 @@ verified. No preview build was uploaded to App Store Connect or TestFlight.
   translated seconds as original-discourse progress. CarPlay retains system
   transport but cannot bookmark synthetic audio or start preparation.
 
+## Listening through translation
+
+**A separate way to listen.** Translation needs only the transcript, so it no longer
+starts from the player of a recording. A series page with transcripts has a
+"Listen in" switch between its own language and the other catalog language
+(English ↔ Hindi). In translated mode the recording actions and Download All are
+hidden. Rows show the narration state (prepare, progress, ready) and open or play the
+narration directly. Rows without a transcript are dimmed. Every row's menu also has
+"Listen in Hindi…" (or English). The choice is stored per series; a series in a
+language hidden by the content-language setting starts out translated. With one
+content language selected, Library gains a "Translated to Hindi" (or English) chip
+listing the hidden language's series that have transcripts. The player's globe
+remains as a shortcut. `TranslatedListening` holds the rules.
+
+**Osho's pace (default).** The rendering measured on the iPhone ran about 2.9× faster
+than Osho: 544 s of Hindi for paragraphs that take 1,567 s in the recording. With
+Osho's pace, each passage's target length is its share of the original paragraph's
+duration. That comes from the shipped `AlignmentCatalog` through `TranscriptSyncModel`
+(`NarrationOriginalTiming`, `NarrationPacingTargets`), so no audio download is
+needed. The voice renders at 0.88× its default rate. `NarrationPausePacer` then
+lengthens its existing pauses toward the target, weighted by pause length, with caps
+of 3 s per interior pause and 6 s at the paragraph end. Speech samples are preserved.
+Natural pace keeps the earlier output. Pace is part of `NarrationSelection`; saved
+renditions without it decode as natural and keep their identity.
+
+Measured on six real Hindi passages from the phone, before the caps were lowered
+and the slower rate added: 22.8 s → 43.4 s and 24.2 s → 97.2 s, each within 0.3 s of
+Osho's paragraph length. The 97 s passage had 14 pauses up to 8.3 s, which is why
+the caps were lowered and part of the stretch moved into the voice rate. How it
+sounds still needs the owner's ear on the device.
+
+**One clock for both languages.** `NarrationTimeline` maps translated time to
+original time piecewise between paragraph starts. "Return to Original" resumes the
+recording at the matching moment. Starting a translation while its recording is
+loaded begins at the matching passage. Bookmarks made while a translation plays are
+saved on the recording at the matching moment. Listening statistics, history and
+cloud progress remain separate.
+
+**Controls.** Translated audio already used the player's speed and sleep timer;
+DeNoise stays off for it. The translated reader now also has speed (the same
+0.05-step control) and sleep timer buttons. The sleep timer UI is shared
+(`SleepTimerControl`), and finishing a partial-then-complete narration counts as
+the end of the discourse for the timer.
+
 ## Background preparation, partial listening and time left
 
 **Background.** On iOS 26+, each preparation submits a `BGContinuedProcessingTask`

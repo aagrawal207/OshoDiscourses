@@ -7,10 +7,56 @@ struct NarrationVoice: Codable, Hashable, Identifiable, Sendable {
     let quality: Int
 }
 
+/// Osho's pace lengthens the voice's pauses so each paragraph lasts about as long as in the recording.
+enum NarrationPace: String, Codable, CaseIterable, Sendable {
+    case osho
+    case natural
+
+    static let preferenceKey = "narration.pace"
+
+    static var preferred: NarrationPace {
+        UserDefaults.standard.string(forKey: preferenceKey).flatMap(NarrationPace.init(rawValue:)) ?? .osho
+    }
+
+    /// Osho also speaks slowly between pauses; this much keeps the system voice natural.
+    var voiceRateScale: Float {
+        switch self {
+        case .osho: 0.88
+        case .natural: 1
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .osho: "Osho's pace"
+        case .natural: "Natural pace"
+        }
+    }
+}
+
 struct NarrationSelection: Codable, Hashable, Sendable {
     let sourceLanguage: String
     let targetLanguage: String
     let voice: NarrationVoice
+    let pace: NarrationPace
+
+    init(sourceLanguage: String, targetLanguage: String, voice: NarrationVoice, pace: NarrationPace = .natural) {
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+        self.voice = voice
+        self.pace = pace
+    }
+
+    private enum CodingKeys: String, CodingKey { case sourceLanguage, targetLanguage, voice, pace }
+
+    // Renditions saved before pacing existed are natural pace.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sourceLanguage = try container.decode(String.self, forKey: .sourceLanguage)
+        targetLanguage = try container.decode(String.self, forKey: .targetLanguage)
+        voice = try container.decode(NarrationVoice.self, forKey: .voice)
+        pace = try container.decodeIfPresent(NarrationPace.self, forKey: .pace) ?? .natural
+    }
 }
 
 struct NarrationSegment: Codable, Equatable, Identifiable, Sendable {

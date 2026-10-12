@@ -1371,6 +1371,47 @@ struct NarrationServiceTests {
         }
     }
 
+    @Test func oshoPacePacesEachPassageToTheOriginalParagraphAndNaturalPaceDoesNot() async throws {
+        let pacer = NarrationTestPacer()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("NarrationPacing-\(UUID().uuidString)", isDirectory: true)
+        let suite = "NarrationPacing.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let service = NarrationService(directory: directory, defaults: defaults, pacer: pacer)
+        // A real shipped alignment: 109 paragraphs of Vigyan Bhairav Tantra Vol 1 #1.
+        let source = transcript((0..<109).map { "Paragraph \($0) of the talk." }, id: "english-Vigyan_Bhairav_Tantra_Vol_1-1")
+        let timing = try #require(NarrationOriginalTiming.make(transcript: source))
+        let natural = try await service.prepare(
+            transcript: source, selection: selection(), translate: translated, renderer: NarrationTestRenderer()
+        )
+        #expect(pacer.targets.isEmpty)
+        let osho = try await service.prepare(
+            transcript: source, selection: NarrationSelection(
+                sourceLanguage: "en", targetLanguage: "hi",
+                voice: NarrationVoice(id: "voice.hi", name: "Test voice", language: "hi-IN", quality: 1), pace: .osho
+            ),
+            translate: translated, renderer: NarrationTestRenderer()
+        )
+        #expect(osho.id != natural.id)
+        #expect(osho.selection.pace == .osho)
+        #expect(pacer.targets.count == 109)
+        #expect(zip(pacer.targets, 0...).allSatisfy { target, index in
+            abs(target - (timing.duration(ofParagraph: index) ?? -1)) < 0.000_1
+        })
+        #expect(osho.segments.allSatisfy { abs($0.duration - pacer.reported) < 0.05 })
+        try expectNoStaging(in: directory)
+    }
+
+    @Test func savedRenditionsWithoutAPaceDecodeAsNaturalAndKeepTheirIdentity() throws {
+        let legacy = #"{"sourceLanguage":"en","targetLanguage":"hi","voice":{"id":"v","name":"n","language":"hi-IN","quality":1}}"#
+        let decoded = try JSONDecoder().decode(NarrationSelection.self, from: Data(legacy.utf8))
+        #expect(decoded.pace == .natural)
+        #expect(decoded == NarrationSelection(sourceLanguage: "en", targetLanguage: "hi", voice: NarrationVoice(id: "v", name: "n", language: "hi-IN", quality: 1)))
+    }
+
     private func transcript(_ text: [String], id: String = "test-discourse") -> Transcript {
         Transcript(discourseID: id, sourceID: "site", fetchedAt: Date(timeIntervalSince1970: 100), paragraphs: text.enumerated().map {
             .init(index: $0.offset, text: $0.element, isEmphasis: false)
@@ -1436,6 +1477,32 @@ struct NarrationServiceTests {
 }
 
 private enum NarrationTestError: Error { case interrupted, unexpectedWork }
+
+/// Writes a fixed-length passage so the test sees which target each passage was paced to.
+private final class NarrationTestPacer: NarrationPacing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [TimeInterval] = []
+    let reported: TimeInterval = 0.5
+    var targets: [TimeInterval] { lock.withLock { recorded } }
+
+    func pace(_ input: URL, to output: URL, targetDuration: TimeInterval) async throws -> TimeInterval {
+        lock.withLock { recorded.append(targetDuration) }
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1))
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 24_000.0, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 48_000,
+        ]
+        let file = try AVAudioFile(forWriting: output, settings: settings)
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 12_000))
+        buffer.frameLength = 12_000
+        let samples = try #require(buffer.floatChannelData?[0])
+        for index in 0..<12_000 { samples[index] = 0.1 * sin(Float(index) * 0.1) }
+        try file.write(from: buffer)
+        file.close()
+        let closed = try AVAudioFile(forReading: output)
+        defer { closed.close() }
+        return Double(closed.length) / closed.processingFormat.sampleRate
+    }
+}
 
 @MainActor
 private final class NarrationTestClock {

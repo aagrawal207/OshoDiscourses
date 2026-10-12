@@ -93,6 +93,7 @@ final class NarrationPreviewPlayback {
             caughtUp = nil
             player.stop()
             narrations.savePosition(documentID: document.id, position: 0)
+            SleepTimerService.shared.discourseDidFinish()
             Self.log.info("outcome=finished")
         } else if latest?.isComplete == true || available > document.segments.count {
             play(documentID: document.id, player: player, resumeAt: document.duration)

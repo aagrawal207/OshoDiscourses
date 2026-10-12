@@ -25,6 +25,8 @@ struct PlayerView: View {
     private var transcripts = TranscriptService.shared
     @State private var showBookmarkSheet = false
     @State private var bookmarkTimestamp: TimeInterval = 0
+    /// A translation's bookmark belongs to its recording, at the matching moment.
+    @State private var narrationTimeline: NarrationTimeline?
     @State private var showBookmarkAdded = false
     @State private var showTotalTime = false
     /// Whether this window has room for the reading pane beside or below the controls.
@@ -185,7 +187,7 @@ struct PlayerView: View {
         }
         #endif
         .sheet(isPresented: $showBookmarkSheet) {
-            if !player.isPlayingNarration, let id = player.currentTrackId {
+            if let id = player.currentDiscourseID {
                 AddBookmarkSheet(
                     timestamp: bookmarkTimestamp,
                     discourseID: id,
@@ -196,6 +198,14 @@ struct PlayerView: View {
                 }
                 .presentationDetents([.medium])
             }
+        }
+        .task(id: "\(player.currentNarration?.id ?? ""):\(player.currentNarration?.segments.count ?? 0)") {
+            narrationTimeline = nil
+            guard let narration = player.currentNarration else { return }
+            let timeline = await NarrationService.shared.timeline(for: narration)
+            // A slower lookup for an earlier narration must not replace the current one's.
+            guard !Task.isCancelled, player.currentNarration?.id == narration.id else { return }
+            narrationTimeline = timeline
         }
         .onChange(of: player.isPlayingNarration) { _, isNarration in
             if isNarration {
@@ -769,13 +779,17 @@ struct PlayerView: View {
             label: "Bookmark",
             isActive: false
         ) {
-            guard !player.isPlayingNarration else { return }
-            bookmarkTimestamp = player.currentTime
+            if player.isPlayingNarration {
+                guard let original = narrationTimeline?.originalTime(forTranslated: player.currentTime) else { return }
+                bookmarkTimestamp = original
+            } else {
+                bookmarkTimestamp = player.currentTime
+            }
             showBookmarkSheet = true
         }
         .accessibilityLabel("Add bookmark")
-        .accessibilityHint("Saves the current position")
-        .disabled(player.isPlayingNarration)
+        .accessibilityHint(player.isPlayingNarration ? "Saves this moment in the original recording" : "Saves the current position")
+        .disabled(player.isPlayingNarration && narrationTimeline?.originalTime(forTranslated: player.currentTime) == nil)
     }
 
     private func playerControlButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
@@ -800,70 +814,7 @@ struct PlayerView: View {
     // MARK: - Sleep Timer
 
     private var sleepTimerContent: some View {
-        VStack(spacing: 4) {
-            Button {
-                sleepTimer.startUntilEndOfDiscourse()
-                showSleepTimer = false
-            } label: {
-                HStack {
-                    Text("End of discourse")
-                        .font(.body)
-                    Spacer()
-                    if sleepTimer.mode == .endOfDiscourse {
-                        Image(systemName: "checkmark")
-                            .font(.caption)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            }
-            .buttonStyle(.plain)
-
-            Divider()
-
-            ForEach([5, 10, 15, 30, 45, 60], id: \.self) { minutes in
-                Button {
-                    sleepTimer.start(minutes: minutes)
-                    showSleepTimer = false
-                } label: {
-                    HStack {
-                        Text("\(minutes) min")
-                            .font(.body)
-                        Spacer()
-                        if sleepTimer.mode == .countdown {
-                            let activeMinutes = Int(sleepTimer.remainingTime) / 60 + (Int(sleepTimer.remainingTime) % 60 > 0 ? 1 : 0)
-                            if activeMinutes == minutes {
-                                Image(systemName: "checkmark")
-                                    .font(.caption)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if sleepTimer.isActive {
-                Divider()
-
-                Button {
-                    sleepTimer.cancel()
-                    showSleepTimer = false
-                } label: {
-                    Text("Cancel")
-                        .font(.body)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .frame(width: 160)
-        .padding(.vertical, 8)
-        .presentationCompactAdaptation(.popover)
+        SleepTimerControl { showSleepTimer = false }
     }
 
     // MARK: - Helpers

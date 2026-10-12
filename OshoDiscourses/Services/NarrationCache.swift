@@ -632,11 +632,14 @@ actor NarrationCache {
 
     private nonisolated static func documentID(discourseID: String, digest: String, selection: NarrationSelection) throws -> String {
         try validate(selection)
-        return Self.digest(try JSONEncoder().encode([
+        var parts = [
             String(renderVersion), discourseID, digest,
             canonicalLanguage(selection.sourceLanguage), canonicalLanguage(selection.targetLanguage),
             selection.voice.id, canonicalLanguage(selection.voice.language), String(selection.voice.quality),
-        ]))
+        ]
+        // Natural pace leaves the identity unchanged, so renditions saved before pacing still match.
+        if selection.pace != .natural { parts.append(selection.pace.rawValue) }
+        return Self.digest(try JSONEncoder().encode(parts))
     }
 
     private nonisolated static func canonicalLanguage(_ value: String) -> String {

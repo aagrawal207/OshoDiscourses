@@ -9,7 +9,8 @@ final class NarrationService {
         directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("narrations", isDirectory: true),
         defaults: .standard,
-        backgroundActivity: makeBackgroundActivity()
+        backgroundActivity: makeBackgroundActivity(),
+        pacer: NarrationPausePacer()
     )
 
     enum Event {
@@ -31,12 +32,15 @@ final class NarrationService {
     /// True only while the system has accepted the work; otherwise leaving the app must pause it.
     private(set) var continuesInBackground = false
     @ObservationIgnored var onEvent: (@MainActor (Event) -> Void)?
+    @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private var timings: [String: NarrationOriginalTiming] = [:]
 
     @ObservationIgnored private let cache: NarrationCache
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let retrySleep: @MainActor (Duration) async throws -> Void
     @ObservationIgnored private let now: @MainActor () -> TimeInterval
     @ObservationIgnored private let backgroundActivity: (any NarrationBackgroundActivity)?
+    @ObservationIgnored private let pacer: (any NarrationPacing)?
     @ObservationIgnored private var estimator: NarrationProgressEstimator?
     @ObservationIgnored private var active: Preparation?
     @ObservationIgnored private var ready: [String: NarrationCache.Snapshot] = [:]
@@ -52,14 +56,17 @@ final class NarrationService {
         let documentID: String
         let discourseID: String
         let renderer: any NarrationSpeechRendering
+        /// Seconds each passage should last at Osho's pace, indexed by chunk; nil where unpaced.
+        let paceTargets: [TimeInterval?]
         let onFailure: (@MainActor (Error) -> Void)?
         var rendererCancelled = false
         var failure: WorkFailure?
 
         init(
             job: NarrationCache.Job, owner: UUID?, documentID: String, discourseID: String,
-            renderer: any NarrationSpeechRendering, onFailure: (@MainActor (Error) -> Void)?
+            renderer: any NarrationSpeechRendering, paceTargets: [TimeInterval?], onFailure: (@MainActor (Error) -> Void)?
         ) {
+            self.paceTargets = paceTargets
             self.job = job
             self.owner = owner
             self.documentID = documentID
@@ -95,8 +102,10 @@ final class NarrationService {
         directory: URL, defaults: UserDefaults,
         retrySleep: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         now: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-        backgroundActivity: (any NarrationBackgroundActivity)? = nil
+        backgroundActivity: (any NarrationBackgroundActivity)? = nil,
+        pacer: (any NarrationPacing)? = nil
     ) {
+        self.pacer = pacer
         cache = NarrationCache(directory: directory)
         self.defaults = defaults
         self.retrySleep = retrySleep
@@ -111,6 +120,12 @@ final class NarrationService {
         return nil
     }
 
+    /// Verifying saved audio reads every file, so screens that only show status load once per launch.
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        await load()
+    }
+
     func load() async {
         guard active == nil, deletingIDs.isEmpty, deletingDiscourses.isEmpty else { return }
         let started = revision
@@ -120,6 +135,7 @@ final class NarrationService {
             documents = snapshots.map(\.document).sorted(by: Self.mostRecent)
             ready = Dictionary(uniqueKeysWithValues: snapshots.filter { $0.document.isComplete }.map { ($0.document.id, $0) })
             errorMessage = nil
+            hasLoaded = true
             revision &+= 1
             Self.log.info("stage=load outcome=loaded")
         } catch is CancellationError {
@@ -184,9 +200,15 @@ final class NarrationService {
         }
         guard !deletingIDs.contains(plan.document.id) else { throw NarrationPreparationError.busy }
         let job = NarrationCache.Job()
+        let paceTargets: [TimeInterval?] = selection.pace == .osho && pacer != nil
+            ? NarrationPacingTargets.durations(
+                chunks: plan.chunks.map { ($0.sourceParagraphIndex, $0.text.count) },
+                timing: NarrationOriginalTiming.make(transcript: transcript)
+            )
+            : []
         let preparation = Preparation(
             job: job, owner: owner, documentID: plan.document.id, discourseID: transcript.discourseID,
-            renderer: renderer, onFailure: onFailure
+            renderer: renderer, paceTargets: paceTargets, onFailure: onFailure
         )
         active = preparation
         revision &+= 1
@@ -367,8 +389,10 @@ final class NarrationService {
                 for (chunk, text) in zip(batch.chunks, batch.texts) {
                     try check(job)
                     stage = .rendering
+                    let target = active?.paceTargets.indices.contains(chunk.index) == true ? active?.paceTargets[chunk.index] : nil
                     let duration = try await renderPassage(
-                        text, index: chunk.index, total: total, voiceID: selection.voice.id, renderer: renderer, job: job
+                        text, index: chunk.index, total: total, voiceID: selection.voice.id, target: target,
+                        renderer: renderer, job: job
                     )
                     try check(job)
                     stage = .checkpoint
@@ -393,7 +417,7 @@ final class NarrationService {
     }
 
     private func renderPassage(
-        _ text: String, index: Int, total: Int, voiceID: String,
+        _ text: String, index: Int, total: Int, voiceID: String, target: TimeInterval?,
         renderer: any NarrationSpeechRendering, job: NarrationCache.Job
     ) async throws -> TimeInterval {
         var retries = 0
@@ -402,10 +426,18 @@ final class NarrationService {
             statusMessage = "Creating audio \(index + 1) of \(total)…"
             let output = try await cache.outputURL(segment: index, job: job)
             try check(job)
+            // The voice renders beside the final file; pacing writes the passage that is kept.
+            let unpaced = output.deletingLastPathComponent().appendingPathComponent(".unpaced-\(index).m4a")
+            let pacing = target.flatMap { target in pacer.map { ($0, target) } }
             do {
-                let duration = try await renderer.render(text: text, voiceID: voiceID, to: output)
+                defer { if pacing != nil { try? FileManager.default.removeItem(at: unpaced) } }
+                var duration = try await renderer.render(text: text, voiceID: voiceID, to: pacing == nil ? output : unpaced)
                 try check(job)
-                Self.log.debug("stage=rendering outcome=succeeded retries=\(retries, privacy: .public)")
+                if let (pacer, target) = pacing {
+                    duration = try await pacer.pace(unpaced, to: output, targetDuration: target)
+                    try check(job)
+                }
+                Self.log.debug("stage=rendering outcome=succeeded paced=\(pacing != nil, privacy: .public) retries=\(retries, privacy: .public)")
                 return duration
             } catch {
                 try check(job)
@@ -523,6 +555,20 @@ final class NarrationService {
         let saved = defaults.double(forKey: Self.positionPrefix + documentID)
         guard saved.isFinite, saved >= 0 else { return 0 }
         return min(saved, ready[documentID]?.document.duration ?? saved)
+    }
+
+    /// Maps this rendition's time to the original recording's, paragraph by paragraph, without its audio.
+    func timeline(for document: NarrationDocument) async -> NarrationTimeline? {
+        let timing: NarrationOriginalTiming
+        if let cached = timings[document.discourseID] {
+            timing = cached
+        } else {
+            guard let transcript = try? await TranscriptService.shared.transcript(for: document.discourseID),
+                  let made = NarrationOriginalTiming.make(transcript: transcript) else { return nil }
+            timings[document.discourseID] = made
+            timing = made
+        }
+        return NarrationTimeline(segments: document.segments, timing: timing, lastParagraphComplete: document.isComplete)
     }
 
     /// The finished passages from the start, which can play before the full narration exists.

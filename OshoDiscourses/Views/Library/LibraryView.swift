@@ -5,6 +5,8 @@ enum SeriesFilter: Hashable {
     case english
     case hindi
     case downloaded
+    /// Series in the hidden language, listened to through translation into this language name.
+    case translated(String)
     case theme(String)
 
     var label: String {
@@ -13,6 +15,7 @@ enum SeriesFilter: Hashable {
         case .english: return "English"
         case .hindi: return "Hindi"
         case .downloaded: return "Downloaded"
+        case .translated(let language): return "Translated to \(language)"
         case .theme(let name): return name.capitalized
         }
     }
@@ -59,6 +62,18 @@ struct LibraryView: View {
         }
     }
 
+    /// Series hidden by the content language that can still be heard in it through translation.
+    private var translatableHiddenSeries: [SeriesInfo] {
+        #if TRANSLATED_NARRATION
+        guard TranslatedListening.isSupported, settings.languageFilter != .both else { return [] }
+        return Catalog.allSeries.filter {
+            TranslatedListening.isHidden($0, filter: settings.languageFilter) && TranslatedListening.canTranslate($0)
+        }
+        #else
+        return []
+        #endif
+    }
+
     /// Filters that actually have entries given the visible series + downloads.
     /// "All" is always present; language/downloaded/theme chips appear only when
     /// at least one matching series exists.
@@ -72,6 +87,9 @@ struct LibraryView: View {
         if hasEnglish && hasHindi {
             filters.append(.english)
             filters.append(.hindi)
+        }
+        if !translatableHiddenSeries.isEmpty {
+            filters.append(.translated(settings.languageFilter == .hindi ? "Hindi" : "English"))
         }
 
         let downloadedSeriesIDs = Set(
@@ -101,7 +119,8 @@ struct LibraryView: View {
     }
 
     private var filteredSeries: [SeriesInfo] {
-        var result = visibleSeries
+        var result: [SeriesInfo]
+        if case .translated = activeFilter { result = translatableHiddenSeries } else { result = visibleSeries }
 
         if !searchText.isEmpty {
             let query = searchText.lowercased()
@@ -118,6 +137,7 @@ struct LibraryView: View {
         case .all: break
         case .english: result = result.filter { $0.language == .english }
         case .hindi: result = result.filter { $0.language == .hindi }
+        case .translated: break
         case .downloaded:
             let downloadedSeriesIDs = Set(
                 downloads.downloadedIDs.compactMap { Catalog.discourseLookup[$0]?.series.id }
