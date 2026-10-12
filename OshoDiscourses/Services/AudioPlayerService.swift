@@ -405,9 +405,8 @@ final class AudioPlayerService {
         voiceFocusPreset = settings?.voiceFocusPreset ?? .lift
         volume = max(1.0, min(Float(settings?.volumeBoost ?? 1), Self.maximumBoost))
         configureNoiseProcessor()
-        // Restore the listener's preferred speed; clamp in case a stale/corrupt
-        // value was stored outside the supported 0.5–2.0 range.
-        playbackRate = max(0.5, min(Float(settings?.defaultPlaybackRate ?? 1), 2.0))
+        // A stale or corrupt stored speed falls back onto the supported grid.
+        playbackRate = PlaybackSpeed.normalized(Float(settings?.defaultPlaybackRate ?? 1))
         refreshAudioProcessingStatus()
         if connectsToSystem {
             setupAudioSession()
@@ -927,7 +926,7 @@ final class AudioPlayerService {
     }
 
     func setRate(_ rate: Float) {
-        let clamped = max(0.5, min(rate, 2.0))
+        let clamped = PlaybackSpeed.normalized(rate)
         playbackRate = clamped
         // Persist so the chosen speed survives relaunch. The in-player picker is
         // the single source of truth — no separate "remember speed" toggle.
@@ -1448,7 +1447,7 @@ final class AudioPlayerService {
             return .success
         }
 
-        // CarPlay's speed button and Siri use this; setRate clamps to 0.5–2.0.
+        // CarPlay's speed button and Siri use this; setRate rounds onto the 0.05 grid.
         let rates: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
         commandCenter.changePlaybackRateCommand.supportedPlaybackRates = rates.map { NSNumber(value: $0) }
         commandCenter.changePlaybackRateCommand.addTarget { [weak self] event in

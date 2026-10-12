@@ -693,16 +693,17 @@ struct PlayerView: View {
         HStack(spacing: 0) {
             playerControlButton(
                 icon: "speedometer",
-                label: formatSpeed(player.playbackRate),
-                isActive: player.playbackRate != 1.0
+                label: PlaybackSpeed.label(player.playbackRate),
+                isActive: !PlaybackSpeed.matches(player.playbackRate, 1)
             ) {
                 showSpeedPicker.toggle()
             }
             .popover(isPresented: $showSpeedPicker) {
-                speedPickerContent
+                PlaybackSpeedControl()
             }
             .accessibilityLabel("Playback speed")
-            .accessibilityValue(formatSpeed(player.playbackRate))
+            .accessibilityValue(PlaybackSpeed.accessibilityLabel(player.playbackRate))
+            .accessibilityIdentifier("player.speed")
 
             playerControlButton(
                 icon: player.audioProcessingStatus.isIssue ? "exclamationmark.triangle" : "waveform",
@@ -796,35 +797,6 @@ struct PlayerView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Speed Picker
-
-    private var speedPickerContent: some View {
-        VStack(spacing: 4) {
-            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { speed in
-                Button {
-                    player.setRate(Float(speed))
-                    showSpeedPicker = false
-                } label: {
-                    HStack {
-                        Text(formatSpeed(Float(speed)))
-                            .font(.body)
-                        Spacer()
-                        if abs(Double(player.playbackRate) - speed) < 0.01 {
-                            Image(systemName: "checkmark")
-                                .font(.caption)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .frame(width: 160)
-        .padding(.vertical, 8)
-        .presentationCompactAdaptation(.popover)
-    }
-
     // MARK: - Sleep Timer
 
     private var sleepTimerContent: some View {
@@ -906,13 +878,5 @@ struct PlayerView: View {
             return String(format: "%d:%02d:%02d", hrs, mins, secs)
         }
         return String(format: "%d:%02d", mins, secs)
-    }
-
-    private func formatSpeed(_ speed: Float) -> String {
-        if speed == 1.0 { return "1x" }
-        if speed == Float(Int(speed)) {
-            return "\(Int(speed))x"
-        }
-        return String(format: "%.2gx", speed)
     }
 }

@@ -320,6 +320,7 @@ struct DownloadsView: View {
         let items = searchText.isEmpty ? inProgress : []
         if !items.isEmpty {
             Section {
+                if downloads.waitingReason != nil { DownloadWaitingNotice() }
                 ForEach(items) { discourse in
                     InProgressRow(discourse: discourse)
                 }
@@ -633,6 +634,9 @@ private struct InProgressRow: View {
 
     private var isQueued: Bool { downloads.isQueued(discourse.id) }
     private var progress: Double { downloads.progress(for: discourse.id) }
+    private var statusText: String {
+        downloads.waitingReason?.rowLabel ?? "\(Int(progress * 100))%"
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -652,7 +656,7 @@ private struct InProgressRow: View {
                 } else {
                     ProgressView(value: progress)
                         .tint(Color.accent)
-                    Text("\(Int(progress * 100))%")
+                    Text(statusText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -670,7 +674,7 @@ private struct InProgressRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Cancel download")
-            .accessibilityValue(isQueued ? "Queued" : "\(Int(progress * 100)) percent")
+            .accessibilityValue(isQueued ? "Queued" : downloads.waitingReason?.rowLabel ?? "\(Int(progress * 100)) percent")
         }
         .contentShape(Rectangle())
     }

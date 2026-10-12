@@ -256,7 +256,8 @@ and preparation shows passages done and an estimated time left.
 - [x] Download with progress tracking (background URLSession — continues when app is backgrounded/locked/killed)
 - [x] Audio playback (AVPlayer with queue management)
 - [x] Background audio + lock screen / Control Center / AirPods controls (MPRemoteCommandCenter, with interruption + route-change recovery)
-- [x] Seek slider, playback speed (0.5x–2x, persisted across launches), volume boost (1.5x/2x/3x/4x, gain + peak limiter in the tap)
+- [x] Seek slider, playback speed (0.5×–2× in 0.05 steps via slider, −/+ and presets; `PlaybackSpeed` is the one grid for every entry point; persisted across launches), volume boost (1.5x/2x/3x/4x, gain + peak limiter in the tap)
+- [x] Download source choice (1.16.3 build 34): oshoworld.com (Delhi) first in India and neighbours, archive.org (California) first elsewhere, overridden by measured speed (`DownloadSourcePolicy`). A frozen server is abandoned after its restarts so the other is tried. Downloads waiting for Wi-Fi or a connection show a notice with "Use Mobile Data". DEBUG `-debugDownloadNetwork cellularOnly|offline` fakes the network for UI tests.
 - [x] Mini-player bar (ultraThinMaterial glass)
 - [x] Full player screen (Apple Music style)
 - [x] Downloads screen grouped by series + total storage-used meter
@@ -354,7 +355,7 @@ Features from the RN version — port status:
 
 ## Dev notes
 
-- 1.16.3 (33) was submitted at 2026-10-12T00:11:36Z (`WAITING_FOR_REVIEW`, release after approval) with optional yearly support and gentle engagement. The app, subscription group and all three annual subscription versions are in the same submission. The full unit suite passed 459 functions / 498 runs. Xcode cloud signing produced the App Store IPA without restoring or revoking local distribution certificates. See [the release record](docs/app-store/releases/1.16.3.md).
+- 1.16.3 (34) was submitted at 2026-10-12T18:29:28Z (`WAITING_FOR_REVIEW`, release after approval) with optional yearly support, gentle engagement, finer playback speed and India-aware downloads. Build 33 was submitted earlier and withdrawn. The app, subscription group and all three annual subscription versions are in submission `a82513a6-a042-4625-96ea-d430b6520ac3`. The StoreKit expiry fixture fails in the iOS 27 simulator; the rest of the unit suite (530) passes. Xcode cloud signing produced the App Store IPA. See [the release record](docs/app-store/releases/1.16.3.md).
 - 1.16.0 (28) was approved and released on 2026-10-03 with CarPlay, Apple Watch and iPad; the Mac app is a later submission. See [the release record](docs/app-store/releases/1.16.0.md).
 - 1.16.2 (32) is released (`READY_FOR_DISTRIBUTION`, checked 2026-10-11). It adds transcript copy options: Select Text, Select Passages and drag-out. See [the release record](docs/app-store/releases/1.16.2.md).
 - 1.16.1 (31) was released after approval (`READY_FOR_DISTRIBUTION`, checked 2026-10-08; builds 29 and 30 were withdrawn first). It adds en-GB and Hindi store listings, new keywords, reordered screenshots, Health & Fitness as the secondary category, a Settings > About > Rate Osho Talks link, a broader review prompt and mini-player clearance on every page. See [the release record](docs/app-store/releases/1.16.1.md).

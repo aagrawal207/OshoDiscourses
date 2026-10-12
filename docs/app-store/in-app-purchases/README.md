@@ -4,7 +4,7 @@ App: **Osho Talks - Audio Discourses**, `6774409039`.
 Bundle ID: `com.agraabhi.oshodiscourses`.
 
 Three additional **auto-renewing yearly support subscriptions** are configured in
-group `22466252`, all at level 1, and submitted with 1.16.3 (33). They are separate from the five approved
+group `22466252`, all at level 1, and submitted with 1.16.3 (34). They are separate from the five approved
 consumables below. See [Yearly support](../../annual-support.md) for their IDs,
 prices and verification status. Their approval and an app release are still required.
 Their review screenshots are `COMPLETE`, with matching checksums recorded in

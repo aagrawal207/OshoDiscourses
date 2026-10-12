@@ -26,7 +26,7 @@ assume that an absent entitlement means a pending request was declined.
 
 All IDs begin with `com.agraabhi.oshodiscourses.`. Draft products use one-year
 periods, the app's existing 175 territories, automatic future-territory availability
-and Apple-equalized regional prices. They were submitted with 1.16.3 (33) and are
+and Apple-equalized regional prices. They were submitted with 1.16.3 (34) and are
 awaiting review. Product approval is still required. Apple guideline 3.1.2(a) requires ongoing
 customer value; acceptance of optional development-support subscriptions is not
 guaranteed. Review notes explain that these support ongoing app development and
@@ -36,7 +36,7 @@ Setup and pricing were read back on 2026-10-11. The group review version is
 `9d2842e3-b25f-4747-a9c8-1cffe4ac5fcf`, with an en-US “Yearly Support” localization.
 All three products have complete review screenshots. The app version, group
 version and three subscription versions are in submission
-`0c1b46f3-c078-43bd-b1b2-0bfd0c43cde6`, whose state is `WAITING_FOR_REVIEW`.
+`a82513a6-a042-4625-96ea-d430b6520ac3`, whose state is `WAITING_FOR_REVIEW`. The earlier build 33 submission was withdrawn.
 
 ## Metrics
 

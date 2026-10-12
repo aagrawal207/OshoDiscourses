@@ -231,7 +231,7 @@ struct ContentView: View {
         }
         #endif
         // `-debugDownload <discourseID>` starts a real download through the
-        // normal source chain (archive first, then oshoworld) and logs it.
+        // normal source chain (nearer server first, then the other) and logs it.
         if let flag = args.firstIndex(of: "-debugDownload"), args.indices.contains(flag + 1),
            let entry = Catalog.discourseLookup[args[flag + 1]] {
             print("[debugDownload] \(entry.discourse.id) oshoworld=\(entry.discourse.audioURL) archive=\(ArchiveCatalog.audioURL(for: entry.discourse)?.absoluteString ?? "none")")
