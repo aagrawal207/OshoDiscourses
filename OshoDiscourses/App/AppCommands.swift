@@ -74,9 +74,14 @@ struct AppCommands: Commands {
             Divider()
 
             Menu("Speed") {
+                Button("Slower") { player.setRate(PlaybackSpeed.stepped(player.playbackRate, by: -1)) }
+                    .disabled(state.rate <= PlaybackSpeed.range.lowerBound)
+                Button("Faster") { player.setRate(PlaybackSpeed.stepped(player.playbackRate, by: 1)) }
+                    .disabled(state.rate >= PlaybackSpeed.range.upperBound)
+                Divider()
                 ForEach(Self.speeds, id: \.self) { speed in
-                    Toggle(Self.speedLabel(speed), isOn: Binding(
-                        get: { abs(state.rate - speed) < 0.01 },
+                    Toggle(PlaybackSpeed.label(speed), isOn: Binding(
+                        get: { PlaybackSpeed.matches(state.rate, speed) },
                         set: { if $0 { player.setRate(speed) } }
                     ))
                 }
@@ -115,9 +120,5 @@ struct AppCommands: Commands {
             Button("Close Player") { navigation?.closePlayer() }
                 .disabled(!state.canClosePlayer)
         }
-    }
-
-    static func speedLabel(_ speed: Float) -> String {
-        speed == speed.rounded() ? "\(Int(speed))×" : "\(speed.formatted(.number.precision(.fractionLength(0...2))))×"
     }
 }
