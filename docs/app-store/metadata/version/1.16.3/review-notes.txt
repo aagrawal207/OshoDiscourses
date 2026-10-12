@@ -1,0 +1,7 @@
+Osho Talks remains free to use, with no ads and no sign-in.
+
+This version adds three optional auto-renewing yearly support subscriptions for ongoing app development. They do not unlock recordings or features. Existing one-time consumable tips are unchanged. To find all support options, open Settings > About > Support Development. The list shows the localized price and yearly billing label before purchase, plus renewal terms, Terms of Use, Privacy Policy, Restore Subscription and Manage Subscriptions. The three annual amounts share one subscription group at the same level to prevent multiple simultaneous subscriptions.
+
+The Home support reminder appears only after at least seven listening days and two hours of use, while playback is stopped and no sleep timer or player presentation is active. It can be dismissed for ninety days or disabled permanently. Supporters are not asked again. Native rating requests retain their natural-pause gate and now have a ninety-day cooldown, separated from support reminders by at least fourteen days.
+
+The app is an independent player for publicly available recordings. Support funds app development; it is not a purchase of Osho audio content. Every feature remains available without any purchase.
