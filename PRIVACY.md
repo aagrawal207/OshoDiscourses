@@ -17,6 +17,8 @@
 - **Listening stats:** how long you listen each day, used for the in-app stats and streak
 - **Downloaded files:** audio files you choose to download, stored in the Documents folder (visible in Files app). These are not included in your iCloud backup, since they can be re-downloaded.
 - **Optional tips:** verified StoreKit transaction IDs and their counted/revoked state, plus a device-local tip count, prevent duplicate counting. Tips unlock no content or features.
+- **Optional yearly support:** the app checks verified subscription status through Apple to show your current plan and avoid duplicate subscriptions. A pending product is remembered locally until approval or until you explicitly clear a declined request. There is no developer-run subscription database. All content and features remain free.
+- **Rating and support reminders:** request dates and your support-reminder choice are stored on this device to limit reminders. They are not sent to the developer.
 
 ## iCloud sync
 
@@ -40,8 +42,9 @@ recognisers. Recognition assets may require downloading; the recording is not up
 
 Oshoworld.com and archive.org host the audio files. Apple's iCloud service handles optional sync between your devices. The app does not include advertising or tracking services.
 
-Optional tips use Apple's StoreKit in-app purchases. Apple handles the purchase;
-the app records verified transaction state locally and has no purchase server.
+Optional tips and yearly support use Apple's StoreKit in-app purchases. Apple
+handles payment, subscription renewals and cancellations. The app records tip
+transactions locally and checks subscription status with Apple; it has no purchase server.
 
 ## Analytics and tracking
 

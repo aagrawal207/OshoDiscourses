@@ -2,12 +2,7 @@ import Foundation
 import StoreKit
 import UIKit
 
-/// Asks for an App Store rating at a good moment: after the listener has used the
-/// app on a few distinct days, and never more than once per app version.
-///
-/// iOS throttles the prompt itself; the version gate keeps us from spending it on a
-/// cold launch. Good moments are a natural, idle completion or a manual pause after
-/// a long listen, both when the listener has already stopped the audio.
+/// Native rating requests belong at idle listening breaks, away from support asks.
 @MainActor
 enum ReviewRequestService {
 
@@ -58,24 +53,47 @@ enum ReviewRequestService {
         requestReviewIfAppropriate()
     }
 
-    /// Call after a natural high point (e.g. finishing a discourse). Requests a
-    /// review only if the listener has enough active days and hasn't already been
-    /// asked on this version. Safe to call often — it self-gates.
+    /// Call only after a natural completion or an eligible manual pause.
     static func requestReviewIfAppropriate() {
-        guard isEligible(
-            activeDays: ListeningStatsService.shared.distinctActiveDays,
-            lastPromptedVersion: defaults.string(forKey: lastPromptedVersionKey),
-            currentVersion: currentVersion
-        ) else { return }
-
         guard let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-            return  // no active scene (e.g. backgrounded) — try again next time
+            return
         }
 
-        // Record the attempt before asking: iOS may or may not actually show the
-        // dialog, but either way we shouldn't pester on this version again.
+        attemptReview(
+            activeDays: ListeningStatsService.shared.distinctActiveDays,
+            currentVersion: currentVersion,
+            defaults: defaults,
+            engagement: .shared,
+            isForeground: true,
+            isPlaying: AppRuntime.shared.audioPlayer.isPlaying,
+            sleepTimerArmed: SleepTimerService.shared.isActive
+        ) {
+            AppStore.requestReview(in: scene)
+        }
+    }
+
+    @discardableResult
+    static func attemptReview(
+        activeDays: Int,
+        currentVersion: String,
+        defaults: UserDefaults,
+        engagement: EngagementService,
+        isForeground: Bool,
+        isPlaying: Bool,
+        sleepTimerArmed: Bool,
+        request: () -> Void
+    ) -> Bool {
+        guard isForeground, !isPlaying, !sleepTimerArmed,
+              isEligible(
+                activeDays: activeDays,
+                lastPromptedVersion: defaults.string(forKey: lastPromptedVersionKey),
+                currentVersion: currentVersion
+              ), engagement.recordRatingAttemptIfAllowed() else { return false }
+
+        // StoreKit may suppress the dialog; the attempt still consumes both gates.
         defaults.set(currentVersion, forKey: lastPromptedVersionKey)
-        AppStore.requestReview(in: scene)
+        request()
+        return true
     }
 }

@@ -1,0 +1,59 @@
+[
+  {
+    "amount": 5,
+    "appVersion": "1.16.3",
+    "build": "33",
+    "correction": "One repeated-edge column added on the right. Original RGB pixels verified unchanged; no resampling.",
+    "device": "iPhone 13 mini",
+    "file": "annual-5.png",
+    "os": "iOS 27.0",
+    "sha256": "bb1cd04969c2b554b7e2ecbf0c54dee50c6fb2b2b168af1de28fcc46be6abb1c",
+    "size": [
+      1125,
+      2436
+    ],
+    "sourceFile": "C0616BEC-1154-460B-978A-B5535B1235F0.png",
+    "sourceTestResult": "build/1.16.3-ui-mini.xcresult",
+    "reviewScreenshotId": "669e1850-8f75-439a-ba4d-d6d4820f5ae3",
+    "md5": "0cc1560cf57f27fb789c70f95786e782",
+    "deliveryState": "COMPLETE"
+  },
+  {
+    "amount": 10,
+    "appVersion": "1.16.3",
+    "build": "33",
+    "correction": "One repeated-edge column added on the right. Original RGB pixels verified unchanged; no resampling.",
+    "device": "iPhone 13 mini",
+    "file": "annual-10.png",
+    "os": "iOS 27.0",
+    "sha256": "30b803fc95e98e1d0a109287d11355c9ed290e0a6406840958e1c3871a087334",
+    "size": [
+      1125,
+      2436
+    ],
+    "sourceFile": "C923320E-6880-482D-B403-7696B43E1228.png",
+    "sourceTestResult": "build/1.16.3-ui-mini.xcresult",
+    "reviewScreenshotId": "478b451e-e512-466f-aa41-136423d86bf2",
+    "md5": "a8019a1f1fec6c4c316f849c42d4a775",
+    "deliveryState": "COMPLETE"
+  },
+  {
+    "amount": 15,
+    "appVersion": "1.16.3",
+    "build": "33",
+    "correction": "One repeated-edge column added on the right. Original RGB pixels verified unchanged; no resampling.",
+    "device": "iPhone 13 mini",
+    "file": "annual-15.png",
+    "os": "iOS 27.0",
+    "sha256": "30b803fc95e98e1d0a109287d11355c9ed290e0a6406840958e1c3871a087334",
+    "size": [
+      1125,
+      2436
+    ],
+    "sourceFile": "454E74CC-A9E9-4DD9-9510-F302731AF3A2.png",
+    "sourceTestResult": "build/1.16.3-ui-mini.xcresult",
+    "reviewScreenshotId": "16bb7695-4894-497a-be15-3a8f1280d23c",
+    "md5": "a8019a1f1fec6c4c316f849c42d4a775",
+    "deliveryState": "COMPLETE"
+  }
+]

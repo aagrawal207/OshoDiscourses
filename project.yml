@@ -77,8 +77,8 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: W2NS9DM63G
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.16.2"
-    CURRENT_PROJECT_VERSION: "32"
+    MARKETING_VERSION: "1.16.3"
+    CURRENT_PROJECT_VERSION: "34"
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG"
@@ -204,6 +204,8 @@ targets:
     platform: iOS
     sources:
       - path: OshoDiscoursesTests
+      - path: OshoDiscourses/TipJar.storekit
+        buildPhase: resources
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
@@ -217,6 +219,8 @@ targets:
     platform: iOS
     sources:
       - path: OshoDiscoursesUITests
+      - path: OshoDiscourses/TipJar.storekit
+        buildPhase: resources
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
