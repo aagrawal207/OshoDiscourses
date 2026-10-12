@@ -25,6 +25,7 @@ struct MiniPlayerView: View {
     }
 
     private var discourseLine: String? {
+        if player.isPlayingNarration { return "Translated narration" }
         guard !player.currentSeries.isEmpty,
               let hash = player.currentTitle.lastIndex(of: "#") else { return nil }
         let number = player.currentTitle[player.currentTitle.index(after: hash)...]

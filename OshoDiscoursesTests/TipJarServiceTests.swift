@@ -539,7 +539,7 @@ private final class TestTipTransaction: TipJarTransaction {
 }
 
 @MainActor
-private final class TipTestGate {
+final class TipTestGate {
     private var isOpen = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 

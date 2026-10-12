@@ -15,6 +15,11 @@ final class AudioPlayerService {
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     var currentTrackId: String?
+    private(set) var currentNarration: NarrationDocument?
+    // Paused and recovering playback still belongs to the synthesized timeline.
+    var isPlayingNarration: Bool { currentNarration != nil }
+    /// Display/catalog identity only; playback offsets always belong to currentTrackId.
+    var currentDiscourseID: String? { currentNarration?.discourseID ?? currentTrackId }
     var currentTitle: String = ""
     var currentSeries: String = ""
     var playbackRate: Float = 1.0
@@ -27,6 +32,15 @@ final class AudioPlayerService {
         let url: URL
         let title: String
         let series: String
+        let narration: NarrationDocument?
+
+        init(id: String, url: URL, title: String, series: String, narration: NarrationDocument? = nil) {
+            self.id = narration.map { AudioPlayerService.narrationTrackID(for: $0.id) } ?? id
+            self.url = url
+            self.title = title
+            self.series = series
+            self.narration = narration
+        }
     }
 
     private(set) var queue: [QueueItem] = []
@@ -34,6 +48,43 @@ final class AudioPlayerService {
 
     var hasNext: Bool { currentIndex < queue.count - 1 }
     var hasPrevious: Bool { currentIndex > 0 }
+
+    nonisolated static func narrationTrackID(for documentID: String) -> String {
+        "narration:" + documentID
+    }
+
+    nonisolated static func isNarrationTrackID(_ id: String) -> Bool {
+        id.hasPrefix("narration:")
+    }
+
+    enum NarrationPlaybackFailure: String, Equatable, Sendable {
+        case incomplete, nonlocalAudio, unavailableAudio, unknownDiscourse, playback
+
+        var label: String {
+            switch self {
+            case .incomplete: return "Finish preparing this narration before playing it."
+            case .nonlocalAudio, .unavailableAudio: return "The prepared narration audio is unavailable. Prepare it again."
+            case .unknownDiscourse: return "The source discourse is unavailable."
+            case .playback: return "The narration could not play. Try preparing it again."
+            }
+        }
+    }
+
+    private(set) var narrationPlaybackFailure: NarrationPlaybackFailure?
+    /// Called when playback reaches the last finished passage of a narration still being prepared.
+    @ObservationIgnored var onNarrationPreviewEnd: (@MainActor (NarrationDocument) -> Void)?
+    @ObservationIgnored private var narrationPreviewAsset: NarrationPreviewAsset?
+
+    /// The joined timeline belongs to exactly one partial document; any other document must not reuse it.
+    private struct NarrationPreviewAsset {
+        let documentID: String
+        let segmentCount: Int
+        let asset: AVAsset
+
+        func matches(_ document: NarrationDocument) -> Bool {
+            documentID == document.id && segmentCount == document.segments.count
+        }
+    }
 
     // MARK: - Noise Reduction / Voice Filter
 
@@ -95,6 +146,7 @@ final class AudioPlayerService {
 
     enum AudioProcessingStatus: Equatable, Sendable {
         case off, waitingForPlayback, preparing, loadingModel, modelReady, active
+        case synthesizedNarration
         case waitingForAudio, bypassing, unsupportedFormat, sourceError
         case setupFailed(AudioMixFailure)
         case modelUnavailable(DeepFilterProcessor.Status)
@@ -111,6 +163,7 @@ final class AudioPlayerService {
         var label: String {
             switch self {
             case .off: return "Original sound"
+            case .synthesizedNarration: return "For original recordings"
             case .waitingForPlayback: return "Ready for playback"
             case .preparing, .loadingModel, .modelReady: return "Getting ready…"
             case .active: return "Enhancement is on"
@@ -124,6 +177,8 @@ final class AudioPlayerService {
         var detail: String {
             switch self {
             case .off: return "Noise reduction and volume boost are off."
+            case .synthesizedNarration:
+                return "These controls apply to original recordings. Your choices will be used when you return to the original audio."
             case .waitingForPlayback: return "Your choices will apply when you play a discourse."
             case .preparing, .loadingModel, .modelReady:
                 return "Getting noise reduction ready. Volume boost starts once cleanup is working."
@@ -143,6 +198,7 @@ final class AudioPlayerService {
         var outcome: String {
             switch self {
             case .off: return "off"
+            case .synthesizedNarration: return "narration_unprocessed"
             case .waitingForPlayback: return "waiting"
             case .preparing: return "preparing"
             case .loadingModel: return "model_loading"
@@ -162,6 +218,10 @@ final class AudioPlayerService {
         didSet {
             guard oldValue != isNoiseReductionEnabled else { return }
             settings?.noiseReduction = isNoiseReductionEnabled
+            guard !isPlayingNarration else {
+                refreshAudioProcessingStatus()
+                return
+            }
             // Each replacement tap owns its model and format; its prepare callback activates them.
             noiseProcessor.setDenoiseEnabled(isNoiseReductionEnabled)
             rebuildAudioMix()
@@ -201,7 +261,7 @@ final class AudioPlayerService {
 
     /// Whether DeepFilterNet lacks confirmed processing by the current tap.
     var isDeepFilterBypassing: Bool {
-        isNoiseReductionEnabled
+        !isPlayingNarration && isNoiseReductionEnabled
             && noiseReductionMode == .deepFilterNet
             && !audioProcessingStatus.isActive
     }
@@ -209,10 +269,11 @@ final class AudioPlayerService {
     /// Describes current availability, independently of the listener's saved boost level.
     /// The tap also gates gain per buffer, including between status polls.
     var isBoostAvailable: Bool {
-        isNoiseReductionEnabled && isAudioProcessingAttached && audioProcessingStatus.isActive
+        !isPlayingNarration && isNoiseReductionEnabled && isAudioProcessingAttached && audioProcessingStatus.isActive
     }
 
     var noiseReductionAccessibilityValue: String {
+        guard !isPlayingNarration else { return AudioProcessingStatus.synthesizedNarration.detail }
         guard isNoiseReductionEnabled else { return "Off" }
         var value = "On, \(noiseReductionMode.displayName), \(denoiseStrength.label) noise reduction"
         if noiseReductionMode == .deepFilterNet {
@@ -263,10 +324,13 @@ final class AudioPlayerService {
     private var readyItemID: ObjectIdentifier?
     // Pending original offsets are explicit restorations; ordinary saved resume is read at readiness.
     private var pendingResumePosition: TimeInterval?
+    private var restoresOriginalEndpoint = false
     @ObservationIgnored private var previousDiagnostics = NoiseReductionProcessor.Diagnostics()
     @ObservationIgnored private var lastProcessedAt: TimeInterval?
     @ObservationIgnored private var monitoringStartedAt: TimeInterval?
     private let settings: UserSettings?
+    private let narrationService: NarrationService?
+    private var narrationStore: NarrationService { narrationService ?? .shared }
     private let originalPlaybackActions: OriginalPlaybackActions?
     private let connectsToSystem: Bool
     private let makePlayer: @MainActor () -> AVPlayer
@@ -308,6 +372,7 @@ final class AudioPlayerService {
     private var interruptionObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
     private var mediaResetObserver: NSObjectProtocol?
+    private var backgroundObserver: NSObjectProtocol?
     private var wasPlayingBeforeInterruption = false
 
     // MARK: - Init
@@ -315,6 +380,7 @@ final class AudioPlayerService {
     init(
         settings: UserSettings? = .shared,
         connectsToSystem: Bool = true,
+        narrationService: NarrationService? = nil,
         originalPlaybackActions: OriginalPlaybackActions? = nil,
         noiseProcessor: NoiseReductionProcessor = NoiseReductionProcessor(),
         makePlayer: @escaping @MainActor () -> AVPlayer = { AVPlayer() },
@@ -327,6 +393,7 @@ final class AudioPlayerService {
     ) {
         self.settings = settings
         self.connectsToSystem = connectsToSystem
+        self.narrationService = narrationService
         self.originalPlaybackActions = originalPlaybackActions
         self.noiseProcessor = noiseProcessor
         self.makePlayer = makePlayer
@@ -361,6 +428,52 @@ final class AudioPlayerService {
         currentIndex = 0
     }
 
+    func returnToOriginal(localURL: URL, id: String, title: String, series: String) {
+        let item = QueueItem(id: id, url: localURL, title: title, series: series)
+        let position = playbackStateService?.getPosition(discourseId: id) ?? 0
+        guard loadAndPlay(item: item, resumeAt: position, restoreOriginalEndpoint: true) else { return }
+        queue = [item]
+        currentIndex = 0
+    }
+
+    func playNarration(_ document: NarrationDocument, url: URL) {
+        guard let source = Catalog.discourseLookup[document.discourseID] else {
+            rejectNarration(.unknownDiscourse)
+            return
+        }
+        let item = QueueItem(
+            id: Self.narrationTrackID(for: document.id), url: url,
+            title: source.discourse.displayTitle, series: source.series.name, narration: document
+        )
+        guard loadAndPlay(item: item) else { return }
+        queue = [item]
+        currentIndex = 0
+    }
+
+    var isPlayingNarrationPreview: Bool { currentNarration.map { !$0.isComplete } ?? false }
+
+    /// Plays the finished passages of a narration that is still being prepared, joined into one timeline.
+    func playNarrationPreview(
+        _ document: NarrationDocument, firstSegmentURL: URL, asset: AVAsset, resumeAt position: TimeInterval?
+    ) {
+        guard let source = Catalog.discourseLookup[document.discourseID] else {
+            rejectNarration(.unknownDiscourse)
+            return
+        }
+        let previous = narrationPreviewAsset
+        narrationPreviewAsset = NarrationPreviewAsset(documentID: document.id, segmentCount: document.segments.count, asset: asset)
+        let item = QueueItem(
+            id: Self.narrationTrackID(for: document.id), url: firstSegmentURL,
+            title: source.discourse.displayTitle, series: source.series.name, narration: document
+        )
+        guard loadAndPlay(item: item, resumeAt: position) else {
+            narrationPreviewAsset = previous
+            return
+        }
+        queue = [item]
+        currentIndex = 0
+    }
+
     /// `resumeAt` overrides the saved position of the starting item, e.g. for a bookmark.
     func playQueue(items: [QueueItem], startIndex: Int = 0, resumeAt position: TimeInterval? = nil) {
         guard !items.isEmpty else { return }
@@ -390,17 +503,28 @@ final class AudioPlayerService {
 
     func resumePlayback() {
         guard currentTrackId != nil, queue.indices.contains(currentIndex) else { return }
+        if let narration = currentNarration, !validateNarration(narration, url: queue[currentIndex].url) {
+            pausePlayback()
+            return
+        }
+        if let narration = currentNarration, !narration.isComplete, readyItemID != nil,
+           currentTime >= narration.duration - 0.05 {
+            // Play at the end of the finished passages continues with newer ones instead of doing nothing.
+            onNarrationPreviewEnd?(narration)
+            return
+        }
         if isPlaying, player?.timeControlStatus == .playing { return }
         wantsPlayback = true
         guard let player, player.status != .failed, player.currentItem?.status != .failed else {
             // An item that failed before its first frame has no position of its own;
             // nil lets the saved position win instead of restarting at 0.
             let position = pendingResumePosition ?? (currentTime > 0 ? currentTime : nil)
+            let restoreOriginalEndpoint = restoresOriginalEndpoint
             if self.player?.status == .failed {
                 detachCurrentItem()
                 self.player = nil
             }
-            loadAndPlay(item: queue[currentIndex], resumeAt: position)
+            loadAndPlay(item: queue[currentIndex], resumeAt: position, restoreOriginalEndpoint: restoreOriginalEndpoint)
             return
         }
         guard player.currentItem?.status == .readyToPlay else { return }
@@ -412,20 +536,21 @@ final class AudioPlayerService {
         }
         if audioMixFailure == .playback {
             audioMixFailure = nil
-            if isNoiseReductionEnabled, !isAudioProcessingAttached, let item = player.currentItem {
+            if !isPlayingNarration, isNoiseReductionEnabled, !isAudioProcessingAttached, let item = player.currentItem {
                 applyAudioMix(to: item)
             }
         }
         // A pending seek can defer play(); its default must carry the requested speed.
         player.defaultRate = playbackRate
         player.play()
-        if let id = currentTrackId, !isPlaying || playSession?.discourseID != id {
+        if !isPlayingNarration, let id = currentTrackId, !isPlaying || playSession?.discourseID != id {
             playSession = PlaySession(
                 discourseID: id, startedAt: Date(), startPosition: currentTime,
                 savedBefore: playbackStateService?.lastSaved(discourseId: id)
             )
         }
         isPlaying = true
+        if isPlayingNarration { narrationPlaybackFailure = nil }
         refreshAudioProcessingStatus()
         updateNowPlayingInfo()
     }
@@ -435,7 +560,9 @@ final class AudioPlayerService {
         player?.pause()
         isPlaying = false
         // A Watch copy resumes from here; autosave alone would lag by up to 10 s.
-        if let id = currentTrackId, currentTime.isFinite, currentTime > 0 {
+        if isPlayingNarration {
+            saveNarrationPosition()
+        } else if let id = currentTrackId, currentTime.isFinite, currentTime > 0 {
             playbackStateService?.savePosition(discourseId: id, position: currentTime, duration: duration)
         }
         resetProcessingEvidence()
@@ -444,7 +571,20 @@ final class AudioPlayerService {
     }
 
     func seek(to time: TimeInterval) {
-        let target = time
+        let target: TimeInterval
+        if let narration = currentNarration {
+            guard time.isFinite else { return }
+            target = max(0, min(time, duration > 0 ? duration : narration.duration))
+            currentTime = target
+            if player?.currentItem?.status != .readyToPlay
+                || readyItemID != (player?.currentItem).map(ObjectIdentifier.init) {
+                pendingResumePosition = target
+                saveNarrationPosition()
+                return
+            }
+        } else {
+            target = time
+        }
         guard let player else {
             // No player after a media-services reset: the next resume reloads at currentTime.
             if currentTrackId != nil, target.isFinite { currentTime = max(0, target) }
@@ -466,6 +606,7 @@ final class AudioPlayerService {
         pendingSeekIssuedAt = Date()
         seekGeneration += 1
         let generation = seekGeneration
+        saveNarrationPosition()
         let cmTime = CMTime(seconds: target, preferredTimescale: 600)
         let itemID = player.currentItem.map(ObjectIdentifier.init)
         player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
@@ -626,6 +767,21 @@ final class AudioPlayerService {
         // second call for a track that's no longer current must not finish the
         // *next* track (double-skip) or re-fire smart delete / sleep timer.
         guard currentTrackId != nil else { return }
+        if let narration = currentNarration, !narration.isComplete {
+            // The end of the finished passages is a pause point, not the end of the narration.
+            currentTime = narration.duration
+            pausePlayback()
+            Self.log.info("outcome=narration_preview_end natural=\(naturally)")
+            onNarrationPreviewEnd?(narration)
+            return
+        }
+        if let narration = currentNarration {
+            stop()
+            narrationStore.savePosition(documentID: narration.id, position: 0)
+            Self.log.info("outcome=narration_finished natural=\(naturally)")
+            if connectsToSystem { SleepTimerService.shared.discourseDidFinish() }
+            return
+        }
         player?.pause()
         let completedTrackId = currentTrackId
         markCurrentAsCompleted()
@@ -697,7 +853,7 @@ final class AudioPlayerService {
     }
 
     private func markCurrentAsCompleted() {
-        guard let trackId = currentTrackId else { return }
+        guard !isPlayingNarration, let trackId = currentTrackId else { return }
         playbackStateService?.markListenedComplete(discourseId: trackId)
         playbackStateService?.clearPosition(discourseId: trackId)
     }
@@ -793,17 +949,23 @@ final class AudioPlayerService {
         settings?.volumeBoost = Double(clamped)
         // Attenuation below unity is the player's job; gain above it is the tap's.
         player?.volume = min(clamped, 1.0)
+        guard !isPlayingNarration else { return }
         // Gain updates preserve the current tap and its streaming history.
         noiseProcessor.setOutputGain(clamped > 1.0 ? clamped : 1.0)
     }
 
     func stop() {
+        saveNarrationPosition()
+        if isPlayingNarration { clearPositionHistory() }
         wantsPlayback = false
         detachCurrentItem()
         isPlaying = false
         currentTime = 0
         duration = 0
         currentTrackId = nil
+        currentNarration = nil
+        narrationPreviewAsset = nil
+        playSession = nil
         currentTitle = ""
         currentSeries = ""
         pendingSeekTarget = nil
@@ -818,13 +980,31 @@ final class AudioPlayerService {
     // MARK: - Private: Playback
 
     @discardableResult
-    private func loadAndPlay(item: QueueItem, resumeAt position: TimeInterval? = nil) -> Bool {
-        // Outgoing identity belongs to the loaded item, even if a caller has replaced its queue.
-        if let outgoingId = currentTrackId, currentTime > 0 {
-            playbackStateService?.savePosition(discourseId: outgoingId, position: currentTime, duration: duration)
+    private func loadAndPlay(
+        item: QueueItem, resumeAt position: TimeInterval? = nil, restoreOriginalEndpoint: Bool = false
+    ) -> Bool {
+        if let narration = item.narration {
+            guard validateNarration(narration, url: item.url) else { return false }
+        } else if Self.isNarrationTrackID(item.id) {
+            rejectNarration(.incomplete)
+            return false
         }
+        let previewAsset = item.narration.flatMap { document in
+            narrationPreviewAsset.flatMap { !document.isComplete && $0.matches(document) ? $0 : nil }
+        }
+        narrationPreviewAsset = previewAsset
+        // Outgoing identity belongs to the loaded item, even if a caller has replaced its queue.
+        if isPlayingNarration {
+            saveNarrationPosition()
+        } else if let outgoingId = currentTrackId, currentTime > 0 {
+            playbackStateService?.savePosition(discourseId: outgoingId, position: currentTime, duration: duration)
+            if item.narration != nil { playbackStateService?.onProgressSaved?() }
+        }
+        if isPlayingNarration || item.narration != nil { clearPositionHistory() }
         detachCurrentItem()
 
+        currentNarration = item.narration
+        playSession = nil
         currentTrackId = item.id
         currentTitle = item.title
         currentSeries = item.series
@@ -837,10 +1017,18 @@ final class AudioPlayerService {
         didManuallySeekNearEnd = false
         didTriggerPreemptiveDownload = false
         pendingResumePosition = position
+        restoresOriginalEndpoint = restoreOriginalEndpoint && item.narration == nil
+        if let narration = item.narration {
+            let saved = position ?? narrationStore.position(for: narration.id)
+            pendingResumePosition = saved.isFinite && saved >= 0 && saved < narration.duration ? saved : 0
+            currentTime = pendingResumePosition ?? 0
+            duration = narration.duration
+        }
+        narrationPlaybackFailure = nil
         wantsPlayback = true
         isPlaying = false
 
-        let playerItem = AVPlayerItem(url: item.url)
+        let playerItem = previewAsset.map { AVPlayerItem(asset: $0.asset) } ?? AVPlayerItem(url: item.url)
         let observedItemID = ObjectIdentifier(playerItem)
         let generation = playbackGeneration
         statusObservation = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
@@ -870,21 +1058,27 @@ final class AudioPlayerService {
             pausePlayback()
             removeAudioMix()
             audioMixFailure = .playback
+            if isPlayingNarration {
+                narrationPlaybackFailure = .playback
+                Self.log.error("outcome=narration_playback_failed")
+            }
             refreshAudioProcessingStatus()
             return
         }
         guard item.status == .readyToPlay, readyItemID != itemID else { return }
         readyItemID = itemID
-        duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
-        let restoresExplicitPosition = pendingResumePosition != nil
-        let saved = pendingResumePosition ?? playbackStateService?.getPosition(discourseId: trackID)
+        duration = item.duration.seconds.isFinite ? item.duration.seconds : currentNarration?.duration ?? 0
+        let restoresExplicitPosition = !isPlayingNarration && pendingResumePosition != nil
+        let saved = pendingResumePosition ?? currentNarration.map { narrationStore.position(for: $0.id) }
+            ?? playbackStateService?.getPosition(discourseId: trackID)
         pendingResumePosition = nil
         if restoresExplicitPosition, let saved, saved.isFinite, duration > 0 {
-            // Exactly the end would finish at once: completion, Smart Delete, auto-advance.
-            let position = max(0, min(saved, duration - 1))
+            // Returning from narration preserves the whole original timeline; bookmarks avoid finishing on load.
+            let limit = restoresOriginalEndpoint ? duration : duration - 1
+            let position = max(0, min(saved, limit))
             seek(to: position)
             Self.log.info("outcome=original_position_restored clamped=\(position != saved)")
-        } else if let saved, saved.isFinite, saved > 0, saved < duration - 5 {
+        } else if let saved, saved.isFinite, saved > 0, saved < (isPlayingNarration ? duration : duration - 5) {
             seek(to: saved)
         }
         setupTimeObserver()
@@ -892,9 +1086,64 @@ final class AudioPlayerService {
         if wantsPlayback {
             resumePlayback()
             if isPlaying {
-                playbackStateService?.recordPlay(discourseId: trackID)
+                if isPlayingNarration {
+                    Self.log.info("outcome=narration_started")
+                } else {
+                    playbackStateService?.recordPlay(discourseId: trackID)
+                }
             }
         }
+    }
+
+    func saveNarrationPosition() {
+        guard let narration = currentNarration else { return }
+        let position = pendingResumePosition ?? currentTime
+        guard position.isFinite else { return }
+        narrationStore.savePosition(documentID: narration.id, position: max(0, min(position, narration.duration)))
+    }
+
+    private func validateNarration(_ document: NarrationDocument, url: URL) -> Bool {
+        guard Catalog.discourseLookup[document.discourseID] != nil else {
+            rejectNarration(.unknownDiscourse)
+            return false
+        }
+        guard !document.id.isEmpty, !document.segments.isEmpty,
+              document.segments.enumerated().allSatisfy({
+                  $0.element.index == $0.offset && $0.element.duration.isFinite && $0.element.duration > 0
+              }) else {
+            rejectNarration(.incomplete)
+            return false
+        }
+        guard url.isFileURL else {
+            rejectNarration(.nonlocalAudio)
+            return false
+        }
+        if !document.isComplete {
+            // Finished passages play from their joined timeline; the service vouches for their files.
+            guard narrationPreviewAsset?.matches(document) == true, document.audioFileName == nil,
+                  document.duration.isFinite, document.duration > 0,
+                  narrationStore.playablePrefix(of: document.id)?.document.segments.count ?? 0 >= document.segments.count else {
+                rejectNarration(.incomplete)
+                return false
+            }
+            return true
+        }
+        // A matching filename alone can select another rendition's audio or stale metadata.
+        guard let preparedURL = narrationStore.audioURL(for: document),
+              preparedURL.standardizedFileURL == url.standardizedFileURL,
+              document.audioFileName == url.lastPathComponent,
+              let attributes = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+              attributes.isRegularFile == true, (attributes.fileSize ?? 0) > 0,
+              FileManager.default.isReadableFile(atPath: url.path) else {
+            rejectNarration(.unavailableAudio)
+            return false
+        }
+        return true
+    }
+
+    private func rejectNarration(_ failure: NarrationPlaybackFailure) {
+        narrationPlaybackFailure = failure
+        Self.log.error("outcome=narration_rejected reason=\(failure.rawValue, privacy: .public)")
     }
 
     private func detachCurrentItem() {
@@ -907,6 +1156,7 @@ final class AudioPlayerService {
         removeAudioMix()
         readyItemID = nil
         pendingResumePosition = nil
+        restoresOriginalEndpoint = false
         pendingSeekTarget = nil
         pendingSeekIssuedAt = nil
         seekGeneration &+= 1
@@ -933,6 +1183,11 @@ final class AudioPlayerService {
         observeInterruptions()
         observeRouteChanges()
         observeMediaServicesReset()
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handleBackgroundEntry() }
+        }
     }
 
     /// Activates the audio session. Called right before playback and whenever we
@@ -957,6 +1212,10 @@ final class AudioPlayerService {
         guard currentTrackId != nil else { return }
         activateSession()
         updateNowPlayingInfo()
+    }
+
+    func handleBackgroundEntry() {
+        saveNarrationPosition()
     }
 
     private func observeInterruptions() {
@@ -985,6 +1244,7 @@ final class AudioPlayerService {
             // iOS has already paused us. Remember whether we were playing so we
             // can resume if the system says it's okay.
             wasPlayingBeforeInterruption = isPlaying
+            saveNarrationPosition()
             wantsPlayback = false
             isPlaying = false
             resetProcessingEvidence()
@@ -1051,8 +1311,11 @@ final class AudioPlayerService {
     func handleMediaServicesReset() {
         let resume = isPlaying || (wantsPlayback && pendingResumePosition != nil)
         let position = pendingResumePosition ?? (currentTime > 0 ? currentTime : nil)
+        let restoreOriginalEndpoint = restoresOriginalEndpoint
+        saveNarrationPosition()
         if let position { currentTime = position }
         detachCurrentItem()
+        restoresOriginalEndpoint = restoreOriginalEndpoint
         player = nil
         isPlaying = false
         wantsPlayback = false
@@ -1063,7 +1326,7 @@ final class AudioPlayerService {
         }
         Self.log.info("outcome=media_services_reset")
         if resume, currentTrackId != nil, queue.indices.contains(currentIndex) {
-            loadAndPlay(item: queue[currentIndex], resumeAt: position)
+            loadAndPlay(item: queue[currentIndex], resumeAt: position, restoreOriginalEndpoint: restoreOriginalEndpoint)
         }
         refreshAudioProcessingStatus()
         updateNowPlayingInfo()
@@ -1221,6 +1484,10 @@ final class AudioPlayerService {
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPMediaItemPropertyTitle] = currentTitle
         info[MPMediaItemPropertyArtist] = "Osho"
+        if let narration = currentNarration {
+            let language = NarrationLanguageSupport.displayName(for: narration.selection.targetLanguage)
+            info[MPMediaItemPropertyArtist] = "Osho · \(language) synthesized narration"
+        }
         info[MPMediaItemPropertyAlbumTitle] = currentSeries
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
@@ -1267,7 +1534,7 @@ final class AudioPlayerService {
                 if seconds.isFinite {
                     self.currentTime = seconds
                     // Pre-emptive smart download: 20 seconds before end
-                    if !self.didTriggerPreemptiveDownload,
+                    if !self.isPlayingNarration, !self.didTriggerPreemptiveDownload,
                        self.duration > 30,
                        seconds >= self.duration - 20,
                        let trackId = self.currentTrackId {
@@ -1322,7 +1589,7 @@ final class AudioPlayerService {
 
     private func applyAudioMix(to item: AVPlayerItem) {
         removeAudioMix()
-        guard isNoiseReductionEnabled else {
+        guard !isPlayingNarration, isNoiseReductionEnabled else {
             refreshAudioProcessingStatus()
             return
         }
@@ -1363,7 +1630,7 @@ final class AudioPlayerService {
     }
 
     private func rebuildAudioMix() {
-        if let item = player?.currentItem, isNoiseReductionEnabled {
+        if let item = player?.currentItem, !isPlayingNarration, isNoiseReductionEnabled {
             applyAudioMix(to: item)
         } else {
             removeAudioMix()
@@ -1386,7 +1653,7 @@ final class AudioPlayerService {
     }
 
     private func isCurrentAudioMix(generation: UInt64, itemID: ObjectIdentifier) -> Bool {
-        isNoiseReductionEnabled && currentTrackId != nil
+        !isPlayingNarration && isNoiseReductionEnabled && currentTrackId != nil
             && generation == audioMixGeneration
             && (player?.currentItem).map(ObjectIdentifier.init) == itemID
     }
@@ -1404,8 +1671,12 @@ final class AudioPlayerService {
     }
 
     private func resetProcessingEvidence() {
-        let snapshot = noiseProcessor.diagnosticsSnapshot()
-        previousDiagnostics = snapshot.tapGeneration == audioMixGeneration ? snapshot : .init()
+        if isPlayingNarration {
+            previousDiagnostics = .init()
+        } else {
+            let snapshot = noiseProcessor.diagnosticsSnapshot()
+            previousDiagnostics = snapshot.tapGeneration == audioMixGeneration ? snapshot : .init()
+        }
         lastProcessedAt = nil
         monitoringStartedAt = nil
     }
@@ -1413,6 +1684,11 @@ final class AudioPlayerService {
     /// Model readiness alone does not prove audio processing. Sample recent
     /// buffer outcomes on the control thread after mix attachment.
     func refreshAudioProcessingStatus() {
+        if isPlayingNarration {
+            deepFilterStatus = .idle
+            setProcessingStatus(audioMixFailure == .playback ? .setupFailed(.playback) : .synthesizedNarration)
+            return
+        }
         guard isNoiseReductionEnabled else {
             deepFilterStatus = .idle
             setProcessingStatus(.off)
@@ -1538,6 +1814,7 @@ final class AudioPlayerService {
     }
 
     private func configureNoiseProcessor() {
+        guard !isPlayingNarration else { return }
         noiseProcessor.configure(
             mode: noiseReductionMode,
             wetMix: denoiseStrength.wetMix,

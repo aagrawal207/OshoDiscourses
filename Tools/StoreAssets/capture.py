@@ -24,13 +24,16 @@ def run(*args, check=True):
 
 
 class Capture:
-    def __init__(self, udid, output, replace=False):
+    def __init__(self, udid, output, replace=False, expected_device_name=None):
         self.udid = udid
         self.output = Path(output)
         self.replace = replace
         devices = json.loads(run("xcrun", "simctl", "list", "devices", "--json"))["devices"]
         self.device = next(d for group in devices.values() for d in group if d["udid"] == udid)
-        if not self.device["name"].startswith("Osho Store "):
+        if expected_device_name is not None:
+            if self.device["name"] != expected_device_name or not expected_device_name.startswith("Osho "):
+                raise ValueError("The simulator does not match the task-owned target")
+        elif not self.device["name"].startswith("Osho Store "):
             raise ValueError("Only dedicated Osho Store simulators can be used")
         app = Path(run("xcrun", "simctl", "get_app_container", udid, BUNDLE, "app").strip())
         with (app / "Info.plist").open("rb") as source:

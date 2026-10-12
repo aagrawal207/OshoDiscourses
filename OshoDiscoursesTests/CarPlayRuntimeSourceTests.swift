@@ -88,6 +88,23 @@ extension CarPlayTests {
             #expect(fixture.source.playbackRate == 1.75)
             #expect(fixture.player.playbackRate == 1.75)
         }
+
+        @Test func syntheticTimelineDoesNotPublishProgressOrAllowOriginalBookmarks() {
+            let fixture = makeFixture()
+            fixture.player.currentTrackId = AudioPlayerService.narrationTrackID(for: "synthetic-test")
+            fixture.player.currentTitle = "Synthetic narration"
+            fixture.player.currentTime = 45
+            fixture.player.duration = 100
+            let library = CompanionLibrary(downloads: fixture.downloads, playbackState: fixture.playbackState,
+                                           bookmarks: .shared, player: fixture.player)
+            #expect(library.nowPlaying() == nil)
+            #expect(!fixture.source.canBookmarkCurrentItem)
+            #expect(!fixture.source.addBookmarkAtCurrentTime())
+            #expect(fixture.source.queue.isEmpty)
+            #expect(fixture.source.currentQueueIndex == -1)
+            fixture.source.setRate(1.25)
+            #expect(fixture.player.playbackRate == 1.25)
+        }
     }
 }
 #endif

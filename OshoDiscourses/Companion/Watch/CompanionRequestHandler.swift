@@ -30,8 +30,12 @@ final class WatchRuntimePlayback: WatchPlaybackSurface {
 
     private var player: AudioPlayerService { runtime.audioPlayer }
 
-    var currentDiscourseID: String? { player.currentTrackId }
-    var hasNext: Bool { player.hasNext }
+    var currentDiscourseID: String? {
+        guard !player.isPlayingNarration, let id = player.currentTrackId,
+              !AudioPlayerService.isNarrationTrackID(id) else { return nil }
+        return id
+    }
+    var hasNext: Bool { currentDiscourseID != nil && player.hasNext }
     var accentName: String? { UserSettings.shared.effectiveAccentTheme.rawValue }
     func nowPlaying() -> CompanionNowPlaying? {
         guard var nowPlaying = runtime.library.nowPlaying() else { return nil }
@@ -186,6 +190,7 @@ final class CompanionRequestHandler {
         }
 
         guard let current = surface.currentDiscourseID else { throw .nothingLoaded }
+        guard !AudioPlayerService.isNarrationTrackID(current) else { throw .nothingLoaded }
         guard let expected = request.expectedDiscourseID, expected == current else { throw .staleDiscourse }
         switch request.action {
         case .setPlaying(let playing): surface.setPlaying(playing)

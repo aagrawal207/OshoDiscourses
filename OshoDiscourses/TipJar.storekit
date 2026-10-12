@@ -130,7 +130,84 @@
       }
     ]
   },
-  "subscriptionGroups": [],
+  "subscriptionGroups": [
+    {
+      "id": "22466252",
+      "localizations": [
+        {
+          "description": "",
+          "displayName": "Yearly Support",
+          "locale": "en_US"
+        }
+      ],
+      "name": "Optional Yearly Support",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "5.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6F1A2B35",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Optional support for ongoing app development.",
+              "displayName": "Small yearly support",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agraabhi.oshodiscourses.support.annual5",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Small yearly support",
+          "subscriptionGroupID": "22466252",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "10.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6F1A2B36",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Optional support for ongoing app development.",
+              "displayName": "Generous yearly support",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agraabhi.oshodiscourses.support.annual10",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Generous yearly support",
+          "subscriptionGroupID": "22466252",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "15.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6F1A2B37",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Optional support for ongoing app development.",
+              "displayName": "Extra yearly support",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agraabhi.oshodiscourses.support.annual15",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Extra yearly support",
+          "subscriptionGroupID": "22466252",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
   "version": {
     "major": 3,
     "minor": 0

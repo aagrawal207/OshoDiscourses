@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlayerView: View {
     @Environment(AudioPlayerService.self) private var player
+    @Environment(DownloadService.self) private var downloads
     /// Optional so previews and any host without a window model still work.
     @Environment(AppNavigation.self) private var navigation: AppNavigation?
     @Environment(\.dismiss) private var dismiss
@@ -14,6 +15,10 @@ struct PlayerView: View {
     @State private var showAudioEnhancement = false
     @State private var showQueue = false
     @State private var showTranscript = false
+    #if TRANSLATED_NARRATION
+    @State private var narrationDiscourse: CatalogDiscourse?
+    @State private var showNarrationRecovery = false
+    #endif
     /// The wide player's reading pane; the listener's choice persists.
     @AppStorage("player.transcriptPaneVisible") private var showsTranscriptPane = true
     private var sleepTimer = SleepTimerService.shared
@@ -39,7 +44,10 @@ struct PlayerView: View {
     private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
 
     private var hasOpenSheet: Bool {
-        showQueue || showAudioEnhancement || showTranscript || showBookmarkSheet
+        #if TRANSLATED_NARRATION
+        if narrationDiscourse != nil || showNarrationRecovery { return true }
+        #endif
+        return showQueue || showAudioEnhancement || showTranscript || showBookmarkSheet
     }
 
     /// How the player uses the space it was given. Phones and narrow windows
@@ -142,15 +150,42 @@ struct PlayerView: View {
             .presentationSizing(.page)
         }
         .sheet(isPresented: $showTranscript) {
-            if let id = player.currentTrackId {
+            if !player.isPlayingNarration, let id = player.currentTrackId {
                 TranscriptView(discourseID: id)
                     .environment(player)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
         }
+        #if TRANSLATED_NARRATION
+        .sheet(item: $narrationDiscourse) { discourse in
+            if #available(macCatalyst 26.0, *) {
+                TranslatedNarrationView(discourseID: discourse.id)
+                    .id(discourse.id)
+                    .environment(player)
+                    .environment(downloads)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: $showNarrationRecovery) {
+            NavigationStack {
+                TranslatedNarrationLibraryView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showNarrationRecovery = false }
+                                .keyboardShortcut(.cancelAction)
+                        }
+                    }
+            }
+            .environment(player)
+            .environment(downloads)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        #endif
         .sheet(isPresented: $showBookmarkSheet) {
-            if let id = player.currentTrackId {
+            if !player.isPlayingNarration, let id = player.currentTrackId {
                 AddBookmarkSheet(
                     timestamp: bookmarkTimestamp,
                     discourseID: id,
@@ -160,6 +195,14 @@ struct PlayerView: View {
                     showBookmarkAdded = true
                 }
                 .presentationDetents([.medium])
+            }
+        }
+        .onChange(of: player.isPlayingNarration) { _, isNarration in
+            if isNarration {
+                showTranscript = false
+                showBookmarkSheet = false
+                showAudioEnhancement = false
+                showBookmarkAdded = false
             }
         }
         .overlay(alignment: .top) {
@@ -252,13 +295,20 @@ struct PlayerView: View {
                 bottomControls(arrangement: arrangement)
                     .padding(.top, tight ? 16 : 32)
 
-                if player.isNoiseReductionEnabled, player.audioProcessingStatus.isIssue {
+                if !player.isPlayingNarration, player.isNoiseReductionEnabled, player.audioProcessingStatus.isIssue {
                     Text(player.audioProcessingStatus.label)
                         .font(.caption)
                         .foregroundStyle(.orange)
                         .multilineTextAlignment(.center)
                         .padding(.top, 8)
                 }
+
+                #if TRANSLATED_NARRATION
+                if #available(macCatalyst 26.0, *), let failure = player.narrationPlaybackFailure {
+                    NarrationPlaybackFailureBanner(failure: failure) { showNarrationRecovery = true }
+                        .padding(.top, 8)
+                }
+                #endif
 
                 Spacer()
             }
@@ -269,7 +319,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var transcriptPane: some View {
-        if let id = player.currentTrackId {
+        if !player.isPlayingNarration, let id = player.currentTrackId {
             TranscriptView(discourseID: id, presentation: .embedded)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityElement(children: .contain)
@@ -281,6 +331,12 @@ struct PlayerView: View {
     private func consumeTranscriptRequest() {
         guard let navigation, navigation.wantsTranscript else { return }
         navigation.wantsTranscript = false
+        #if TRANSLATED_NARRATION
+        if player.isPlayingNarration {
+            openNarration()
+            return
+        }
+        #endif
         guard hasTranscript else { return }
         if paneFits { showsTranscriptPane = true } else { showTranscript = true }
     }
@@ -292,7 +348,7 @@ struct PlayerView: View {
     private func consumeBookmarkRequest() {
         guard let navigation, let draft = navigation.pendingBookmark else { return }
         navigation.pendingBookmark = nil
-        guard draft.discourseID == player.currentTrackId else { return }
+        guard !player.isPlayingNarration, draft.discourseID == player.currentTrackId else { return }
         bookmarkTimestamp = draft.timestamp
         showBookmarkSheet = true
     }
@@ -328,18 +384,27 @@ struct PlayerView: View {
 
     /// oshoworld.com publishes a transcript for the playing discourse.
     private var hasTranscript: Bool {
-        guard let id = player.currentTrackId else { return false }
+        guard !player.isPlayingNarration, let id = player.currentTrackId else { return false }
         return transcripts.availability(for: id) != .unavailable
     }
 
     /// The wide player opens its reading pane; elsewhere the transcript sheet.
     private func openTranscript() {
+        guard !player.isPlayingNarration else { return }
         if paneFits {
             showsTranscriptPane.toggle()
         } else {
             showTranscript = true
         }
     }
+
+    #if TRANSLATED_NARRATION
+    private func openNarration() {
+        guard #available(macCatalyst 26.0, *) else { return }
+        // Capture the source before presentation; playback can change in another window.
+        narrationDiscourse = currentEntry?.discourse
+    }
+    #endif
 
     // MARK: - Top Bar (AirPlay + Up Next)
 
@@ -368,6 +433,23 @@ struct PlayerView: View {
 
             Spacer()
 
+            #if TRANSLATED_NARRATION
+            if #available(macCatalyst 26.0, *) {
+                Button(action: openNarration) {
+                    Image(systemName: "globe")
+                        .font(.title3)
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Translate")
+                .accessibilityHint("Prepares or plays a translation in a synthetic voice")
+                .accessibilityIdentifier("player.translate")
+                .disabled(currentEntry == nil)
+            }
+            #endif
+
             Button {
                 showQueue = true
             } label: {
@@ -391,7 +473,7 @@ struct PlayerView: View {
     /// by scanning 259 series for a name match, so the discourse number and the
     /// series metadata both come straight from the catalog.
     private var currentEntry: (discourse: CatalogDiscourse, series: SeriesInfo)? {
-        guard let id = player.currentTrackId else { return nil }
+        guard let id = player.currentDiscourseID else { return nil }
         return Catalog.discourseLookup[id]
     }
 
@@ -420,6 +502,14 @@ struct PlayerView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
+            #if TRANSLATED_NARRATION
+            if let narration = player.currentNarration {
+                Text("\(NarrationLanguageSupport.displayName(for: narration.selection.targetLanguage)) · Synthetic voice")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            #endif
         }
         .frame(maxWidth: .infinity)
     }
@@ -623,15 +713,20 @@ struct PlayerView: View {
             }
             .accessibilityLabel("DeNoise")
             .accessibilityValue(player.noiseReductionAccessibilityValue)
-            .accessibilityHint("Adjusts noise reduction, quiet speech and volume boost")
+            .accessibilityHint(player.isPlayingNarration
+                                ? "DeNoise applies to original recordings"
+                                : "Adjusts noise reduction, quiet speech and volume boost")
             .accessibilityIdentifier("player.audioEnhancement")
+            .disabled(player.isPlayingNarration)
 
             playerControlButton(icon: "doc.plaintext", label: "Transcript", isActive: arrangement != .single) {
                 openTranscript()
             }
             .accessibilityValue(paneFits ? (arrangement != .single ? "Shown" : "Hidden") : "")
             .accessibilityLabel("Transcript")
-            .accessibilityHint(hasTranscript ? "Reads along with the playing audio" : "No transcript for this discourse")
+            .accessibilityHint(player.isPlayingNarration
+                                ? "Use Read Along for the translated narration"
+                                : (hasTranscript ? "Reads along with the playing audio" : "No transcript for this discourse"))
             .accessibilityIdentifier("player.transcript")
             .disabled(!hasTranscript)
             .opacity(hasTranscript ? 1 : 0.35)
@@ -649,19 +744,37 @@ struct PlayerView: View {
             .accessibilityLabel("Sleep timer")
             .accessibilityValue(sleepTimer.isActive ? sleepTimer.statusLabel : "Off")
 
-            playerControlButton(
-                icon: "bookmark",
-                label: "Bookmark",
-                isActive: false
-            ) {
-                bookmarkTimestamp = player.currentTime
-                showBookmarkSheet = true
+            #if TRANSLATED_NARRATION
+            if player.isPlayingNarration {
+                if #available(macCatalyst 26.0, *) {
+                    playerControlButton(icon: "doc.plaintext", label: "Read Along", isActive: false, action: openNarration)
+                        .accessibilityLabel("Read translated narration")
+                        .accessibilityIdentifier("player.readNarration")
+                }
+            } else {
+                bookmarkControl
             }
-            .accessibilityLabel("Add bookmark")
-            .accessibilityHint("Saves the current position")
+            #else
+            bookmarkControl
+            #endif
         }
         // Short control labels must fit five columns on narrow screens.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    private var bookmarkControl: some View {
+        playerControlButton(
+            icon: "bookmark",
+            label: "Bookmark",
+            isActive: false
+        ) {
+            guard !player.isPlayingNarration else { return }
+            bookmarkTimestamp = player.currentTime
+            showBookmarkSheet = true
+        }
+        .accessibilityLabel("Add bookmark")
+        .accessibilityHint("Saves the current position")
+        .disabled(player.isPlayingNarration)
     }
 
     private func playerControlButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {

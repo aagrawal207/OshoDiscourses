@@ -144,7 +144,8 @@ final class CompanionLibrary {
     // MARK: Now Playing
 
     func nowPlaying() -> CompanionNowPlaying? {
-        guard let id = player.currentTrackId else { return nil }
+        guard !player.isPlayingNarration, let id = player.currentTrackId,
+              !AudioPlayerService.isNarrationTrackID(id) else { return nil }
         let sleep = SleepTimerService.shared
         return CompanionNowPlaying(
             discourseID: id, title: player.currentTitle, series: player.currentSeries,

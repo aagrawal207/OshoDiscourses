@@ -11,13 +11,13 @@ struct AudioEnhancementView: View {
     var body: some View {
         Form {
             enableSection
-            modeSection
+            modeSection.disabled(player.isPlayingNarration)
             if player.isNoiseReductionEnabled {
-                reductionSection
+                reductionSection.disabled(player.isPlayingNarration)
             }
-            boostSection
+            boostSection.disabled(player.isPlayingNarration)
             if player.isNoiseReductionEnabled, player.noiseReductionMode == .deepFilterNet {
-                voiceSection
+                voiceSection.disabled(player.isPlayingNarration)
             }
         }
         .reservesMiniPlayerSpace()
@@ -33,6 +33,7 @@ struct AudioEnhancementView: View {
                 Toggle("Enable DeNoise", isOn: $player.isNoiseReductionEnabled)
                     .font(.headline)
                     .accessibilityIdentifier("audioEnhancement.enabled")
+                    .disabled(player.isPlayingNarration)
                 Text("Reduce recording noise and make quiet audio easier to hear.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -48,7 +49,7 @@ struct AudioEnhancementView: View {
                 }
                     .font(.caption.weight(.medium))
                     .accessibilityIdentifier("audioEnhancement.status")
-                if player.audioProcessingStatus.isIssue {
+                if player.audioProcessingStatus.isIssue || player.isPlayingNarration {
                     Text(player.audioProcessingStatus.detail)
                 }
             }
@@ -147,7 +148,7 @@ struct AudioEnhancementView: View {
             .accessibilityIdentifier("audioEnhancement.fineTune")
             .accessibilityValue(player.voiceFocusPreset.displayName)
         } footer: {
-            Text("Your choices apply to all discourses. Results vary by recording.")
+            Text("Your choices apply to original recordings. Results vary by recording.")
                 .accessibilityIdentifier("audioEnhancement.footer")
         }
     }
@@ -159,6 +160,7 @@ struct AudioEnhancementView: View {
     }
 
     private var boostExplanation: String {
+        if player.isPlayingNarration { return "Volume boost applies to original recordings." }
         if !player.isNoiseReductionEnabled {
             return "Turn on DeNoise to use volume boost. It raises the volume after reducing noise."
         }
@@ -224,6 +226,7 @@ private struct AudioEnhancementVoiceView: View {
         .reservesMiniPlayerSpace()
         .navigationTitle("Quiet Speech")
         .navigationBarTitleDisplayMode(.inline)
+        .disabled(player.isPlayingNarration)
     }
 }
 
@@ -251,6 +254,7 @@ private struct AudioEnhancementModeView: View {
         .reservesMiniPlayerSpace()
         .navigationTitle("Listening Mode")
         .navigationBarTitleDisplayMode(.inline)
+        .disabled(player.isPlayingNarration)
     }
 
     private func modeButton(_ mode: NoiseReductionMode) -> some View {

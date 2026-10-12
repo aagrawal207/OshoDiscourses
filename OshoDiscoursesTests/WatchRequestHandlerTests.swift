@@ -40,6 +40,18 @@ import Testing
         #expect(nan.errorMessage != nil)
     }
 
+    @Test func syntheticTimelineCannotBeControlledAsAnOriginalDiscourse() {
+        let id = AudioPlayerService.narrationTrackID(for: "synthetic-test")
+        surface.currentDiscourseID = id
+        let handler = handler()
+        let actions: [CompanionAction] = [.setPlaying(true), .skipForward, .skipBackward, .nextDiscourse, .previousDiscourse, .setRate(1.5)]
+        for action in actions {
+            let response = handler.handle(WatchFixture.request(action, expected: id))
+            #expect(response.errorMessage == CompanionRequestHandler.Failure.nothingLoaded.message)
+        }
+        #expect(surface.calls.isEmpty)
+    }
+
     @Test func nextAtTheEndOfTheSeriesIsRejected() {
         surface.currentDiscourseID = "a"
         surface.hasNext = false

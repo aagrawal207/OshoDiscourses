@@ -50,6 +50,7 @@ final class CarPlayNowPlayingControls: NSObject, CPNowPlayingTemplateObserver {
     func update() {
         guard isConnected, let source else { return }
         CPNowPlayingTemplate.shared.isUpNextButtonEnabled = source.queue.count > 1
+        if buttons.count == 2 { buttons[1].isEnabled = source.canBookmarkCurrentItem }
         if confirmedDiscourseID != nil, confirmedDiscourseID != source.currentDiscourseID {
             confirmedDiscourseID = nil
             rebuildButtons()
@@ -116,6 +117,7 @@ final class CarPlayNowPlayingControls: NSObject, CPNowPlayingTemplateObserver {
             }
         }
         bookmark.isSelected = confirmed
+        bookmark.isEnabled = source?.canBookmarkCurrentItem ?? false
         bookmark.accessibilityLabel = confirmed ? "Bookmark added" : "Add bookmark"
         buttons = [rate, bookmark]
         CPNowPlayingTemplate.shared.updateNowPlayingButtons(buttons)

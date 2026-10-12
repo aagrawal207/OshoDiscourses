@@ -103,7 +103,7 @@ struct AppCommands: Commands {
 
             Button("Add Bookmark…") { navigation?.addBookmark() }
                 .keyboardShortcut("b")
-                .disabled(!hasTrack || navigation == nil)
+                .disabled(!state.canAddBookmark || navigation == nil)
             Button("Show Transcript") { navigation?.showTranscript() }
                 .keyboardShortcut("t")
                 .disabled(!state.canShowTranscript || navigation == nil)

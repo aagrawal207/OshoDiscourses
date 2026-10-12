@@ -52,6 +52,7 @@ struct TranscriptView: View {
     /// rebuild it on every playback tick.
     @State private var selectionText = ""
     @State private var textSelection: TranscriptTextSelectionView.Item?
+    @State private var screenAwakeOwner = UUID()
 
     /// One piece of a paragraph as shown on screen. Long paragraphs are split
     /// at sentence boundaries (`TranscriptBlocks`); most are a single block.
@@ -147,7 +148,7 @@ struct TranscriptView: View {
         // timer would dim the page mid-paragraph. Held only while this
         // discourse is actually playing; pausing or closing hands it back.
         .onAppear { updateIdleTimer() }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear { ScreenAwakeService.shared.setAwake(false, owner: screenAwakeOwner) }
         .onChange(of: player.isPlaying) { _, _ in updateIdleTimer() }
         .onChange(of: player.currentTrackId) { _, _ in updateIdleTimer() }
         .onChange(of: scenePhase) { _, _ in updateIdleTimer() }
@@ -1031,7 +1032,7 @@ struct TranscriptView: View {
     // MARK: - Helpers
 
     private func updateIdleTimer() {
-        UIApplication.shared.isIdleTimerDisabled = isPlayingThis && player.isPlaying && scenePhase == .active
+        ScreenAwakeService.shared.setAwake(isPlayingThis && player.isPlaying && scenePhase == .active, owner: screenAwakeOwner)
     }
 
     private func showToast(_ text: String, seconds: Double = 2) {

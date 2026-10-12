@@ -59,8 +59,15 @@ final class AppNavigation {
     private var player: AudioPlayerService { AppRuntime.shared.audioPlayer }
 
     var hasTrack: Bool { player.currentTrackId != nil }
+    var canAddBookmark: Bool { hasTrack && !player.isPlayingNarration }
 
     var canShowTranscript: Bool {
+        if player.isPlayingNarration {
+            #if TRANSLATED_NARRATION
+            if #available(macCatalyst 26.0, *) { return true }
+            #endif
+            return false
+        }
         guard let id = player.currentTrackId else { return false }
         return TranscriptService.shared.availability(for: id) != .unavailable
     }
@@ -90,7 +97,7 @@ final class AppNavigation {
     }
 
     func addBookmark() {
-        guard let id = player.currentTrackId else { return }
+        guard !player.isPlayingNarration, let id = player.currentTrackId else { return }
         pendingBookmark = BookmarkDraft(
             discourseID: id,
             seriesName: player.currentSeries,
@@ -115,6 +122,7 @@ struct CommandState: Equatable {
     var rate: Float = 1
     var sleepMode: SleepTimerService.Mode = .off
     var canShowTranscript = false
+    var canAddBookmark = false
     var isPlayerPresented = false
     var canClosePlayer = false
 }

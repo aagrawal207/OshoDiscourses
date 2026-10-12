@@ -77,8 +77,9 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: W2NS9DM63G
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.16.2"
-    CURRENT_PROJECT_VERSION: "32"
+    MARKETING_VERSION: "1.16.3"
+    CURRENT_PROJECT_VERSION: "33"
+    TRANSLATED_NARRATION_UI: TRANSLATED_NARRATION
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG"
@@ -104,6 +105,7 @@ targets:
         DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         MACOSX_DEPLOYMENT_TARGET: "15.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) $(TRANSLATED_NARRATION_UI)"
         CODE_SIGN_ENTITLEMENTS: Signing/OshoDiscourses.entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Signing/MacCatalyst.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: OshoDiscourses/Bridging/OshoDiscourses-Bridging-Header.h
@@ -148,6 +150,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.education
         UIBackgroundModes: [audio]
+        # Translated narration keeps preparing after the app leaves the screen (iOS 26
+        # continued processing); each run submits a unique suffix.
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(PRODUCT_BUNDLE_IDENTIFIER).narration.*
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         # Transcript speech sync (iOS 26, for discourses without shipped timing)
@@ -204,9 +210,12 @@ targets:
     platform: iOS
     sources:
       - path: OshoDiscoursesTests
+      - path: OshoDiscourses/TipJar.storekit
+        buildPhase: resources
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) $(TRANSLATED_NARRATION_UI)"
         SUPPORTS_MACCATALYST: YES
         # Without this the bundle targets the SDK's macOS and cannot load on older Macs.
         MACOSX_DEPLOYMENT_TARGET: "15.0"
@@ -217,9 +226,12 @@ targets:
     platform: iOS
     sources:
       - path: OshoDiscoursesUITests
+      - path: OshoDiscourses/TipJar.storekit
+        buildPhase: resources
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) $(TRANSLATED_NARRATION_UI)"
         TEST_TARGET_NAME: OshoDiscourses
     dependencies:
       - target: OshoDiscourses

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var navigationPath = NavigationPath()
+    @State private var supportPresentation = HomeSupportPresentation()
     @Environment(DownloadService.self) private var downloads
     @Environment(PlaybackStateService.self) private var playbackState
     @Environment(AudioPlayerService.self) private var player
@@ -59,6 +60,8 @@ struct HomeView: View {
                         }
                     }
 
+                    HomeSupportCard(presentation: supportPresentation)
+
                     if !popularEnglish.isEmpty {
                         SeriesSectionView(title: "Popular in English", series: popularEnglish, isRegular: isRegular)
                     }
@@ -83,6 +86,7 @@ struct HomeView: View {
             .background(Color(.systemGroupedBackground))
             .reservesMiniPlayerSpace()
             .navigationTitle("Home")
+            .modifier(HomeSupportObserver(presentation: supportPresentation, isHomeRoot: navigationPath.isEmpty))
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }

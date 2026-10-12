@@ -31,6 +31,9 @@ struct ContentView: View {
     /// simulator without tapping through the UI.
     @State private var debugTranscriptID: String?
     @State private var showDebugTranscript = false
+    #if TRANSLATED_NARRATION
+    @State private var debugNarration: CatalogDiscourse?
+    #endif
     #endif
 
     private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
@@ -92,6 +95,16 @@ struct ContentView: View {
                     .environment(player)
             }
         }
+        #if TRANSLATED_NARRATION
+        .sheet(item: $debugNarration) { discourse in
+            if #available(macCatalyst 26.0, *) {
+                TranslatedNarrationView(discourseID: discourse.id)
+                    .environment(player)
+                    .environment(downloads)
+                    .environment(navigation)
+            }
+        }
+        #endif
         #endif
         .preferredColorScheme(colorSchemeForAppearance(settings.appearance))
     }
@@ -104,6 +117,7 @@ struct ContentView: View {
             rate: player.playbackRate,
             sleepMode: SleepTimerService.shared.mode,
             canShowTranscript: navigation.canShowTranscript,
+            canAddBookmark: navigation.canAddBookmark,
             isPlayerPresented: navigation.isPlayerPresented,
             canClosePlayer: navigation.canClosePlayer
         )
@@ -209,6 +223,13 @@ struct ContentView: View {
     #if DEBUG
     private func runDebugLaunchArguments() async {
         let args = ProcessInfo.processInfo.arguments
+        #if TRANSLATED_NARRATION
+        if let flag = args.firstIndex(of: "-debugNarration"), args.indices.contains(flag + 1),
+           let entry = Catalog.discourseLookup[args[flag + 1]] {
+            debugNarration = entry.discourse
+            return
+        }
+        #endif
         // `-debugDownload <discourseID>` starts a real download through the
         // normal source chain (archive first, then oshoworld) and logs it.
         if let flag = args.firstIndex(of: "-debugDownload"), args.indices.contains(flag + 1),

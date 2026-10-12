@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 /// Process-owned services shared by every scene: the phone/iPad/Mac windows,
 /// CarPlay and the Watch connection. A CarPlay-only launch never shows a window,
@@ -14,6 +15,7 @@ final class AppRuntime {
     let library: CompanionLibrary
 
     private var didStart = false
+    private var interruptionObserver: NSObjectProtocol?
 
     private init() {
         audioPlayer = AudioPlayerService()
@@ -51,7 +53,15 @@ final class AppRuntime {
         // Transcripts travel with the audio: fetched behind each committed
         // download, dropped with a deleted one, backfilled for older downloads.
         downloadService.onDownloadCommitted = { TranscriptService.shared.prefetch($0.id) }
+        // Saved narrations are independent downloads; Smart Delete only owns the original recording.
         downloadService.onDownloadDeleted = { TranscriptService.shared.remove($0) }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { notification in
+            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  raw == AVAudioSession.InterruptionType.began.rawValue else { return }
+            Task { @MainActor in NarrationService.shared.cancel() }
+        }
         Task {
             try? await Task.sleep(for: .seconds(5))
             TranscriptService.shared.backfill(
@@ -59,5 +69,11 @@ final class AppRuntime {
                 allowsCellular: UserSettings.shared.allowCellularDownloads
             )
         }
+    }
+
+    func enteredBackground() {
+        audioPlayer.handleBackgroundEntry()
+        NarrationService.shared.cancel()
+        ScreenAwakeService.shared.removeAllRequests()
     }
 }

@@ -6,6 +6,7 @@
 
 - Downloads audio files from oshoworld.com or an Internet Archive mirror to your device
 - Fetches discourse transcripts from oshoworld.com and caches them on your device
+- Optionally translates a transcript on your device with Apple Translation and creates narration using a system voice
 - Stores your settings, bookmarks, and playback progress on your device
 - Syncs your playback progress, bookmarks, and listening stats across your own devices through your personal iCloud (Apple's iCloud Key-Value storage). This data goes only to your iCloud account. The developer has no server and never receives it. There is no account to create and no sign-in.
 
@@ -17,10 +18,16 @@
 - **Listening stats:** how long you listen each day, used for the in-app stats and streak
 - **Downloaded files:** audio files you choose to download, stored in the Documents folder (visible in Files app). These are not included in your iCloud backup, since they can be re-downloaded.
 - **Optional tips:** verified StoreKit transaction IDs and their counted/revoked state, plus a device-local tip count, prevent duplicate counting. Tips unlock no content or features.
+- **Optional yearly support:** the app checks verified subscription status through Apple to show your current plan and avoid duplicate subscriptions. A pending product is remembered locally until approval or until you explicitly clear a declined request. There is no developer-run subscription database. All content and features remain free.
+- **Rating and support reminders:** request dates and your support-reminder choice are stored on this device to limit reminders. They are not sent to the developer.
+- **Translated narration:** translated text, completed audio and partial preparation checkpoints stay on your device and are excluded from device backup. Playback positions are separate from the original recordings.
 
 ## iCloud sync
 
 Your playback progress, bookmarks, and listening stats sync across devices signed in to the same Apple Account, through Apple's iCloud Key-Value storage. This uses your own iCloud. The data never reaches the developer, and you can turn sync off by disabling iCloud Drive for the app in iOS Settings.
+
+Generated narration and its playback positions are not live-synced. Their positions
+use ordinary device settings storage, which can be included in device backup.
 
 ## Apple Watch, CarPlay and Mac
 
@@ -36,12 +43,19 @@ For recordings without matching bundled transcript timing, optional speech sync 
 iOS 26 processes downloaded English or Hindi audio using Apple's on-device speech
 recognisers. Recognition assets may require downloading; the recording is not uploaded.
 
+Translated narration may require language or system-voice downloads from Apple.
+According to [Apple's TranslationSession documentation](https://developer.apple.com/documentation/translation/translationsession),
+translation is processed on your device. Apple may collect API usage and performance
+metrics, including the app bundle ID and language pair, but not the original or
+translated text. The developer does not receive the text or generated audio.
+
 ## Third-party services
 
 Oshoworld.com and archive.org host the audio files. Apple's iCloud service handles optional sync between your devices. The app does not include advertising or tracking services.
 
-Optional tips use Apple's StoreKit in-app purchases. Apple handles the purchase;
-the app records verified transaction state locally and has no purchase server.
+Optional tips and yearly support use Apple's StoreKit in-app purchases. Apple
+handles payment, subscription renewals and cancellations. The app records tip
+transactions locally and checks subscription status with Apple; it has no purchase server.
 
 ## Analytics and tracking
 

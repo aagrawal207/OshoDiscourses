@@ -56,6 +56,8 @@ struct OshoDiscoursesApp: App {
                         // The day may have rolled over while backgrounded; refresh
                         // the shuffled accent so it advances without a relaunch.
                         UserSettings.shared.refreshShuffledTheme()
+                    } else if newPhase == .background {
+                        runtime.enteredBackground()
                     }
                 }
 

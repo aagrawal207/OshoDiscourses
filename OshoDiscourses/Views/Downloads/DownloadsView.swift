@@ -208,6 +208,29 @@ struct DownloadsView: View {
                     }
                 }
             }
+
+            #if TRANSLATED_NARRATION
+            if #available(macCatalyst 26.0, *) {
+                NavigationLink {
+                    TranslatedNarrationLibraryView()
+                        .environment(player)
+                        .environment(downloads)
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Translated Narrations")
+                            Text("Saved audio and preparation progress")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "globe")
+                            .foregroundStyle(Color.accent)
+                    }
+                }
+                .accessibilityIdentifier("downloads.translatedNarrations")
+            }
+            #endif
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }

@@ -40,13 +40,13 @@ final class PlaybackStateService {
         self.defaults = defaults
         self.recordListeningTime = recordListeningTime
         self.saveListeningStats = saveListeningStats
-        recentlyPlayed = defaults.stringArray(forKey: recentKey) ?? []
+        recentlyPlayed = (defaults.stringArray(forKey: recentKey) ?? []).filter(Self.isOriginalDiscourseID)
         if let saved = defaults.stringArray(forKey: completedKey) {
-            completedDiscourseIDs = Set(saved)
+            completedDiscourseIDs = Set(saved.filter(Self.isOriginalDiscourseID))
         }
-        listenedCompleted = defaults.stringArray(forKey: listenedCompletedKey) ?? []
+        listenedCompleted = (defaults.stringArray(forKey: listenedCompletedKey) ?? []).filter(Self.isOriginalDiscourseID)
         if defaults.object(forKey: playedKey) != nil {
-            allPlayedDiscourseIDs = defaults.stringArray(forKey: playedKey) ?? []
+            allPlayedDiscourseIDs = (defaults.stringArray(forKey: playedKey) ?? []).filter(Self.isOriginalDiscourseID)
         } else {
             migratePlayedHistory()
         }
@@ -65,7 +65,7 @@ final class PlaybackStateService {
     /// nil means now, counted only when the position moved, since autosave also
     /// rewrites a paused position every tick.
     func savePosition(discourseId: String, position: TimeInterval, duration: TimeInterval = 0, savedAt: Date? = nil) {
-        guard position.isFinite, position > 0 else { return }
+        guard Self.isOriginalDiscourseID(discourseId), position.isFinite, position > 0 else { return }
         if let savedAt {
             recordSaveTime(savedAt, for: discourseId)
         } else if abs(getPosition(discourseId: discourseId) - position) >= 1 {
@@ -82,6 +82,7 @@ final class PlaybackStateService {
     }
 
     func lastSaved(discourseId: String) -> Date? {
+        guard Self.isOriginalDiscourseID(discourseId) else { return nil }
         let value = defaults.double(forKey: savedAtKeyPrefix + discourseId)
         return value > 0 ? Date(timeIntervalSince1970: value) : nil
     }
@@ -91,15 +92,18 @@ final class PlaybackStateService {
     }
 
     func getPosition(discourseId: String) -> TimeInterval {
+        guard Self.isOriginalDiscourseID(discourseId) else { return 0 }
         return defaults.double(forKey: keyPrefix + discourseId)
     }
 
     func getDuration(discourseId: String) -> TimeInterval {
+        guard Self.isOriginalDiscourseID(discourseId) else { return 0 }
         return defaults.double(forKey: durationKeyPrefix + discourseId)
     }
 
     /// Keeps the save time: finishing or clearing a talk is also listening news.
     func clearPosition(discourseId: String, at date: Date = Date()) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         recordSaveTime(date, for: discourseId)
         defaults.removeObject(forKey: keyPrefix + discourseId)
         defaults.removeObject(forKey: durationKeyPrefix + discourseId)
@@ -108,11 +112,13 @@ final class PlaybackStateService {
     }
 
     func dismissFromRecent(discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         recentlyPlayed.removeAll { $0 == discourseId }
         defaults.set(recentlyPlayed, forKey: recentKey)
     }
 
     func recordPlay(discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         recentlyPlayed.removeAll { $0 == discourseId }
         recentlyPlayed.insert(discourseId, at: 0)
         if recentlyPlayed.count > maxRecent {
@@ -125,12 +131,14 @@ final class PlaybackStateService {
     // MARK: - Completion Tracking
 
     func markCompleted(discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         completedDiscourseIDs.insert(discourseId)
         defaults.set(Array(completedDiscourseIDs), forKey: completedKey)
         recordInPlayedHistory(discourseId)
     }
 
     func markListenedComplete(discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         completedDiscourseIDs.insert(discourseId)
         defaults.set(Array(completedDiscourseIDs), forKey: completedKey)
         listenedCompleted.removeAll { $0 == discourseId }
@@ -143,21 +151,24 @@ final class PlaybackStateService {
     }
 
     func dismissListenedComplete(discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         listenedCompleted.removeAll { $0 == discourseId }
         defaults.set(listenedCompleted, forKey: listenedCompletedKey)
     }
 
     func isCompleted(_ discourseId: String) -> Bool {
-        completedDiscourseIDs.contains(discourseId)
+        Self.isOriginalDiscourseID(discourseId) && completedDiscourseIDs.contains(discourseId)
     }
 
     func unmarkCompleted(discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         completedDiscourseIDs.remove(discourseId)
         defaults.set(Array(completedDiscourseIDs), forKey: completedKey)
     }
 
     func completedCount(for seriesId: String) -> Int {
-        completedDiscourseIDs.filter { $0.hasPrefix(seriesId + "-") }.count
+        guard Self.isOriginalDiscourseID(seriesId) else { return 0 }
+        return completedDiscourseIDs.filter { $0.hasPrefix(seriesId + "-") }.count
     }
 
     // MARK: - iCloud Sync (NSUbiquitousKeyValueStore)
@@ -177,7 +188,7 @@ final class PlaybackStateService {
     func exportCloudSnapshot() -> CloudSnapshot {
         var positions: [String: TimeInterval] = [:]
         var durations: [String: TimeInterval] = [:]
-        for id in recentlyPlayed {
+        for id in recentlyPlayed where Self.isOriginalDiscourseID(id) {
             let pos = getPosition(discourseId: id)
             if pos > 0 { positions[id] = pos }
             let dur = getDuration(discourseId: id)
@@ -186,10 +197,10 @@ final class PlaybackStateService {
         return CloudSnapshot(
             positions: positions,
             durations: durations,
-            recentlyPlayed: recentlyPlayed,
-            completed: Array(completedDiscourseIDs),
-            listenedCompleted: listenedCompleted,
-            played: allPlayedDiscourseIDs
+            recentlyPlayed: recentlyPlayed.filter(Self.isOriginalDiscourseID),
+            completed: Array(completedDiscourseIDs).filter(Self.isOriginalDiscourseID),
+            listenedCompleted: listenedCompleted.filter(Self.isOriginalDiscourseID),
+            played: allPlayedDiscourseIDs.filter(Self.isOriginalDiscourseID)
         )
     }
 
@@ -204,7 +215,7 @@ final class PlaybackStateService {
         var changed = false
 
         for (id, cloudPos) in snapshot.positions
-            where cloudPos.isFinite && cloudPos > getPosition(discourseId: id) {
+            where Self.isOriginalDiscourseID(id) && cloudPos.isFinite && cloudPos > getPosition(discourseId: id) {
             let cloudDur = snapshot.durations[id] ?? getDuration(discourseId: id)
             // Another device's listening; this device's save time stays unchanged.
             storePosition(discourseId: id, position: cloudPos, duration: cloudDur)
@@ -215,12 +226,12 @@ final class PlaybackStateService {
             changed = true
         }
         for (id, cloudDur) in snapshot.durations
-            where cloudDur.isFinite && cloudDur > getDuration(discourseId: id) {
+            where Self.isOriginalDiscourseID(id) && cloudDur.isFinite && cloudDur > getDuration(discourseId: id) {
             defaults.set(cloudDur, forKey: durationKeyPrefix + id)
             changed = true
         }
 
-        let mergedCompleted = completedDiscourseIDs.union(snapshot.completed)
+        let mergedCompleted = completedDiscourseIDs.union(snapshot.completed.filter(Self.isOriginalDiscourseID))
         if mergedCompleted != completedDiscourseIDs {
             completedDiscourseIDs = mergedCompleted
             defaults.set(Array(completedDiscourseIDs), forKey: completedKey)
@@ -228,7 +239,7 @@ final class PlaybackStateService {
         }
 
         let mergedRecent = Self.mergeList(
-            cloud: snapshot.recentlyPlayed, local: recentlyPlayed, cap: maxRecent
+            cloud: snapshot.recentlyPlayed.filter(Self.isOriginalDiscourseID), local: recentlyPlayed, cap: maxRecent
         )
         if mergedRecent != recentlyPlayed {
             recentlyPlayed = mergedRecent
@@ -237,7 +248,7 @@ final class PlaybackStateService {
         }
 
         let mergedListened = Self.mergeList(
-            cloud: snapshot.listenedCompleted, local: listenedCompleted, cap: 20
+            cloud: snapshot.listenedCompleted.filter(Self.isOriginalDiscourseID), local: listenedCompleted, cap: 20
         )
         if mergedListened != listenedCompleted {
             listenedCompleted = mergedListened
@@ -245,7 +256,7 @@ final class PlaybackStateService {
             changed = true
         }
 
-        let cloudPlayed = (snapshot.played ?? snapshot.recentlyPlayed + snapshot.completed)
+        let cloudPlayed = (snapshot.played ?? snapshot.recentlyPlayed + snapshot.completed).filter(Self.isOriginalDiscourseID)
         let mergedPlayed = Self.mergeList(
             cloud: cloudPlayed,
             local: allPlayedDiscourseIDs,
@@ -265,7 +276,7 @@ final class PlaybackStateService {
     static func mergeList(cloud: [String], local: [String], cap: Int) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
-        for id in cloud + local where !seen.contains(id) {
+        for id in cloud + local where Self.isOriginalDiscourseID(id) && !seen.contains(id) {
             seen.insert(id)
             result.append(id)
         }
@@ -275,6 +286,7 @@ final class PlaybackStateService {
     // MARK: - Private
 
     private func recordInPlayedHistory(_ discourseId: String) {
+        guard Self.isOriginalDiscourseID(discourseId) else { return }
         allPlayedDiscourseIDs.removeAll { $0 == discourseId }
         allPlayedDiscourseIDs.insert(discourseId, at: 0)
         defaults.set(allPlayedDiscourseIDs, forKey: playedKey)
@@ -306,8 +318,13 @@ final class PlaybackStateService {
             resetListeningContinuity()
             return
         }
+        if player.isPlayingNarration {
+            player.saveNarrationPosition()
+            resetListeningContinuity()
+            return
+        }
         guard let trackId = player.currentTrackId,
-              player.currentTime.isFinite, player.currentTime > 0 else {
+              Self.isOriginalDiscourseID(trackId), player.currentTime.isFinite, player.currentTime > 0 else {
             resetListeningContinuity()
             return
         }
@@ -339,6 +356,10 @@ final class PlaybackStateService {
         lastRecordedTrackId = nil
         lastRecordedGeneration = nil
         wasPlaying = false
+    }
+
+    private nonisolated static func isOriginalDiscourseID(_ id: String) -> Bool {
+        !AudioPlayerService.isNarrationTrackID(id)
     }
 
     /// Whether the media-position delta between two ~10s auto-save ticks is

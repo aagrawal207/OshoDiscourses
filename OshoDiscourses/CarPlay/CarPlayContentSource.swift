@@ -30,6 +30,7 @@ protocol CarPlayContentSource: AnyObject {
     func playQueueItem(at index: Int)
 
     var playbackRate: Float { get }
+    var canBookmarkCurrentItem: Bool { get }
     func setRate(_ rate: Float)
     /// Adds a bookmark at the current position; false when nothing is loaded.
     func addBookmarkAtCurrentTime() -> Bool
@@ -37,6 +38,10 @@ protocol CarPlayContentSource: AnyObject {
     /// Calls `onChange` after list-relevant state changes (downloads, recent
     /// playback, bookmarks, current track, queue), never for position ticks.
     func observeChanges(_ onChange: @escaping @MainActor @Sendable () -> Void) -> CarPlayObservation
+}
+
+extension CarPlayContentSource {
+    var canBookmarkCurrentItem: Bool { currentDiscourseID != nil }
 }
 
 @MainActor
@@ -78,16 +83,24 @@ final class CarPlayRuntimeSource: CarPlayContentSource {
     var currentDiscourseID: String? { player.currentTrackId }
     var isPlaying: Bool { player.isPlaying }
     var queue: [CarPlayQueueEntry] {
-        player.queue.map { CarPlayQueueEntry(discourseID: $0.id, title: $0.title, series: $0.series) }
+        guard !player.queue.contains(where: { AudioPlayerService.isNarrationTrackID($0.id) }) else { return [] }
+        return player.queue.map { CarPlayQueueEntry(discourseID: $0.id, title: $0.title, series: $0.series) }
     }
-    var currentQueueIndex: Int { player.currentIndex }
-    func playQueueItem(at index: Int) { player.playQueueItem(at: index) }
+    var currentQueueIndex: Int { queue.isEmpty ? -1 : player.currentIndex }
+    func playQueueItem(at index: Int) {
+        guard queue.indices.contains(index) else { return }
+        player.playQueueItem(at: index)
+    }
 
     var playbackRate: Float { player.playbackRate }
+    var canBookmarkCurrentItem: Bool {
+        guard !player.isPlayingNarration, let id = player.currentTrackId else { return false }
+        return !AudioPlayerService.isNarrationTrackID(id)
+    }
     func setRate(_ rate: Float) { player.setRate(rate) }
 
     func addBookmarkAtCurrentTime() -> Bool {
-        guard let id = player.currentTrackId else { return false }
+        guard canBookmarkCurrentItem, let id = player.currentTrackId else { return false }
         let time = player.currentTime.isFinite ? max(0, player.currentTime) : 0
         bookmarks.add(discourseID: id, seriesName: player.currentSeries, title: player.currentTitle, timestamp: time)
         return true

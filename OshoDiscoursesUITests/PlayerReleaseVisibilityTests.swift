@@ -1,6 +1,7 @@
 import XCTest
 
-// Translated narration is deferred; these keep its entry points out of shipping builds.
+// Builds with narration disabled must not leave entry points into the hidden feature.
+#if !TRANSLATED_NARRATION
 final class PlayerReleaseVisibilityTests: XCTestCase {
     @MainActor
     func testPlayerKeepsTranscriptAndDeNoiseWithoutTranslationEntryPoints() {
@@ -47,3 +48,4 @@ final class PlayerReleaseVisibilityTests: XCTestCase {
         add(screenshot)
     }
 }
+#endif

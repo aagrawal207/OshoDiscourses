@@ -31,7 +31,7 @@ Mac: `Tools/MacCatalyst/run-local.sh [build|test|launch]` (see Dev notes).
 - Swift 6.0, SwiftUI, iOS 18+, Mac Catalyst 18 (macOS 15+), watchOS 11+
 - AVFoundation + MediaPlayer (audio playback + lock screen controls)
 - CarPlay (list templates + shared Now Playing) and WatchConnectivity, both iOS-only
-- StoreKit 2 (optional consumable tips)
+- StoreKit 2 (optional consumable tips and yearly support subscriptions)
 - Vendored native dependencies: RNNoise C sources and DeepFilterNet 3
   (Rust/tract, built into `Vendor/DeepFilterBridge.xcframework`, with a bundled model)
 - No SwiftData — catalog is static structs, settings use UserDefaults, downloads tracked by filesystem
@@ -91,6 +91,7 @@ OshoDiscourses/
 │   ├── TranscriptAligner.swift         # Unique-trigram landmarks + LIS chain -> paragraph start times (any script)
 │   ├── MacWindowConfigurator.swift     # 900 × 600 minimum window size on Mac; no-op elsewhere
 │   ├── TipJarService.swift             # StoreKit 2 consumables: verified finish, local dedup, updates/recovery
+│   ├── AnnualSupportService.swift      # Optional yearly support: verified status, purchase, restore and renewal updates
 │   └── UserSettings.swift              # @Observable singleton over UserDefaults
 ├── RNNoise/                            # Vendored RNNoise C sources + bridging header
 ├── Bridging/                           # Single Obj-C bridging header (RNNoise + DeepFilter)
@@ -209,10 +210,23 @@ OshoDiscoursesTests/
   and 1,972 Hindi. The remaining 14 failed text matching after all download
   failures were recovered; some site pages contain another discourse's text.
 
-### Translated narration (deferred)
+### Translated narration (local development)
 
-Translated narration is not on `main`. It is preserved on branch
-`wip/translated-narration-1.16` (commit `17c9039`) for a later release.
+This worktree restores translated narration on `feature/translated-narration`,
+based on the submitted 1.16.3 source. The original release worktree is unchanged.
+`TRANSLATED_NARRATION_UI=TRANSLATED_NARRATION` enables local player and Downloads
+entry points; clear the setting to check the deferred state. No translation build
+has been submitted. The original snapshot remains on `wip/translated-narration-1.16`
+at `17c9039`. See [the port and verification record](docs/translation-port.md).
+
+Apple Translation translates source transcripts and an ordinary system voice
+renders offline audio. Synthetic positions never update original listening
+history, bookmarks, statistics or cloud progress. Saved narrations survive deletion
+of the original download. Their library owns deletion. Preparation is reserved
+to one window before preflight/consent. On iOS 26+ it keeps running in the background
+through a continued-processing task with Lock Screen progress; closing its screen or
+system expiry pauses it. Finished passages can play while later ones are prepared,
+and preparation shows passages done and an estimated time left.
 
 ### URL patterns
 - English underscore: `https://www.oshoworld.com/wp-content/uploads/newAudios/{Folder}_(count)/{Prefix}_{num}.mp3`
@@ -340,8 +354,9 @@ Features from the RN version — port status:
 
 ## Dev notes
 
+- 1.16.3 (33) was submitted at 2026-10-12T00:11:36Z (`WAITING_FOR_REVIEW`, release after approval) with optional yearly support and gentle engagement. The app, subscription group and all three annual subscription versions are in the same submission. The full unit suite passed 459 functions / 498 runs. Xcode cloud signing produced the App Store IPA without restoring or revoking local distribution certificates. See [the release record](docs/app-store/releases/1.16.3.md).
 - 1.16.0 (28) was approved and released on 2026-10-03 with CarPlay, Apple Watch and iPad; the Mac app is a later submission. See [the release record](docs/app-store/releases/1.16.0.md).
-- 1.16.2 (32) was submitted on 2026-10-08 (`WAITING_FOR_REVIEW`, release after approval). It adds transcript copy options: Select Text, Select Passages and drag-out. See [the release record](docs/app-store/releases/1.16.2.md).
+- 1.16.2 (32) is released (`READY_FOR_DISTRIBUTION`, checked 2026-10-11). It adds transcript copy options: Select Text, Select Passages and drag-out. See [the release record](docs/app-store/releases/1.16.2.md).
 - 1.16.1 (31) was released after approval (`READY_FOR_DISTRIBUTION`, checked 2026-10-08; builds 29 and 30 were withdrawn first). It adds en-GB and Hindi store listings, new keywords, reordered screenshots, Health & Fitness as the secondary category, a Settings > About > Rate Osho Talks link, a broader review prompt and mini-player clearance on every page. See [the release record](docs/app-store/releases/1.16.1.md).
 - 1.15.0 (26) is released, and all five consumable tips are approved, verified on 2026-09-19. Build 26 includes the corrected feedback email. This follows build 25's rejection under 2.1(b) (tips could not be found) and 1.5 (Support URL). The attached 60.66-second TestFlight build 25 walkthrough starts on the iPhone Home Screen, demonstrates core screens and completes a US$3 Small tip sandbox purchase with the count increasing from two to three. `SUPPORT.md` is published in commit `9304509`, and the App Store Support URL points to it. Build 26 passed 413 functions / 512 runs, five iPhone SE UI scenarios and Release signing/content checks. See [the release record](docs/app-store/releases/1.15.0.md) for evidence, submission IDs, artifacts and the replacement signing setup.
 - xcodegen required: `brew install xcodegen`
@@ -361,6 +376,16 @@ Features from the RN version — port status:
 - Dynamic Island / Live Activity was removed (was a Live Activity hosted by a now-deleted widget extension); standard lock-screen/Control-Center controls stay via MediaPlayer
 
 ### Tip jar release
+
+The next-release support sheet also includes $5, $10 and $15 yearly support
+subscriptions between the one-time prices. App Store Connect drafts are in one
+subscription group at the same level. All three were submitted with 1.16.3 and
+are awaiting review. See
+[Yearly support](docs/annual-support.md) for product IDs, verification and the
+remaining release checks. An inline Home support card appears only after seven
+listening days and two hours of use, outside playback, and can be snoozed for
+ninety days or disabled permanently. Native rating requests also have a ninety-day
+cooldown, with fourteen days between rating and support reminders.
 
 `TipJarService` and `TipJarView` are enabled in Debug and Release, and Settings >
 About > Support Development opens the sheet. Missing or partially available

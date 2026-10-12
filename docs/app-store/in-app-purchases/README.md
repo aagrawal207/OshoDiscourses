@@ -3,6 +3,14 @@
 App: **Osho Talks - Audio Discourses**, `6774409039`.
 Bundle ID: `com.agraabhi.oshodiscourses`.
 
+Three additional **auto-renewing yearly support subscriptions** are configured in
+group `22466252`, all at level 1, and submitted with 1.16.3 (33). They are separate from the five approved
+consumables below. See [Yearly support](../../annual-support.md) for their IDs,
+prices and verification status. Their approval and an app release are still required.
+Their review screenshots are `COMPLETE`, with matching checksums recorded in
+`annual-support/manifest.json`. The exact subscription versions and group version
+are retained in the app's `WAITING_FOR_REVIEW` submission.
+
 The five consumables were created on 2026-09-16. Readback confirmed
 `READY_TO_SUBMIT` for each product, with English (`en-US`) metadata, review notes,
 and a completed review screenshot upload.
