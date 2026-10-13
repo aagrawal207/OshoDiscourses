@@ -1,0 +1,24 @@
+{
+  "1.17.0": [
+    {
+      "symbol": "globe",
+      "title": "Listen in Hindi or English",
+      "detail": "Choose Hindi on an English series page, or English on a Hindi one. A system voice reads the translated transcript, so you don't need the recording. The wording may not be perfect."
+    },
+    {
+      "symbol": "waveform",
+      "title": "At Osho's pace",
+      "detail": "The voice pauses the way Osho does, so each paragraph takes about as long as in his talk."
+    },
+    {
+      "symbol": "lock.iphone",
+      "title": "Keeps going when you lock your phone",
+      "detail": "Follow the progress on the Lock Screen, and start listening to the finished part while the rest is prepared."
+    },
+    {
+      "symbol": "arrow.left.arrow.right",
+      "title": "The same moment in both",
+      "detail": "Switch between the translation and Osho's recording without losing your place. Bookmarks save the moment in the recording."
+    }
+  ]
+}

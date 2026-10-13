@@ -24,6 +24,9 @@ struct ContentView: View {
     @State private var rootBottomInset: CGFloat = 0
     @State private var miniPlayerHeight: CGFloat = 64
     @Bindable private var settings = UserSettings.shared
+    @State private var whatsNew: WhatsNewContent?
+    @State private var whatsNewOwner = UUID()
+    @State private var hostWindow = HostWindowBox()
     #if DEBUG
     /// `-debugTranscript <discourseID>` on the launch arguments plays that
     /// (already downloaded) discourse and opens its transcript (or the full
@@ -78,6 +81,14 @@ struct ContentView: View {
         .fullScreenCover(isPresented: regularPlayerBinding) {
             playerScreen
         }
+        .background { HostWindowReader { hostWindow.window = $0 }.frame(width: 0, height: 0).accessibilityHidden(true) }
+        .task { await presentWhatsNewWhenQuiet() }
+        .onDisappear(perform: abandonWhatsNew)
+        .sheet(isPresented: Binding(get: { whatsNew != nil }, set: { if !$0 { finishWhatsNew() } })) {
+            if let whatsNew {
+                WhatsNewSheet(content: whatsNew, onFinish: finishWhatsNew)
+            }
+        }
         .sheet(item: windowBookmarkBinding) { draft in
             AddBookmarkSheet(
                 timestamp: draft.timestamp,
@@ -107,6 +118,42 @@ struct ContentView: View {
         #endif
         #endif
         .preferredColorScheme(colorSchemeForAppearance(settings.appearance))
+    }
+
+    /// Waits for a quiet moment in this window, checking every few seconds until it has been seen.
+    private func presentWhatsNewWhenQuiet() async {
+        #if DEBUG
+        // UI tests launch with saved state from earlier runs; only tests that ask see the announcement.
+        guard ProcessInfo.processInfo.arguments.contains("-debugWhatsNew") else { return }
+        #endif
+        let service = WhatsNewService.shared
+        service.recordFreshInstallIfNeeded()
+        try? await Task.sleep(for: .milliseconds(600))
+        while !Task.isCancelled {
+            // The environment's scene phase is a stale copy inside this loop; the window's scene is live.
+            if whatsNew == nil, !navigation.isPlayerPresented, navigation.pendingBookmark == nil,
+               WindowPresentation.isQuiet(hostWindow.window),
+               service.claimPresentation(owner: whatsNewOwner), let content = service.updateContent {
+                EngagementService.shared.registerAnnouncement(owner: whatsNewOwner)
+                whatsNew = content
+            }
+            guard service.isAnnouncementDue else { return }
+            try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    private func abandonWhatsNew() {
+        guard whatsNew != nil else { return }
+        whatsNew = nil
+        WhatsNewService.shared.abandonPresentation(owner: whatsNewOwner)
+        EngagementService.shared.unregisterAnnouncement(owner: whatsNewOwner)
+    }
+
+    private func finishWhatsNew() {
+        guard whatsNew != nil else { return }
+        whatsNew = nil
+        WhatsNewService.shared.finishPresentation(owner: whatsNewOwner)
+        EngagementService.shared.unregisterAnnouncement(owner: whatsNewOwner)
     }
 
     private var commandState: CommandState {
@@ -197,7 +244,8 @@ struct ContentView: View {
     /// player open, the player presents it so the sheet stacks on top.
     private var windowBookmarkBinding: Binding<BookmarkDraft?> {
         Binding(
-            get: { navigation.isPlayerPresented ? nil : navigation.pendingBookmark },
+            // A bookmark asked for during What's New waits for it to close; one sheet shows at a time.
+            get: { navigation.isPlayerPresented || whatsNew != nil ? nil : navigation.pendingBookmark },
             set: { navigation.pendingBookmark = $0 }
         )
     }

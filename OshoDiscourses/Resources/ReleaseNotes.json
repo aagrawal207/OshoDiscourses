@@ -1,0 +1,210 @@
+{
+ "releases": [
+  {
+   "version": "1.17.0",
+   "items": [
+    "Listen in Hindi or English. A system voice reads the translated transcript, so you don't need the recording.",
+    "Translations follow Osho's pace, pausing so each paragraph takes about as long as in his talk.",
+    "Translation keeps going when you lock your phone, with progress on the Lock Screen, and you can listen to the finished part right away.",
+    "Switch between the translation and the recording at the same moment, and bookmark either one.",
+    "A What's New screen after each update, with earlier updates under Settings > About."
+   ],
+   "highlights": [
+    {
+     "symbol": "globe",
+     "title": "Listen in Hindi or English",
+     "detail": "Choose Hindi on an English series page, or English on a Hindi one. A system voice reads the translated transcript, so you don't need the recording. The wording may not be perfect."
+    },
+    {
+     "symbol": "waveform",
+     "title": "At Osho's pace",
+     "detail": "The voice pauses the way Osho does, so each paragraph takes about as long as in his talk."
+    },
+    {
+     "symbol": "lock.iphone",
+     "title": "Keeps going when you lock your phone",
+     "detail": "Follow the progress on the Lock Screen, and start listening to the finished part while the rest is prepared."
+    },
+    {
+     "symbol": "arrow.left.arrow.right",
+     "title": "The same moment in both",
+     "detail": "Switch between the translation and Osho's recording without losing your place. Bookmarks save the moment in the recording."
+    }
+   ]
+  },
+  {
+   "version": "1.16.3",
+   "items": [
+    "Fine-tune playback speed from 0.5× to 2× in small steps, such as 0.85× or 0.9×.",
+    "Faster, more reliable downloads in India and nearby countries. A stuck download now switches servers instead of waiting.",
+    "A download waiting for Wi-Fi now says so, with a one-tap option to use mobile data.",
+    "Choose optional yearly support alongside one-time tips.",
+    "Manage or restore your support subscription through Apple.",
+    "Rating and support requests respect quiet listening moments, with longer breaks between reminders."
+   ]
+  },
+  {
+   "version": "1.16.2",
+   "items": [
+    "Copying from transcripts is easier. Touch and hold a passage to copy or share it, choose Select Text to pick out exact words, or choose Select Passages to copy several at once. You can also drag a passage into Notes, Mail or another app."
+   ]
+  },
+  {
+   "version": "1.16.1",
+   "items": [
+    "When the mini-player is showing, the last discourse on every page now scrolls clear of it instead of hiding behind it.",
+    "You can also rate Osho Talks from Settings > About. Reviews help other listeners find the app."
+   ]
+  },
+  {
+   "version": "1.16.0",
+   "items": [
+    "Osho Talks now runs on Apple Watch. Control the iPhone player from your wrist, browse your downloads, or save a talk to the Watch and listen with Bluetooth headphones.",
+    "In the car, CarPlay shows Continue Listening, your downloads and bookmarks, with playback speed and a bookmark button on the Now Playing screen.",
+    "On iPad, a sidebar makes the library easier to browse, and the transcript can sit beside the player. Keyboard shortcuts and multiple windows are supported."
+   ]
+  },
+  {
+   "version": "1.15.0",
+   "items": [
+    "DeNoise brings noise reduction, volume boost and quiet-speech controls together in the player and Settings.",
+    "Choose Best Quality, Balanced or Gentle Cleanup. First-use settings are Best Quality, Medium noise reduction, Medium boost and Gentle Lift.",
+    "Improved noise reduction and playback reliability on older recordings.",
+    "Open the transcript directly beside DeNoise in the player.",
+    "Optional one-time tips are available under Settings > About > Support Development. All features remain free."
+   ]
+  },
+  {
+   "version": "1.14.0",
+   "items": [
+    "Read along with transcripts: the paragraph being spoken is highlighted and follows the audio, lyrics-style, for over 4,900 discourses",
+    "Tap any paragraph to play from there, mark where the audio is, copy, or share it",
+    "Transcripts download with your talks and remember where you left off, synced across your devices",
+    "92 more series and over 1,100 more discourses, including Es Dhammo Sanantano, Krishna Smriti, The Path of Paradox and The White Lotus",
+    "Fixed downloads for talks whose files had moved on oshoworld.com",
+    "Continue Listening now groups talks by series, with a tap straight to the series page",
+    "Your full listening history is kept, not just the last 20 talks",
+    "Bug fixes and performance improvements"
+   ]
+  },
+  {
+   "version": "1.11.0",
+   "items": [
+    "Improved noise reduction, Voice Focus, and volume boost for clearer listening. The player now shows richer discourse details, and Listening History includes all played discourses. Also includes performance and reliability improvements."
+   ]
+  },
+  {
+   "version": "1.10.0",
+   "items": [
+    "Noise reduction no longer stops working after you skip between discourses, it stays on for as long as you listen.",
+    "Fixed a crackle on louder passages.",
+    "Volume boost now goes up to 4x without distorting, and works with or without noise reduction.",
+    "Noise reduction uses about half the battery it did, and now defaults to the strongest option when you turn it on."
+   ]
+  },
+  {
+   "version": "1.9.1",
+   "items": [
+    "Noise reduction is now marked Beta while we keep tuning it, results vary by recording"
+   ]
+  },
+  {
+   "version": "1.9",
+   "items": [
+    "Much faster downloads — about 10x quicker, from a faster mirror with automatic fallback to the original source",
+    "Series artwork — browse with real waveform art for each series",
+    "Downloads interrupted by a network change now recover on their own",
+    "Fixed series artwork readability in light mode",
+    "Smoother, cached artwork loading while scrolling",
+    "New in Settings: My Other Apps"
+   ]
+  },
+  {
+   "version": "1.8.0",
+   "items": [
+    "Up Next — see and manage your listening queue right from the player, and jump to any discourse in it",
+    "AirPlay button in the player for quick speaker switching",
+    "Fixed the lock screen skip buttons sometimes jumping back or forward much further than 15/30 seconds",
+    "Listening stats now count correctly when you listen at 1.5x or 2x speed",
+    "Deleted bookmarks no longer reappear after syncing with another device",
+    "Sleep timer stays accurate on long timers and when the app is in the background",
+    "Playback recovers on its own after phone calls, Siri, and system audio hiccups instead of needing an app restart",
+    "Clearer message when a download fails due to low storage, and fixed a case where a cancelled download still completed",
+    "Series artwork colors no longer change between launches",
+    "Better VoiceOver support and improved layout at larger text sizes",
+    "Faster search and smoother scrolling in large series"
+   ]
+  },
+  {
+   "version": "1.7.0",
+   "items": [
+    "Fixed the daily accent color — it now actually changes each day and updates across the whole app.",
+    "Added a Support Development link in Settings for anyone who'd like to chip in. It's optional and unlocks nothing.",
+    "Smaller fixes and polish."
+   ]
+  },
+  {
+   "version": "1.5.2",
+   "items": [
+    "A big reliability pass on downloads, plus a few interface fixes.",
+    "Downloads now show real progress. The progress ring used to sit at 0% the whole time and jump to done at the end — it now moves as the file actually downloads, and canceling reliably stops the transfer.",
+    "One download at a time, in order. Since the audio server slows down when it's handling several files at once, downloads now run one after another, in the order you tapped them. The first one finishes at full speed so you have something to listen to while the rest wait.",
+    "See what's downloading in My Activity. A new \"Downloading\" section shows the active download with a live progress bar, plus anything queued behind it — each cancelable, not just on the series page.",
+    "Tidy up your re-download list. Swipe to remove items you don't want under \"Previously Downloaded.\"",
+    "Clearer discourse names. Lists no longer cut off long series names awkwardly — rows read as a clean \"Discourse N\" under the series heading, with full names where there's room.",
+    "Easier-to-read Home screen. Sections now sit on cards so it's clear where each one begins, especially in dark mode."
+   ]
+  },
+  {
+   "version": "1.5.1",
+   "items": [
+    "This update is mostly about downloads — fixing what was broken and making sure the app tells you what's going on instead of failing silently.",
+    "Downloads work reliably again. Fixed a bug that could stop discourses from downloading. If a download does fail now, the app tells you why — Wi-Fi only, no connection, not enough storage — instead of just doing nothing.",
+    "New \"Download over Cellular\" setting. Downloads stay on Wi-Fi by default. Turn this on in Settings if you want to use mobile data.",
+    "Previously downloaded discourses are remembered. Anything you've downloaded before now shows up under \"Previously Downloaded\" in My Activity, so you can grab it again in a tap — even after deleting and reinstalling the app.",
+    "Auto-Play Next plays through properly. A downloaded series now continues to the next discourse without stopping.",
+    "The player timer keeps up with the skip buttons. The elapsed and remaining time now update right away when you jump forward or back.",
+    "Light mode is the default. The app opens in Light now; switch to Dark or System anytime in Settings."
+   ]
+  },
+  {
+   "version": "1.5.0",
+   "items": [
+    "Noise Reduction is now powered by an on-device neural network — much cleaner background-noise removal than before, with no warbling or vibration artifacts",
+    "Choose denoise strength: Light, Medium, or Strong. Light keeps the voice clearest; Strong removes the most noise",
+    "Long-press the Denoise button in the player to switch strength on the fly",
+    "New Noise Reduction section in Settings explaining how it works",
+    "\"My Activity\" tab reorganized — your downloads are front and center, with Listening Stats and Bookmarks at the bottom"
+   ]
+  },
+  {
+   "version": "1.2.0",
+   "items": [
+    "Smart Download now pre-downloads the next episode 20 seconds before the current one ends",
+    "Smart Delete works independently of Auto-Play setting",
+    "Completion tracking — mark discourses complete/incomplete via long-press",
+    "\"Recently Completed\" section on home screen (only from actual listening)",
+    "Series completion progress shown in series header (X/Y completed)",
+    "Downloads section headers are now tappable — navigate directly to the series",
+    "Auto-Play Next toggle in settings",
+    "Listening stats now correctly tracks completed discourses and series",
+    "Settings page cleaned up"
+   ]
+  },
+  {
+   "version": "1.1.0",
+   "items": [
+    "Listening stats: total time, streak, breakdown by week and month. Full history of every discourse you've played.",
+    "Popular series now have descriptions and topic tags. Search finds series by topic — try \"Zen\" or \"meditation.\"",
+    "Lock screen shows artwork now. Dynamic Island dismisses itself after 5 min paused (saves battery). Player fully works in light mode.",
+    "Curated sections on the home screen can be dismissed with the X button. Fixed light mode visual glitches and a crash when playing deleted files."
+   ]
+  },
+  {
+   "version": "1.0",
+   "items": [
+    "The first release of Osho Talks."
+   ]
+  }
+ ]
+}

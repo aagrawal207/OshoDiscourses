@@ -268,6 +268,16 @@ struct SettingsView: View {
             LabeledContent("Series", value: "\(Catalog.allSeries.count)")
             LabeledContent("Discourses", value: "\(Catalog.allSeries.reduce(0) { $0 + $1.count })")
 
+            if let history = WhatsNewService.shared.historyContent {
+                NavigationLink {
+                    WhatsNewView(content: history)
+                } label: {
+                    Label("What's New", systemImage: "sparkles")
+                        .font(.subheadline)
+                }
+                .accessibilityIdentifier("settings.whatsNew")
+            }
+
             Button { showTipJar = true } label: {
                 linkRow("Support Development", icon: "cup.and.saucer.fill", tint: settings.effectiveAccentTheme.color, trailing: "chevron.right")
             }

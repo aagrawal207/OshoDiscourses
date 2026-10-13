@@ -60,6 +60,8 @@ final class EngagementService {
     private(set) var supportSheetOwner: UUID?
     private(set) var externalSupportSheets: Set<UUID> = []
     private(set) var narrationPresentations: Set<UUID> = []
+    /// The What's New screen; prompts wait until it closes.
+    private(set) var announcementPresentations: Set<UUID> = []
     private var exposedOwner: UUID?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let now: @MainActor () -> Date
@@ -67,7 +69,9 @@ final class EngagementService {
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "Engagement")
 
     var isSupportPresentationActive: Bool { supportCardOwner != nil || supportSheetOwner != nil || !externalSupportSheets.isEmpty }
-    var isPromptPresentationActive: Bool { isSupportPresentationActive || !narrationPresentations.isEmpty }
+    var isPromptPresentationActive: Bool {
+        isSupportPresentationActive || !narrationPresentations.isEmpty || !announcementPresentations.isEmpty
+    }
 
     init(defaults: UserDefaults = .standard, now: @escaping @MainActor () -> Date = Date.init) {
         self.defaults = defaults
@@ -124,7 +128,8 @@ final class EngagementService {
     }
 
     func canShowSupportCard(owner: UUID, context: SupportContext) -> Bool {
-        guard supportSheetOwner == nil, externalSupportSheets.isEmpty, narrationPresentations.isEmpty else { return false }
+        guard supportSheetOwner == nil, externalSupportSheets.isEmpty, narrationPresentations.isEmpty,
+              announcementPresentations.isEmpty else { return false }
         if let supportCardOwner {
             guard supportCardOwner == owner else { return false }
             // Exposure starts the next cooldown without removing the card being read.
@@ -201,6 +206,10 @@ final class EngagementService {
         if narrationPresentations.count == 1 { Self.log.debug("Narration presentation outcome=active") }
     }
 
+    func registerAnnouncement(owner: UUID) { announcementPresentations.insert(owner) }
+
+    func unregisterAnnouncement(owner: UUID) { announcementPresentations.remove(owner) }
+
     func unregisterNarrationPresentation(owner: UUID) {
         let removed = narrationPresentations.remove(owner) != nil
         if removed && narrationPresentations.isEmpty { Self.log.debug("Narration presentation outcome=inactive") }
@@ -220,7 +229,7 @@ final class EngagementService {
     }
 
     func refreshSupportStatusIfNeeded(context: SupportContext, refresh: @MainActor () async -> Void) async {
-        guard !checkingSupportStatus, narrationPresentations.isEmpty,
+        guard !checkingSupportStatus, narrationPresentations.isEmpty, announcementPresentations.isEmpty,
               Self.shouldCheckSupportStatus(context: context, history: history, now: now()) else { return }
         checkingSupportStatus = true
         defer { checkingSupportStatus = false }

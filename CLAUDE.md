@@ -228,6 +228,24 @@ through a continued-processing task with Lock Screen progress; closing its scree
 system expiry pauses it. Finished passages can play while later ones are prepared,
 and preparation shows passages done and an estimated time left.
 
+### What's New screen
+
+After an update, existing listeners see What's New once: the installed version's
+highlights (or its notes), any releases skipped since the version they last saw, and
+Earlier Updates. Fresh installs record the version without showing it. Settings >
+About > What's New shows the history any time. Releases newer than the installed app
+are never listed.
+
+`OshoDiscourses/Resources/ReleaseNotes.json` is built from App Store Connect's en-US
+What's New text by `scripts/build-release-notes.py` (tests:
+`scripts/test_build_release_notes.py`). **Before every release**, rebuild it with
+`--include-version <new version>`, which reads
+`docs/app-store/metadata/version/<version>/en-US.json`. Add headline features, with
+SF Symbols, to `docs/app-store/whats-new-highlights.json`. A unit test fails if the
+installed version has no notes. Debug builds announce only with `-debugWhatsNew`,
+because UI tests launch with saved state; `-whatsNew.lastSeenVersion 1.16.2`
+simulates an update.
+
 ### URL patterns
 - English underscore: `https://www.oshoworld.com/wp-content/uploads/newAudios/{Folder}_(count)/{Prefix}_{num}.mp3`
 - English slug: `https://www.oshoworld.com/wp-content/uploads/newAudios/{slug}/{Title} {num}.mp3`
