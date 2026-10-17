@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -86,8 +85,8 @@ private fun TabItem(item: OshoTabItem, selected: Boolean, onClick: () -> Unit, m
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(item.icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.height(2.dp))
+        // SF tab glyphs draw about 26 tall; Material's leave a margin inside the box, hence 30.
+        Icon(item.icon, contentDescription = null, tint = tint, modifier = Modifier.size(30.dp))
         Text(item.title, style = Osho.typography.tabLabel, color = tint, maxLines = 1)
     }
 }

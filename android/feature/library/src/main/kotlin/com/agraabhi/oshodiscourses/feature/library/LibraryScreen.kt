@@ -61,7 +61,9 @@ import com.agraabhi.oshodiscourses.core.model.SeriesInfo
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
 import com.agraabhi.oshodiscourses.core.ui.components.FilterChipStyle
 import com.agraabhi.oshodiscourses.core.ui.components.LargeTitlePage
+import com.agraabhi.oshodiscourses.core.ui.components.MenuCornerRadius
 import com.agraabhi.oshodiscourses.core.ui.components.OshoFilterChip
+import com.agraabhi.oshodiscourses.core.ui.components.PageSearch
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.ProvideElevatedSurfaces
@@ -83,15 +85,12 @@ fun LibraryScreen(
     val viewModel = viewModel { LibraryViewModel(services.catalog, services.downloads, services.settings) }
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LargeTitlePage(title = "Library", background = Osho.colors.systemBackground, modifier = modifier) {
-        item(key = "search", contentType = "search") {
-            SearchField(
-                value = viewModel.query,
-                onValueChange = viewModel::updateQuery,
-                placeholder = "Search by name or topic",
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
+    LargeTitlePage(
+        title = "Library",
+        background = Osho.colors.systemBackground,
+        modifier = modifier,
+        search = PageSearch(viewModel.query, viewModel::updateQuery, "Search by name or topic"),
+    ) {
         item(key = "chips", contentType = "chips") {
             FilterSortBar(
                 state = state,
@@ -108,56 +107,6 @@ fun LibraryScreen(
             item(key = "noResults", contentType = "noResults") { NoResults(state.query) }
         }
     }
-}
-
-/** iOS 26 `.searchable` field: a filled capsule with a magnifier, placeholder and clear button. */
-@Composable
-private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
-    val colors = Osho.colors
-    val focus = LocalFocusManager.current
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        textStyle = Osho.typography.body.copy(color = colors.label),
-        cursorBrush = SolidColor(colors.accent),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = placeholder },
-        decorationBox = { field ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 44.dp)
-                    .clip(CircleShape)
-                    .background(colors.tertiarySystemFill)
-                    .padding(start = 12.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.Search, contentDescription = null, tint = colors.secondaryLabel, modifier = Modifier.size(scaled(22.dp)))
-                Box(Modifier.weight(1f).padding(start = 8.dp, top = 10.dp, bottom = 10.dp)) {
-                    if (value.isEmpty()) {
-                        Text(placeholder, style = Osho.typography.body, color = colors.placeholderText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    field()
-                }
-                if (value.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .clickable(role = Role.Button) { onValueChange("") }
-                            .semantics { contentDescription = "Clear text" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Rounded.Cancel, contentDescription = null, tint = colors.tertiaryLabel, modifier = Modifier.size(20.dp))
-                    }
-                } else {
-                    Box(Modifier.size(width = 8.dp, height = 1.dp))
-                }
-            }
-        },
-    )
 }
 
 @Composable
@@ -216,26 +165,27 @@ private fun SortChip(sort: SortOrder, onSort: (SortField) -> Unit) {
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(MenuCornerRadius),
                 containerColor = Osho.colors.secondarySystemGroupedBackground,
                 shadowElevation = 12.dp,
                 tonalElevation = 0.dp,
-                modifier = Modifier.widthIn(min = 180.dp),
+                modifier = Modifier.widthIn(min = 220.dp),
             ) {
                 SortField.entries.forEach { field ->
+                    // iOS 26 marks the current sort with a leading accent chevron, not a trailing check.
                     DropdownMenuItem(
                         text = { Text(field.label, style = Osho.typography.body, color = Osho.colors.label) },
-                        trailingIcon = if (field == sort.field) {
-                            {
-                                Icon(
-                                    if (sort.ascending) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    tint = Osho.colors.label,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                        leadingIcon = {
+                            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                                if (field == sort.field) {
+                                    Icon(
+                                        if (sort.ascending) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = Osho.colors.accent,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                }
                             }
-                        } else {
-                            null
                         },
                         onClick = {
                             expanded = false

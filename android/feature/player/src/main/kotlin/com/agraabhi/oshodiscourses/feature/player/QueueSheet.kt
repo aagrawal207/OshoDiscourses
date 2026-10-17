@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,10 +32,10 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerState
 import com.agraabhi.oshodiscourses.core.ui.components.GlassTextButton
-import com.agraabhi.oshodiscourses.core.ui.components.GroupedDivider
 import com.agraabhi.oshodiscourses.core.ui.components.SheetToolbar
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
@@ -50,11 +51,13 @@ internal fun QueueSheetContent(
 ) {
     val colors = Osho.colors
     Column(modifier.fillMaxSize()) {
-        SheetToolbar("Up Next", trailing = { GlassTextButton("Done", onClick = onDone, prominent = true) })
+        SheetToolbar("Up Next", trailing = { GlassTextButton("Done", onClick = onDone) })
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp),
         ) {
+            // iOS plain lists rule above the first row and below the last one too.
+            item(key = "topRule") { QueueDivider() }
             itemsIndexed(player.queue, key = { _, item -> item.id }) { index, item ->
                 val current = index == player.currentIndex
                 Row(
@@ -67,7 +70,7 @@ internal fun QueueSheetContent(
                             selected = current
                             onClick(label = if (current) null else "play this discourse") { onSelect(index); true }
                         }
-                        .padding(horizontal = 20.dp, vertical = 11.dp),
+                        .padding(horizontal = 20.dp, vertical = 15.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -101,8 +104,13 @@ internal fun QueueSheetContent(
                         )
                     }
                 }
-                if (index < player.queue.lastIndex) GroupedDivider(startInset = 56.dp)
+                QueueDivider()
             }
         }
     }
+}
+
+@Composable
+private fun QueueDivider() {
+    HorizontalDivider(Modifier.padding(start = 20.dp, end = 16.dp), thickness = Dp.Hairline, color = Osho.colors.separator)
 }

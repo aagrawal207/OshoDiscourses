@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -360,22 +359,25 @@ private fun DismissibleLayer(onDismiss: () -> Unit, content: @Composable (height
     }
 
     val density = LocalDensity.current
-    val corner = with(density) { (offset / 4f).coerceAtMost(28.dp.toPx()).toDp() }
+    val statusTop = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
+    // iOS presents the player as a sheet under the status bar, so the dimmed page shows above it.
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
+            .padding(top = statusTop)
             .offset { IntOffset(0, offset.roundToInt()) }
-            .clip(RoundedCornerShape(topStart = corner, topEnd = corner))
+            .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
             .background(Osho.colors.systemBackground)
             .nestedScroll(connection),
     ) {
         heightPx = constraints.maxHeight.toFloat()
-        val insets = with(density) {
-            (WindowInsets.statusBars.getTop(this) + WindowInsets.navigationBars.getBottom(this)).toDp()
-        }
-        content(maxHeight - insets, maxWidth)
+        val bottomInset = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
+        content(maxHeight - bottomInset, maxWidth)
     }
 }
+
+/** The iOS 26 sheet's top corners, which follow the display's own corner radius. */
+private val SheetCorner = 38.dp
 
 @Composable
 private fun PlayerColumn(
@@ -405,7 +407,6 @@ private fun PlayerColumn(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = side),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -476,7 +477,7 @@ private fun TopBar(ui: PlayerUiState, onShowOutputSwitcher: () -> Unit, onOpenQu
         PlainIconButton(
             icon = Icons.AutoMirrored.Rounded.FormatListBulleted,
             contentDescription = "Up Next",
-            tint = colors.label,
+            tint = colors.accent,
             onClick = onOpenQueue,
             enabled = ui.isQueueBrowsable,
             onClickLabel = "show the playback queue",
@@ -664,8 +665,8 @@ private fun Transport(ui: PlayerUiState, playGlyph: Dp, viewModel: PlayerViewMod
                     if (player.isPlaying) Icons.Rounded.PauseCircle else Icons.Rounded.PlayCircle,
                     contentDescription = null,
                     tint = tint,
-                    // SF circle glyphs draw a little inside their point size; Material's ring fills 20 of 24.
-                    modifier = Modifier.size(playGlyph * 1.08f),
+                    // SF circle glyphs fill their point size; Material's circle fills 20 of 24.
+                    modifier = Modifier.size(playGlyph * 1.2f),
                 )
                 if (player.isBuffering) {
                     CircularProgressIndicator(

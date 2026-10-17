@@ -77,15 +77,18 @@ fun GlassIconButton(
     }
 }
 
+/** SF's back chevron is about 18 tall; Material's glyph fills three quarters of its box. */
+private val BackChevronSize = 24.dp
+
 /** The glass back circle of a pushed page or sheet sub-page. */
 @Composable
 fun BackGlassButton(onClick: () -> Unit, modifier: Modifier = Modifier, hazeState: HazeState? = LocalHazeState.current) {
-    GlassIconButton(Icons.Rounded.ArrowBackIosNew, contentDescription = "Back", onClick = onClick, modifier = modifier, hazeState = hazeState)
+    GlassIconButton(Icons.Rounded.ArrowBackIosNew, contentDescription = "Back", onClick = onClick, modifier = modifier, iconSize = BackChevronSize, hazeState = hazeState)
 }
 
 /**
- * Toolbar text button. [prominent] is the iOS 26 confirmation style ("Done", "Save"): an accent
- * capsule with white text; the plain style is a glass capsule, semibold when [bold].
+ * Toolbar text button: a glass capsule with accent text, as iOS 26 draws "Done", "Cancel" and
+ * "Save". [prominent] marks the confirmation action, which iOS sets semibold.
  */
 @Composable
 fun GlassTextButton(
@@ -98,20 +101,12 @@ fun GlassTextButton(
     hazeState: HazeState? = LocalHazeState.current,
 ) {
     val colors = Osho.colors
-    val surface = if (prominent) {
-        Modifier
-            .shadow(6.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
-            .background(colors.accent, CircleShape)
-            .clip(CircleShape)
-    } else {
-        Modifier.glassButton(CircleShape, hazeState)
-    }
     Box(
         modifier = modifier
             .heightIn(min = 44.dp)
             .widthIn(min = 44.dp)
             .alpha(if (enabled) 1f else DisabledAlpha)
-            .then(surface)
+            .glassButton(CircleShape, hazeState)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
@@ -120,7 +115,7 @@ fun GlassTextButton(
             label,
             style = Osho.typography.body,
             fontWeight = if (prominent || bold) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (prominent) colors.onAccent else colors.label,
+            color = colors.accent,
             maxLines = 1,
         )
     }
@@ -163,16 +158,11 @@ fun InlineTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .heightIn(min = Grouped.barHeight)
+            .padding(horizontal = 16.dp),
     ) {
         if (onBack != null) {
-            GlassIconButton(
-                icon = Icons.Rounded.ArrowBackIosNew,
-                contentDescription = "Back",
-                onClick = onBack,
-                modifier = Modifier.align(Alignment.CenterStart),
-            )
+            BackGlassButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart))
         }
         Box(Modifier.align(Alignment.Center).padding(horizontal = 56.dp)) {
             CappedFontScale {

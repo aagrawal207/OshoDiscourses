@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.agraabhi.oshodiscourses.core.ui.components.BarIconButton
 import com.agraabhi.oshodiscourses.core.ui.components.CappedFontScale
 import com.agraabhi.oshodiscourses.core.ui.components.GlassCapsule
@@ -107,10 +109,11 @@ internal fun TranscriptToolbar(
             },
             trailing = {
                 GlassCapsule {
-                    BarIconButton(Icons.Rounded.Search, "Search transcript", vm::toggleSearch, enabled = state.isLoaded)
+                    // iOS tints toolbar glyphs with the accent.
+                    BarIconButton(Icons.Rounded.Search, "Search transcript", vm::toggleSearch, enabled = state.isLoaded, tint = Osho.colors.accent, iconSize = 26.dp)
                     var menuOpen by remember { mutableStateOf(false) }
                     Box {
-                        BarIconButton(Icons.Rounded.FormatSize, "Transcript options", { menuOpen = true })
+                        BarIconButton(Icons.Rounded.FormatSize, "Transcript options", { menuOpen = true }) { TextSizeGlyph() }
                         OptionsMenu(state, vm, pageURL, expanded = menuOpen, onDismiss = { menuOpen = false }, onOpenURL = onOpenURL)
                     }
                 }
@@ -119,7 +122,17 @@ internal fun TranscriptToolbar(
     }
 }
 
-/** Places [title] at the bar's centre when it clears both sides, else centred in the gap between them. */
+/** SF `textformat.size`: a small and a large A on one baseline; Material's glyph reads as "TT". */
+@Composable
+private fun TextSizeGlyph() {
+    val accent = Osho.colors.accent
+    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.clearAndSetSemantics {}) {
+        Text("A", fontSize = 15.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium, color = accent, modifier = Modifier.alignByBaseline())
+        Text("A", fontSize = 22.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, color = accent, modifier = Modifier.alignByBaseline())
+    }
+}
+
+/** Places [title] just after the leading button, as iOS 26 lays out a principal toolbar item. */
 @Composable
 private fun CenteredTitleBar(
     modifier: Modifier,
@@ -128,7 +141,7 @@ private fun CenteredTitleBar(
     trailing: @Composable () -> Unit,
 ) {
     Layout(contents = listOf(leading, title, trailing), modifier = modifier) { (lead, mid, trail), constraints ->
-        val gap = 8.dp.roundToPx()
+        val gap = 12.dp.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val l = lead.first().measure(loose)
         val t = trail.first().measure(loose)
@@ -139,11 +152,8 @@ private fun CenteredTitleBar(
         layout(width, height) {
             l.placeRelative(0, (height - l.height) / 2)
             t.placeRelative(width - t.width, (height - t.height) / 2)
-            val centred = (width - m.width) / 2
-            val minX = l.width + gap
-            val maxX = width - t.width - gap - m.width
-            val x = if (centred in minX..maxX) centred else minX + (available - m.width) / 2
-            m.placeRelative(x, (height - m.height) / 2)
+            // iOS 26 sets a principal item beside the leading button when trailing items are present.
+            m.placeRelative(l.width + gap, (height - m.height) / 2)
         }
     }
 }
@@ -157,7 +167,7 @@ private fun OptionsMenu(
     onDismiss: () -> Unit,
     onOpenURL: (String) -> Unit,
 ) {
-    OshoMenu(expanded = expanded, onDismiss = onDismiss) {
+    OshoMenu(expanded = expanded, onDismiss = onDismiss, reservesCheckColumn = true) {
         fun act(block: () -> Unit) {
             onDismiss()
             block()

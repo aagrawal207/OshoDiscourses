@@ -86,7 +86,7 @@ data class OshoColors(
     /** Liquid Glass hairline on the tab bar and toolbar buttons. */
     val glassBorder: Color,
     val glassShadow: Color,
-    /** Selected tab pill behind the accent icon and label. */
+    /** Selected tab pill behind the accent icon and label: darker than the bar in both modes. */
     val tabSelectionPill: Color,
 ) {
     /** Tinted-button secondary: `.secondary` inside a default-style Button resolves to accent at 60 % (§1.6). */
@@ -145,9 +145,9 @@ data class OshoColors(
             regularMaterial = Color(0xBFFFFFFF),
             regularMaterialFallback = Color(0xF5FFFFFF),
             barMaterial = Color(0xF0F9F9F9),
-            glassBorder = Color(0x4DFFFFFF),
+            glassBorder = Color(0x1A000000),
             glassShadow = Color(0x1F000000),
-            tabSelectionPill = Color(0x0F000000),
+            tabSelectionPill = Color(0x16000000),
         )
 
         /** True black, the iOS app's Apple Music dark look. */
@@ -180,14 +180,14 @@ data class OshoColors(
             systemYellow = Color(0xFFFFD600),
             systemBlue = Color(0xFF0091FF),
             systemPurple = Color(0xFFDB34F2),
-            ultraThinMaterial = Color(0x8C1C1C1E),
-            ultraThinMaterialFallback = Color(0xF01C1C1E),
+            ultraThinMaterial = Color(0x8C3A3A3C),
+            ultraThinMaterialFallback = Color(0xF0222224),
             regularMaterial = Color(0xBF1C1C1E),
             regularMaterialFallback = Color(0xF51C1C1E),
             barMaterial = Color(0xF0161616),
-            glassBorder = Color(0x1AFFFFFF),
+            glassBorder = Color(0x26FFFFFF),
             glassShadow = Color(0x1F000000),
-            tabSelectionPill = Color(0x1FFFFFFF),
+            tabSelectionPill = Color(0x8C000000),
         )
     }
 }

@@ -25,8 +25,8 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.Pending
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -69,8 +69,9 @@ import com.agraabhi.oshodiscourses.core.ui.components.Grouped
 import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
 import com.agraabhi.oshodiscourses.core.ui.components.ListSectionFooter
 import com.agraabhi.oshodiscourses.core.ui.components.MenuAction
+import com.agraabhi.oshodiscourses.core.ui.components.OshoIcons
 import com.agraabhi.oshodiscourses.core.ui.components.OshoMenu
-import com.agraabhi.oshodiscourses.core.ui.components.SearchField
+import com.agraabhi.oshodiscourses.core.ui.components.PageSearch
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.components.SheetAction
 import com.agraabhi.oshodiscourses.core.ui.components.SmallSpinner
@@ -121,13 +122,14 @@ internal fun DownloadsContent(
         background = Osho.colors.systemGroupedBackground,
         modifier = modifier,
         extraBottomPadding = if (state.isEditing) 56.dp else 0.dp,
+        search = PageSearch(state.query, actions.onQueryChange, "Search downloads"),
         actions = {
             if (state.groups.isNotEmpty()) {
                 if (state.isEditing) {
                     GlassTextButton("Done", actions.onExitEditing, hazeState = null)
                 } else {
                     Box {
-                        GlassIconButton(Icons.Rounded.MoreHoriz, "More options", { toolbarMenu = true }, tint = Osho.colors.accent, iconSize = 22.dp, hazeState = null)
+                        GlassIconButton(Icons.Outlined.Pending, "More options", { toolbarMenu = true }, tint = Osho.colors.accent, iconSize = 24.dp, hazeState = null)
                         OshoMenu(
                             expanded = toolbarMenu,
                             onDismiss = { toolbarMenu = false },
@@ -150,9 +152,6 @@ internal fun DownloadsContent(
             }
         },
     ) {
-        item(key = "search", contentType = "search") {
-            SearchField(state.query, actions.onQueryChange, "Search downloads", Modifier.padding(bottom = 4.dp))
-        }
         if (state.showInProgress) inProgressSection(state, actions)
         downloadedSections(
             state = state,
@@ -319,7 +318,7 @@ private fun SeriesHeader(
         Modifier
             .fillMaxWidth()
             .padding(start = Grouped.sideInset + Grouped.rowPadding, end = Grouped.sideInset + 4.dp)
-            .padding(top = if (first) 8.dp else 20.dp, bottom = 4.dp),
+            .padding(top = if (first) 11.dp else 26.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -332,7 +331,8 @@ private fun SeriesHeader(
         ) {
             SeriesThumbnail(group.series.name, 32.dp, coverURL = coverURL)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(group.series.name, style = Osho.typography.subheadline, fontWeight = FontWeight.SemiBold, color = colors.label)
+                // The list draws section headers secondary, so the name renders gray on iOS too.
+                Text(group.series.name, style = Osho.typography.subheadline, fontWeight = FontWeight.SemiBold, color = colors.secondaryLabel)
                 Text(group.subtitle, style = Osho.typography.caption2, color = colors.secondaryLabel)
             }
         }
@@ -545,7 +545,7 @@ private fun LazyListScope.activitySection(state: DownloadsUiState, actions: Down
     item(key = "activity.stats", contentType = "activity") {
         CardRow(isFirst = true, isLast = false, dividerStart = 52.dp) {
             ActivityRow(
-                icon = Icons.Rounded.BarChart,
+                icon = OshoIcons.ChartBarFill,
                 tint = Osho.colors.accent,
                 title = "Listening Stats",
                 subtitle = state.statsSubtitle,
@@ -584,7 +584,8 @@ private fun ActivityRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+        // SF `.title3` glyphs run about 22 wide; Material's leave a margin inside the box.
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = Osho.typography.body, color = colors.label)
             if (subtitle != null) Text(subtitle, style = Osho.typography.caption, color = colors.secondaryLabel)

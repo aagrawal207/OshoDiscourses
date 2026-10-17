@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.outlined.AllInclusive
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -29,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.components.BackGlassButton
 import com.agraabhi.oshodiscourses.core.ui.components.CardRow
 import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
+import com.agraabhi.oshodiscourses.core.ui.components.OshoIcons
 import com.agraabhi.oshodiscourses.core.ui.components.rowContentPadding
 import com.agraabhi.oshodiscourses.core.ui.components.sectionGap
 import com.agraabhi.oshodiscourses.core.ui.components.sectionHeader
@@ -50,7 +50,8 @@ internal fun ListeningStatsContent(
         modifier = modifier,
         navigation = onBack?.let { back -> { BackGlassButton(back, hazeState = null) } },
     ) {
-        sectionGap("top", 16.dp)
+        // iOS leaves a deep inset above a header-less first section.
+        sectionGap("top", 35.dp)
         item(key = "overview", contentType = "overview") {
             CardRow(isFirst = true, isLast = true) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -60,7 +61,7 @@ internal fun ListeningStatsContent(
                     }
                     Row(Modifier.fillMaxWidth()) {
                         StatCard("Discourses Done", "${state.discoursesDone}", Icons.Rounded.CheckCircle, colors.systemGreen, Modifier.weight(1f))
-                        StatCard("Series Done", "${state.seriesDone}", Icons.AutoMirrored.Rounded.LibraryBooks, colors.systemPurple, Modifier.weight(1f))
+                        StatCard("Series Done", "${state.seriesDone}", OshoIcons.BooksVertical, colors.systemPurple, Modifier.weight(1f))
                     }
                 }
             }
@@ -77,7 +78,7 @@ internal fun ListeningStatsContent(
                 ValueRow(label, value)
             }
         }
-        sectionGap("history.gap", 32.dp)
+        sectionGap("history.gap", 38.dp)
         item(key = "history", contentType = "link") {
             CardRow(isFirst = true, isLast = true) {
                 Row(
@@ -164,7 +165,7 @@ internal fun ListeningHistoryContent(state: ListeningStatsUiState, onBack: (() -
             itemsIndexed(state.played, key = { _, item -> "played.${item.id}" }, contentType = { _, _ -> "played" }) { index, item ->
                 CardRow(isFirst = index == 0, isLast = index == state.played.lastIndex) {
                     Row(
-                        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.rowContentPadding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.rowContentPadding(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {

@@ -8,7 +8,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextInput
+import com.agraabhi.oshodiscourses.core.ui.components.SEARCH_REVEAL_TAG
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.semantics.Role
@@ -86,6 +89,8 @@ class LibraryScreenInteractionTest {
     @Test
     fun searchMatchesDescriptionsAndThemes() {
         show()
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search by name or topic").performTextInput("KABIR")
         compose.onNodeWithText(LibraryFixtures.ajhun.name).assertIsDisplayed()
         compose.onNodeWithText(LibraryFixtures.bird.name).assertDoesNotExist()
@@ -96,6 +101,8 @@ class LibraryScreenInteractionTest {
     @Test
     fun noResultsOnlyWhileSearching() {
         show()
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search by name or topic").performTextInput("xyzzy")
         compose.onNodeWithText("No Results for “xyzzy”").assertIsDisplayed()
         compose.onNodeWithText("Check the spelling or try a new search.").assertIsDisplayed()

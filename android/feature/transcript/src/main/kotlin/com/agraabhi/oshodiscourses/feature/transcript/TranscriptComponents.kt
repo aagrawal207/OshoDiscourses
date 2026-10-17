@@ -40,7 +40,7 @@ internal fun GlassCircleButton(icon: ImageVector, label: String, onClick: () -> 
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = Osho.colors.label, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = Osho.colors.accent, modifier = Modifier.size(24.dp))
     }
 }
 

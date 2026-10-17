@@ -157,9 +157,6 @@ class AppContainer(private val application: Application) : AppServices {
             val started = SystemClock.elapsedRealtime()
             withContext(Dispatchers.IO) { bundledCatalog.warmUp() }
             Log.i(TAG, "outcome=catalog_warm ms=${SystemClock.elapsedRealtime() - started}")
-            downloadEngine.awaitReady()
-            // Shows the last talk in the mini-player, paused, as iOS does at launch.
-            playbackEngine.restoreLastSession()
         }
 
         appScope.launch { runCatching { sync.start() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "sync start failed", it) } }

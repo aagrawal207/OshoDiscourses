@@ -1,6 +1,9 @@
 package com.agraabhi.oshodiscourses.core.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -9,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,8 +36,6 @@ import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -147,26 +150,50 @@ fun IosSlider(
     }
 }
 
-/** iOS Toggle: white full-size thumb, accent track when on, no icon or outline (ui-style.md §8). */
+/** iOS 26 Toggle metrics: a 63 x 28 capsule track around a 39 x 24 capsule thumb. */
+private val SwitchTrackWidth = 63.dp
+private val SwitchTrackHeight = 28.dp
+private val SwitchThumbWidth = 39.dp
+private val SwitchThumbHeight = 24.dp
+
+/** iOS 26 Toggle (ui-style.md §3.3): accent track when on, a gray track when off, no icon. */
 @Composable
 fun IosSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val colors = Osho.colors
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        modifier = modifier,
-        enabled = enabled,
-        // A fixed thumb keeps it full size when off, like iOS; Material shrinks it.
-        thumbContent = { Box(Modifier.size(24.dp)) },
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White,
-            checkedTrackColor = colors.accent,
-            checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = Color.White,
-            uncheckedTrackColor = colors.systemFill,
-            uncheckedBorderColor = Color.Transparent,
-        ),
-    )
+    // iOS 26 draws the off track darker than systemFill; sampled from the reference screens.
+    val offTrack = if (colors.isDark) Color(0xFF5A5A5E) else Color(0xFFC5C5C7)
+    val track by animateColorAsState(if (checked) colors.accent else offTrack, tween(200), label = "switchTrack")
+    val travel = SwitchTrackWidth - SwitchThumbWidth - 4.dp
+    val thumbX by animateDpAsState(if (checked) travel else 0.dp, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium), label = "switchThumb")
+    Box(
+        modifier
+            .size(SwitchTrackWidth, SwitchTrackHeight)
+            .alpha(if (enabled) 1f else 0.4f)
+            .then(
+                if (onCheckedChange != null) {
+                    Modifier.toggleable(
+                        value = checked,
+                        enabled = enabled,
+                        role = Role.Switch,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onValueChange = onCheckedChange,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .background(track, CircleShape)
+            .padding(2.dp),
+    ) {
+        Box(
+            Modifier
+                .offset(x = thumbX)
+                .size(SwitchThumbWidth, SwitchThumbHeight)
+                .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f))
+                .background(Color.White, CircleShape),
+        )
+    }
 }
 
 /**
@@ -186,8 +213,7 @@ fun SegmentedControl(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .alpha(if (enabled) 1f else 0.4f)
+            .height(32.dp)
             .background(colors.tertiarySystemFill, CircleShape)
             .padding(2.dp),
     ) {
@@ -217,7 +243,8 @@ fun SegmentedControl(
                         label,
                         style = Osho.typography.segment,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = colors.label,
+                        // A disabled iOS segmented control keeps its track and thumb and grays only the labels.
+                        color = if (enabled) colors.label else colors.secondaryLabel,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,

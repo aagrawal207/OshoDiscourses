@@ -1,6 +1,7 @@
 package com.agraabhi.oshodiscourses.feature.player
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,7 +36,7 @@ internal fun SleepTimerMenu(
     modifier: Modifier = Modifier,
 ) {
     val checked = PlayerFormatting.checkedSleepMinutes(state)
-    Column(modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    Column(modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         SleepItem("End of discourse", checked = state.mode == SleepTimerMode.END_OF_DISCOURSE, onClick = onEndOfDiscourse)
         MenuDivider()
         SleepTimer.PRESET_MINUTES.forEach { minutes ->

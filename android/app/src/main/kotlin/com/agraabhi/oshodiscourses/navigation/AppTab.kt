@@ -1,12 +1,11 @@
 package com.agraabhi.oshodiscourses.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
-import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation3.runtime.NavKey
+import com.agraabhi.oshodiscourses.core.ui.components.OshoIcons
 import com.agraabhi.oshodiscourses.core.ui.components.OshoTabItem
 import com.agraabhi.oshodiscourses.feature.downloads.DownloadsRoute
 import com.agraabhi.oshodiscourses.feature.home.HomeRoute
@@ -19,8 +18,8 @@ import com.agraabhi.oshodiscourses.feature.settings.SettingsRoute
  */
 enum class AppTab(val title: String, val icon: ImageVector, val root: NavKey) {
     HOME("Home", Icons.Rounded.Home, HomeRoute),
-    LIBRARY("Library", Icons.AutoMirrored.Rounded.LibraryBooks, LibraryRoute),
-    DOWNLOADS("Downloads", Icons.Rounded.DownloadForOffline, DownloadsRoute),
+    LIBRARY("Library", OshoIcons.BooksVertical, LibraryRoute),
+    DOWNLOADS("Downloads", OshoIcons.ArrowDownCircleFill, DownloadsRoute),
     SETTINGS("Settings", Icons.Rounded.Settings, SettingsRoute),
     ;
 

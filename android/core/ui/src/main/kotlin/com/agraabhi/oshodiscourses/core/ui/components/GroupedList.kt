@@ -33,7 +33,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,6 +44,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
@@ -52,7 +53,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.bottomClearance
@@ -64,13 +64,27 @@ object Grouped {
     val cornerRadius = 22.dp
     val rowPadding = 16.dp
     val rowMinHeight = 52.dp
-    val barHeight = 52.dp
+    val barHeight = 44.dp
 }
+
+/** iOS large title: its line sits this far below the bar, putting the baseline 89 below the safe area. */
+private val LargeTitleTop = 14.dp
+
+/** Extra room above the first section of an inline-title page, as iOS 26 grouped lists leave. */
+private val InlinePageTop = 11.dp
+
+/** The soft edge iOS 26 draws under a bar instead of a hairline. */
+private val BarFade = 10.dp
+
+/** The bar over scrolled content: so heavily blurred on iOS that it reads as the page colour, lifted. */
+@Composable
+fun navBarColor(background: Color): Color =
+    if (Osho.colors.isDark) lerp(background, Color.White, 0.04f) else lerp(background, Color.White, 0.6f)
 
 /**
  * A navigation page: a lazy list under an iOS-style bar. A large title scrolls with the content
  * and the bar shows the inline title once it has scrolled away. Sheets below the status bar pass
- * a zero [topInset].
+ * a zero [topInset]. A [search] field hides under the title until the list is pulled down.
  */
 @Composable
 fun GroupedPage(
@@ -83,12 +97,17 @@ fun GroupedPage(
     actions: @Composable RowScope.() -> Unit = {},
     extraBottomPadding: Dp = 0.dp,
     topInset: Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+    search: PageSearch? = null,
+    listModifier: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
     val statusTop = topInset
     val density = LocalDensity.current
-    val collapseThreshold = with(density) { 36.dp.roundToPx() }
+    val reveal = rememberSearchRevealState(listState)
+    val searching = search != null && reveal.isActive
+    // The inline title takes over once the large title's baseline passes under the bar.
+    val collapseThreshold = with(density) { 40.dp.roundToPx() }
     val showInlineTitle by remember(largeTitle) {
         derivedStateOf {
             !largeTitle || listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > collapseThreshold
@@ -98,34 +117,48 @@ fun GroupedPage(
     Box(modifier.fillMaxSize().background(background)) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = statusTop + Grouped.barHeight, bottom = bottomClearance + extraBottomPadding + 24.dp),
+            modifier = Modifier.fillMaxSize().then(if (search != null) Modifier.nestedScroll(reveal.connection) else Modifier).then(listModifier),
+            contentPadding = PaddingValues(
+                top = statusTop + Grouped.barHeight + if (largeTitle && !searching) 0.dp else InlinePageTop,
+                bottom = bottomClearance + extraBottomPadding + 24.dp,
+            ),
         ) {
-            if (largeTitle) {
+            if (largeTitle && !searching) {
                 item(key = "page.largeTitle", contentType = "largeTitle") {
-                    Text(
-                        title,
-                        style = Osho.typography.largeTitle,
-                        fontWeight = FontWeight.Bold,
-                        color = Osho.colors.label,
-                        modifier = Modifier
-                            .padding(horizontal = Grouped.sideInset)
-                            .padding(bottom = 8.dp)
-                            .semantics { heading() },
-                    )
+                    CappedFontScale {
+                        Text(
+                            title,
+                            style = Osho.typography.largeTitle,
+                            fontWeight = FontWeight.Bold,
+                            color = Osho.colors.label,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(horizontal = Grouped.sideInset)
+                                .padding(top = LargeTitleTop, bottom = 6.dp)
+                                .semantics { heading() },
+                        )
+                    }
                 }
             }
+            if (search != null && !searching) searchRevealItem(reveal, search)
             content()
         }
-        PageBar(
-            title = title,
-            showTitle = showInlineTitle,
-            scrolled = scrolled,
-            background = background,
-            statusTop = statusTop,
-            navigation = navigation,
-            actions = actions,
-        )
+        if (search != null && searching) {
+            Column(Modifier.fillMaxWidth().background(background).padding(top = statusTop)) {
+                ActiveSearchBar(reveal, search)
+            }
+        } else {
+            PageBar(
+                title = title,
+                showTitle = showInlineTitle,
+                scrolled = scrolled,
+                background = background,
+                statusTop = statusTop,
+                navigation = navigation,
+                actions = actions,
+            )
+        }
         overlay()
     }
 }
@@ -140,21 +173,23 @@ private fun PageBar(
     navigation: (@Composable () -> Unit)?,
     actions: @Composable RowScope.() -> Unit,
 ) {
-    // iOS 26 fades content under the bar instead of drawing an opaque bar.
-    val fade = if (scrolled) {
-        Brush.verticalGradient(0f to background, 0.75f to background.copy(alpha = 0.9f), 1f to background.copy(alpha = 0f))
-    } else {
-        Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
+    val bar = navBarColor(background)
+    val total = statusTop + Grouped.barHeight + BarFade
+    val solidUntil = (statusTop + Grouped.barHeight) / total
+    // iOS 26 lifts the bar out of the page only once the title collapses; before that, only
+    // the status bar keeps a soft edge so scrolled rows never collide with the clock.
+    val fade = when {
+        showTitle && scrolled -> Brush.verticalGradient(0f to bar, solidUntil to bar, 1f to bar.copy(alpha = 0f))
+        scrolled -> Brush.verticalGradient(0f to background, (statusTop / total) to background.copy(alpha = 0.85f), ((statusTop + BarFade) / total) to background.copy(alpha = 0f))
+        else -> Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
     }
     Box(
         Modifier
             .fillMaxWidth()
-            .height(statusTop + Grouped.barHeight + 8.dp)
+            .height(total)
             .background(fade),
     ) {
-        // iOS bars stop growing past xxxLarge text so the title never collides with the buttons.
-        val density = LocalDensity.current
-        CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.35f))) {
+        CappedFontScale {
             BoxWithConstraints(
                 Modifier
                     .fillMaxWidth()
@@ -189,8 +224,9 @@ private fun PageBar(
     }
 }
 
-fun LazyListScope.sectionHeader(key: Any, text: String, first: Boolean = false) {
-    item(key = key, contentType = "sectionHeader") { SectionHeaderText(text, first) }
+/** [afterFooter]: iOS tucks a header closer under the previous section's footer than under its card. */
+fun LazyListScope.sectionHeader(key: Any, text: String, first: Boolean = false, afterFooter: Boolean = false) {
+    item(key = key, contentType = "sectionHeader") { SectionHeaderText(text, first, afterFooter) }
 }
 
 fun LazyListScope.sectionFooter(key: Any, text: String) {
@@ -202,7 +238,7 @@ fun LazyListScope.sectionGap(key: Any, height: Dp = 24.dp) {
 }
 
 @Composable
-fun SectionHeaderText(text: String, first: Boolean = false) {
+fun SectionHeaderText(text: String, first: Boolean = false, afterFooter: Boolean = false) {
     Text(
         text,
         style = Osho.typography.listHeader,
@@ -210,7 +246,7 @@ fun SectionHeaderText(text: String, first: Boolean = false) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = Grouped.sideInset + Grouped.rowPadding, end = Grouped.sideInset + Grouped.rowPadding)
-            .padding(top = if (first) 8.dp else 24.dp, bottom = 8.dp)
+            .padding(top = if (first) 12.dp else if (afterFooter) 18.dp else 29.dp, bottom = 10.dp)
             .semantics { heading() },
     )
 }
@@ -282,7 +318,7 @@ fun CardRow(
 }
 
 /** Standard row padding inside a [CardRow]. */
-fun Modifier.rowContentPadding(vertical: Dp = 10.dp): Modifier =
+fun Modifier.rowContentPadding(vertical: Dp = 12.dp): Modifier =
     heightIn(min = Grouped.rowMinHeight).padding(horizontal = Grouped.rowPadding, vertical = vertical)
 
 /** SwiftUI `ContentUnavailableView` (ui-style.md §8). */
