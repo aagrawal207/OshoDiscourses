@@ -16,6 +16,7 @@ GitHub README uses a separate hero and three gallery strips.
 | `story.json` | Defines the ordered captions, palette and source image for each poster |
 | `render.swift` | Uses AppKit/CoreText/ImageIO to render opaque sRGB images, JPEG galleries and the checksum manifest |
 | `prepare.py` | Validates and plans the 1.16.0 listing; `--apply` prepares it once 1.15.0 has released |
+| `subscription-images.swift` | Renders the three yearly support promotional images and their checksum manifest into `docs/app-store/subscription-images/` |
 
 Capture scripts are restricted to simulators whose names start with `Osho Store `.
 The seeder refuses to overwrite existing app data. Its sample bookmarks and daily

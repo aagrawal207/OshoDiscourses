@@ -57,6 +57,8 @@ matches all 175 app storefronts and includes new territories automatically.
 
 The older `OshoDonations` / `buymeacoffee` non-consumable (`6809799061`) is an
 incomplete legacy draft. The app's tip service uses only the five IDs above.
+Apple refuses to delete it (HTTP 409); see the
+[1.17.0 record](../releases/1.17.0.md#legacy-oshodonations-product).
 
 ## Verification and submission
 
