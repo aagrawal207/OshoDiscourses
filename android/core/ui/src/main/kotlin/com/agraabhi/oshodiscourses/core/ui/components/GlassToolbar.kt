@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
@@ -29,11 +30,29 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
+import dev.chrisbanes.haze.HazeState
+
+/**
+ * The Liquid Glass button surface. Sheets (elevated surfaces) have no backdrop to blur, so they
+ * get a solid light fill; pages use [glass] over [hazeState], or its tint without one.
+ */
+@Composable
+fun Modifier.glassButton(shape: Shape = CircleShape, hazeState: HazeState? = LocalHazeState.current): Modifier {
+    val colors = Osho.colors
+    val surface = shadow(6.dp, shape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
+    val filled = if (colors.elevated) {
+        surface.background(if (colors.isDark) colors.tertiarySystemBackground else Color.White, shape).clip(shape)
+    } else {
+        surface.glass(shape, hazeState = hazeState)
+    }
+    return filled.border(0.5.dp, colors.glassBorder, shape)
+}
 
 /** iOS 26 toolbar button: a 44 dp Liquid Glass circle around one icon. */
 @Composable
@@ -43,20 +62,93 @@ fun GlassIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     tint: Color = Osho.colors.label,
-    iconSize: Int = 20,
+    iconSize: Dp = 20.dp,
+    hazeState: HazeState? = LocalHazeState.current,
 ) {
-    val colors = Osho.colors
     Box(
         modifier = modifier
             .size(44.dp)
-            .shadow(6.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
-            .glass(CircleShape)
-            .border(0.5.dp, colors.glassBorder, CircleShape)
+            .glassButton(CircleShape, hazeState)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+/** The glass back circle of a pushed page or sheet sub-page. */
+@Composable
+fun BackGlassButton(onClick: () -> Unit, modifier: Modifier = Modifier, hazeState: HazeState? = LocalHazeState.current) {
+    GlassIconButton(Icons.Rounded.ArrowBackIosNew, contentDescription = "Back", onClick = onClick, modifier = modifier, hazeState = hazeState)
+}
+
+/**
+ * Toolbar text button. [prominent] is the iOS 26 confirmation style ("Done", "Save"): an accent
+ * capsule with white text; the plain style is a glass capsule, semibold when [bold].
+ */
+@Composable
+fun GlassTextButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    prominent: Boolean = false,
+    bold: Boolean = false,
+    enabled: Boolean = true,
+    hazeState: HazeState? = LocalHazeState.current,
+) {
+    val colors = Osho.colors
+    val surface = if (prominent) {
+        Modifier
+            .shadow(6.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
+            .background(colors.accent, CircleShape)
+            .clip(CircleShape)
+    } else {
+        Modifier.glassButton(CircleShape, hazeState)
+    }
+    Box(
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .widthIn(min = 44.dp)
+            .alpha(if (enabled) 1f else DisabledAlpha)
+            .then(surface)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = Osho.typography.body,
+            fontWeight = if (prominent || bold) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (prominent) colors.onAccent else colors.label,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * A sheet's inline toolbar (ui-style.md §3.3): 56 high, centred 17/600 title, 44 dp glass
+ * buttons. The title keeps clear of both slots so it stays centred whatever the buttons are.
+ */
+@Composable
+fun SheetToolbar(
+    title: String,
+    modifier: Modifier = Modifier,
+    leading: @Composable RowScope.() -> Unit = {},
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    Box(modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically, content = leading)
+        Text(
+            title,
+            style = Osho.typography.navInline,
+            color = Osho.colors.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 96.dp).semantics { heading() },
+        )
+        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically, content = trailing)
     }
 }
 

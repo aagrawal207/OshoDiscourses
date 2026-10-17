@@ -33,11 +33,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerState
+import com.agraabhi.oshodiscourses.core.ui.components.GlassTextButton
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedDivider
+import com.agraabhi.oshodiscourses.core.ui.components.SheetToolbar
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.player.components.GlassTextButton
-import com.agraabhi.oshodiscourses.feature.player.components.GroupedDivider
-import com.agraabhi.oshodiscourses.feature.player.components.InlineTopBar
 import com.agraabhi.oshodiscourses.feature.player.components.PlayingBars
 
 /** iOS `QueueView`: the download-scoped queue as Up Next. Tapping a row plays it and closes. */
@@ -50,7 +50,7 @@ internal fun QueueSheetContent(
 ) {
     val colors = Osho.colors
     Column(modifier.fillMaxSize()) {
-        InlineTopBar("Up Next", trailing = { GlassTextButton("Done", onClick = onDone, prominent = true) })
+        SheetToolbar("Up Next", trailing = { GlassTextButton("Done", onClick = onDone, prominent = true) })
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp),

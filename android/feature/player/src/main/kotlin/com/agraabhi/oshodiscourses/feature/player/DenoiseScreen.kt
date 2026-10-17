@@ -71,19 +71,19 @@ import com.agraabhi.oshodiscourses.core.model.DenoiseStrength
 import com.agraabhi.oshodiscourses.core.model.NoiseReductionMode
 import com.agraabhi.oshodiscourses.core.model.VoiceFocusPreset
 import com.agraabhi.oshodiscourses.core.ui.bottomClearance
+import com.agraabhi.oshodiscourses.core.ui.components.BackGlassButton
+import com.agraabhi.oshodiscourses.core.ui.components.DisclosureChevron
+import com.agraabhi.oshodiscourses.core.ui.components.GlassTextButton
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedDivider
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedSection
+import com.agraabhi.oshodiscourses.core.ui.components.IosSwitch
+import com.agraabhi.oshodiscourses.core.ui.components.MenuPickerRow
+import com.agraabhi.oshodiscourses.core.ui.components.SectionFooterText
+import com.agraabhi.oshodiscourses.core.ui.components.SectionGap
+import com.agraabhi.oshodiscourses.core.ui.components.SegmentedControl
+import com.agraabhi.oshodiscourses.core.ui.components.SheetToolbar
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.feature.player.PlayerFormatting.StatusIcon
-import com.agraabhi.oshodiscourses.feature.player.components.BackGlassButton
-import com.agraabhi.oshodiscourses.feature.player.components.DisclosureChevron
-import com.agraabhi.oshodiscourses.feature.player.components.GlassTextButton
-import com.agraabhi.oshodiscourses.feature.player.components.GroupedDivider
-import com.agraabhi.oshodiscourses.feature.player.components.GroupedSection
-import com.agraabhi.oshodiscourses.feature.player.components.InlineTopBar
-import com.agraabhi.oshodiscourses.feature.player.components.IosSwitch
-import com.agraabhi.oshodiscourses.feature.player.components.MenuPickerRow
-import com.agraabhi.oshodiscourses.feature.player.components.SectionFooterText
-import com.agraabhi.oshodiscourses.feature.player.components.SectionGap
-import com.agraabhi.oshodiscourses.feature.player.components.SegmentedControl
 import kotlinx.serialization.Serializable
 
 /** The shared DeNoise screen, pushed from Settings or opened from the player. */
@@ -165,7 +165,7 @@ private fun DenoisePageScaffold(
     val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottom = maxOf(bottomClearance, navBar) + 16.dp
     Column(Modifier.fillMaxSize().background(Osho.colors.systemGroupedBackground).statusBarsPadding()) {
-        InlineTopBar(title, leading = leading, trailing = trailing)
+        SheetToolbar(title, leading = leading, trailing = trailing)
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = bottom),
             content = content,

@@ -26,14 +26,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.agraabhi.oshodiscourses.core.ui.components.BackGlassButton
+import com.agraabhi.oshodiscourses.core.ui.components.CardRow
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
+import com.agraabhi.oshodiscourses.core.ui.components.rowContentPadding
+import com.agraabhi.oshodiscourses.core.ui.components.sectionGap
+import com.agraabhi.oshodiscourses.core.ui.components.sectionHeader
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.downloads.ui.BackButton
-import com.agraabhi.oshodiscourses.feature.downloads.ui.CardRow
-import com.agraabhi.oshodiscourses.feature.downloads.ui.GroupedPage
-import com.agraabhi.oshodiscourses.feature.downloads.ui.rowContentPadding
-import com.agraabhi.oshodiscourses.feature.downloads.ui.sectionGap
-import com.agraabhi.oshodiscourses.feature.downloads.ui.sectionHeader
 
 @Composable
 internal fun ListeningStatsContent(
@@ -48,7 +48,7 @@ internal fun ListeningStatsContent(
         largeTitle = false,
         background = colors.systemBackground,
         modifier = modifier,
-        navigation = onBack?.let { back -> { BackButton(back) } },
+        navigation = onBack?.let { back -> { BackGlassButton(back, hazeState = null) } },
     ) {
         sectionGap("top", 16.dp)
         item(key = "overview", contentType = "overview") {
@@ -132,7 +132,7 @@ internal fun ListeningHistoryContent(state: ListeningStatsUiState, onBack: (() -
         largeTitle = false,
         background = colors.systemBackground,
         modifier = modifier,
-        navigation = onBack?.let { back -> { BackButton(back) } },
+        navigation = onBack?.let { back -> { BackGlassButton(back, hazeState = null) } },
     ) {
         sectionHeader("days.header", "Daily Log", first = true)
         if (state.days.isEmpty()) {

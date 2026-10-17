@@ -37,19 +37,19 @@ import com.agraabhi.oshodiscourses.core.domain.sync.SyncStatus
 import com.agraabhi.oshodiscourses.core.model.AccentTheme
 import com.agraabhi.oshodiscourses.core.model.Appearance
 import com.agraabhi.oshodiscourses.core.model.LanguageFilter
+import com.agraabhi.oshodiscourses.core.ui.components.CardRow
+import com.agraabhi.oshodiscourses.core.ui.components.Grouped
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
+import com.agraabhi.oshodiscourses.core.ui.components.ListSectionFooter
+import com.agraabhi.oshodiscourses.core.ui.components.SegmentedControl
+import com.agraabhi.oshodiscourses.core.ui.components.SmallSpinner
+import com.agraabhi.oshodiscourses.core.ui.components.rowContentPadding
+import com.agraabhi.oshodiscourses.core.ui.components.sectionFooter
+import com.agraabhi.oshodiscourses.core.ui.components.sectionHeader
 import com.agraabhi.oshodiscourses.core.ui.theme.AccentPalette
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.feature.settings.ui.AccentSwatch
-import com.agraabhi.oshodiscourses.feature.settings.ui.CardRow
-import com.agraabhi.oshodiscourses.feature.settings.ui.Grouped
-import com.agraabhi.oshodiscourses.feature.settings.ui.GroupedPage
-import com.agraabhi.oshodiscourses.feature.settings.ui.SectionFooterText
-import com.agraabhi.oshodiscourses.feature.settings.ui.SegmentedControl
-import com.agraabhi.oshodiscourses.feature.settings.ui.SmallSpinner
 import com.agraabhi.oshodiscourses.feature.settings.ui.ToggleRow
-import com.agraabhi.oshodiscourses.feature.settings.ui.rowContentPadding
-import com.agraabhi.oshodiscourses.feature.settings.ui.sectionFooter
-import com.agraabhi.oshodiscourses.feature.settings.ui.sectionHeader
 
 internal class SettingsActions(
     val onLanguage: (LanguageFilter) -> Unit = {},
@@ -273,7 +273,7 @@ private fun LazyListScope.aboutSection(state: SettingsUiState, versionName: Stri
     }
     item(key = "about.footer") {
         Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            AboutFooter.forEach { SectionFooterText(it) }
+            AboutFooter.forEach { ListSectionFooter(it) }
         }
     }
 }

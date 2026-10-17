@@ -33,8 +33,10 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,13 +52,15 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.domain.bookmarks.BookmarkCategory
+import com.agraabhi.oshodiscourses.core.ui.components.GlassTextButton
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedDivider
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedSection
+import com.agraabhi.oshodiscourses.core.ui.components.SectionGap
+import com.agraabhi.oshodiscourses.core.ui.components.SheetDetent
+import com.agraabhi.oshodiscourses.core.ui.components.SheetHost
+import com.agraabhi.oshodiscourses.core.ui.components.SheetToolbar
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.player.components.GlassTextButton
-import com.agraabhi.oshodiscourses.feature.player.components.GroupedDivider
-import com.agraabhi.oshodiscourses.feature.player.components.GroupedSection
-import com.agraabhi.oshodiscourses.feature.player.components.InlineTopBar
-import com.agraabhi.oshodiscourses.feature.player.components.SectionGap
 
 /** SF Symbol per category (iOS `BookmarkCategory.icon`, ui-style.md §4). */
 internal val BookmarkCategory.icon: ImageVector
@@ -68,6 +72,45 @@ internal val BookmarkCategory.icon: ImageVector
         BookmarkCategory.MEDITATION -> Icons.Rounded.SelfImprovement
         BookmarkCategory.CUSTOM -> Icons.Outlined.Sell
     }
+
+/**
+ * The window-level Add Bookmark sheet (iOS `ContentView.windowBookmarkBinding`), for menus that
+ * bookmark the current track while the player is closed. The time is captured when it opens.
+ */
+@Composable
+fun AddBookmarkSheet(visible: Boolean, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val viewModel = playerViewModel()
+    // Captured on the rising edge and kept through the exit animation.
+    val capture = remember { DraftCapture() }
+    if (visible && !capture.shown) capture.draft = viewModel.bookmarkDraft()
+    capture.shown = visible
+    val current = capture.draft
+    // Nothing is loaded, as iOS `addBookmark()` guards; the request just ends.
+    if (visible && current == null) SideEffect(onDismiss)
+    SheetHost(
+        visible = visible && current != null,
+        onDismissRequest = onDismiss,
+        modifier = modifier,
+        detents = listOf(SheetDetent.MEDIUM),
+        grouped = true,
+    ) {
+        if (current != null) {
+            AddBookmarkContent(
+                draft = current,
+                onCancel = onDismiss,
+                onSave = { note, category, custom ->
+                    viewModel.saveBookmark(current, note, category, custom)
+                    onDismiss()
+                },
+            )
+        }
+    }
+}
+
+private class DraftCapture {
+    var shown = false
+    var draft: BookmarkDraft? = null
+}
 
 /**
  * iOS `AddBookmarkSheet`. iOS has no edit UI, and the contract has no update, so this only adds.
@@ -86,7 +129,7 @@ internal fun AddBookmarkContent(
     var custom by rememberSaveable { mutableStateOf("") }
 
     Column(modifier.fillMaxSize()) {
-        InlineTopBar(
+        SheetToolbar(
             "Add Bookmark",
             leading = { GlassTextButton("Cancel", onClick = onCancel) },
             trailing = { GlassTextButton("Save", onClick = { onSave(note, category, custom) }, prominent = true) },

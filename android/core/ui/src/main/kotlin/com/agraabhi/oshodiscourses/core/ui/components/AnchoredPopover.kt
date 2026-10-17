@@ -1,4 +1,4 @@
-package com.agraabhi.oshodiscourses.feature.player.components
+package com.agraabhi.oshodiscourses.core.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -45,7 +45,7 @@ import kotlin.math.roundToInt
  * in this host's coordinates. Drawn in-window so it layers with the player and its sheets.
  */
 @Composable
-internal fun AnchoredPopover(
+fun AnchoredPopover(
     visible: Boolean,
     anchor: Rect?,
     onDismissRequest: () -> Unit,

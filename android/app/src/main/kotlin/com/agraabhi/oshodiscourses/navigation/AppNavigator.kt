@@ -23,6 +23,8 @@ class AppNavigator(
     selectedTabState: MutableState<AppTab> = mutableStateOf(AppTab.HOME),
     playerPresentedState: MutableState<Boolean> = mutableStateOf(false),
     transcriptState: MutableState<String?> = mutableStateOf(null),
+    supportState: MutableState<Boolean> = mutableStateOf(false),
+    addBookmarkState: MutableState<Boolean> = mutableStateOf(false),
 ) {
     var selectedTab by selectedTabState
         private set
@@ -32,6 +34,17 @@ class AppNavigator(
     /** The transcript sheet shown over the player, if any. */
     var transcriptDiscourseID by transcriptState
         private set
+
+    /** The Support Development sheet, from Settings or the Home support card. */
+    var isSupportPresented by supportState
+        private set
+
+    /** The window-level Add Bookmark sheet, asked for from a Series or Downloads menu. */
+    var isAddBookmarkPresented by addBookmarkState
+        private set
+
+    // Not saved: after process death the sheet comes back without the Home card's callback.
+    private var onSupportDismissed: (() -> Unit)? = null
 
     val currentStack: NavBackStack<NavKey> get() = stacks.getValue(selectedTab)
 
@@ -68,6 +81,26 @@ class AppNavigator(
         transcriptDiscourseID = null
     }
 
+    /** [onDismissed] lets the Home support card record that its prompt was handled. */
+    fun showSupport(onDismissed: (() -> Unit)? = null) {
+        onSupportDismissed = onDismissed
+        isSupportPresented = true
+    }
+
+    fun closeSupport() {
+        isSupportPresented = false
+        onSupportDismissed?.invoke()
+        onSupportDismissed = null
+    }
+
+    fun showAddBookmark() {
+        isAddBookmarkPresented = true
+    }
+
+    fun closeAddBookmark() {
+        isAddBookmarkPresented = false
+    }
+
     /** From the player's series title: close it, select Home, reset its stack, push the series. */
     fun openSeriesFromPlayer(seriesID: String) {
         closePlayer()
@@ -91,12 +124,16 @@ fun rememberAppNavigator(): AppNavigator {
     val tab = rememberSaveable { mutableStateOf(AppTab.HOME) }
     val player = rememberSaveable { mutableStateOf(false) }
     val transcript = rememberSaveable { mutableStateOf<String?>(null) }
+    val support = rememberSaveable { mutableStateOf(false) }
+    val addBookmark = rememberSaveable { mutableStateOf(false) }
     return remember(home, library, downloads, settings) {
         AppNavigator(
             stacks = mapOf(AppTab.HOME to home, AppTab.LIBRARY to library, AppTab.DOWNLOADS to downloads, AppTab.SETTINGS to settings),
             selectedTabState = tab,
             playerPresentedState = player,
             transcriptState = transcript,
+            supportState = support,
+            addBookmarkState = addBookmark,
         )
     }
 }

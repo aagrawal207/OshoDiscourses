@@ -1,4 +1,4 @@
-package com.agraabhi.oshodiscourses.feature.player.components
+package com.agraabhi.oshodiscourses.core.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -59,14 +59,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** iOS presentation detents: about half the screen, or full height below the status bar. */
-internal enum class SheetDetent { MEDIUM, LARGE }
+enum class SheetDetent { MEDIUM, LARGE }
 
 /**
  * An iOS-style sheet drawn in the same window as the player, so it stacks over it, shares its
  * back handling and shows in screenshots. Drags and content overscroll resize or dismiss it.
  */
 @Composable
-internal fun SheetHost(
+fun SheetHost(
     visible: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,

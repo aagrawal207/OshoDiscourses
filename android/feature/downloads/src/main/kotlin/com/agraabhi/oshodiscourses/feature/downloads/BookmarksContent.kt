@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
@@ -32,23 +32,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.domain.bookmarks.BookmarkCategory
+import com.agraabhi.oshodiscourses.core.ui.components.BackGlassButton
+import com.agraabhi.oshodiscourses.core.ui.components.CardRow
+import com.agraabhi.oshodiscourses.core.ui.components.EmptyState
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
 import com.agraabhi.oshodiscourses.core.ui.components.OshoFilterChip
+import com.agraabhi.oshodiscourses.core.ui.components.SmallSpinner
+import com.agraabhi.oshodiscourses.core.ui.components.rowContentPadding
+import com.agraabhi.oshodiscourses.core.ui.components.sectionHeader
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.downloads.ui.BackButton
-import com.agraabhi.oshodiscourses.feature.downloads.ui.CardRow
-import com.agraabhi.oshodiscourses.feature.downloads.ui.EmptyState
-import com.agraabhi.oshodiscourses.feature.downloads.ui.GroupedPage
-import com.agraabhi.oshodiscourses.feature.downloads.ui.SmallSpinner
-import com.agraabhi.oshodiscourses.feature.downloads.ui.rowContentPadding
-import com.agraabhi.oshodiscourses.feature.downloads.ui.sectionHeader
 
 /** iOS `BookmarkCategory.icon` mapped to Material Symbols (ui-style.md §4). */
 internal val BookmarkCategory.icon: ImageVector
@@ -76,7 +76,7 @@ internal fun BookmarksContent(state: BookmarksUiState, actions: BookmarksActions
         largeTitle = true,
         background = Osho.colors.systemBackground,
         modifier = modifier,
-        navigation = actions.onBack?.let { back -> { BackButton(back) } },
+        navigation = actions.onBack?.let { back -> { BackGlassButton(back, hazeState = null) } },
     ) {
         if (!state.hasBookmarks) {
             item(key = "empty", contentType = "empty") {

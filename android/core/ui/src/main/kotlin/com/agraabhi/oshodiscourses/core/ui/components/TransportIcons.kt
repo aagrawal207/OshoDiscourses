@@ -18,27 +18,44 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 
-/** `gobackward.15`: Material has no replay-15, so "15" is drawn inside `replay`. */
+/**
+ * SF `gobackward.15` / `goforward.30`: Material has no replay-15, so both draw `replay` with the
+ * number on top (ui-style.md §4). Forward mirrors the arrow but not the digits.
+ */
 @Composable
-fun ReplayFifteenIcon(tint: Color, size: Dp = 24.dp, modifier: Modifier = Modifier) {
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.Replay, contentDescription = null, tint = tint, modifier = Modifier.size(size))
-        val scale = size.value / 24f
+fun SkipIntervalIcon(seconds: Int, forward: Boolean, tint: Color, modifier: Modifier = Modifier, size: Dp = 24.dp) {
+    // Sized from dp, not sp, so the digits stay inside the ring at any font scale.
+    val fontSize = with(LocalDensity.current) { (size * 0.34f).toSp() }
+    Box(modifier.size(size).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+        Icon(
+            Icons.Rounded.Replay,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(size).graphicsLayer { if (forward) scaleX = -1f },
+        )
         Text(
-            "15",
+            seconds.toString(),
             color = tint,
-            fontSize = with(LocalDensity.current) { (8 * scale).dp.toSp() },
+            fontSize = fontSize,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.offset(y = (1 * scale).dp),
+            lineHeight = fontSize,
+            modifier = Modifier.offset(y = size / 24),
         )
     }
 }
+
+/** The shared `gobackward.15` glyph, for the player and the transcript transport. */
+@Composable
+fun ReplayFifteenIcon(tint: Color, size: Dp = 24.dp, modifier: Modifier = Modifier) =
+    SkipIntervalIcon(15, forward = false, tint = tint, modifier = modifier, size = size)
 
 /** iOS `CircularProgressView`: a 28 dp ring with a stop square, or a spinner while queued. */
 @Composable

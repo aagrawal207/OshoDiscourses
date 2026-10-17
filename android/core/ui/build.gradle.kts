@@ -6,6 +6,8 @@ plugins {
 dependencies {
     api(projects.core.model)
     api(projects.core.domain)
+    // BackHandler for the in-window sheets and popovers.
+    implementation(libs.androidx.activity.compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     api(libs.haze)

@@ -183,6 +183,8 @@ class SettingsScreenshotTest {
         compose.onNodeWithText("Stop Syncing").performClick()
         compose.waitForIdle()
         assertThat(services.sync.status.value).isEqualTo(SyncStatus.SignInNeeded)
+        // Stop Syncing also withdraws the Drive grant.
+        assertThat(services.sync.disconnectCount).isEqualTo(1)
     }
 
     @Test

@@ -56,10 +56,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.model.PlaybackSpeed
+import com.agraabhi.oshodiscourses.core.ui.components.DisabledAlpha
+import com.agraabhi.oshodiscourses.core.ui.components.IosSlider
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.player.components.DisabledAlpha
-import com.agraabhi.oshodiscourses.feature.player.components.IosSlider
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

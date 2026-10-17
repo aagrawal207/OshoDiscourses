@@ -15,13 +15,14 @@ import kotlinx.coroutines.flow.update
 
 object SampleSupportProducts {
     val tips: List<SupportProduct> = SupportStore.TIP_PRODUCTS.map {
-        SupportProduct(it.id, it.name, "A one-time tip. It unlocks nothing.", it.basePrice.removePrefix("US"))
+        val price = it.basePrice.removePrefix("US")
+        SupportProduct(it.id, it.name, "A one-time tip. It unlocks nothing.", price, price.removePrefix("$").toLong() * 1_000_000)
     }
 
     val annual: List<SupportProduct> = listOf(
-        SupportProduct(SupportStore.ANNUAL_PRODUCT_IDS[0], "Yearly support", "Renews yearly.", "$5.00"),
-        SupportProduct(SupportStore.ANNUAL_PRODUCT_IDS[1], "Yearly support", "Renews yearly.", "$10.00"),
-        SupportProduct(SupportStore.ANNUAL_PRODUCT_IDS[2], "Yearly support", "Renews yearly.", "$15.00"),
+        SupportProduct(SupportStore.ANNUAL_PRODUCT_IDS[0], "Yearly support", "Renews yearly.", "$5.00", 5_000_000),
+        SupportProduct(SupportStore.ANNUAL_PRODUCT_IDS[1], "Yearly support", "Renews yearly.", "$10.00", 10_000_000),
+        SupportProduct(SupportStore.ANNUAL_PRODUCT_IDS[2], "Yearly support", "Renews yearly.", "$15.00", 15_000_000),
     )
 }
 

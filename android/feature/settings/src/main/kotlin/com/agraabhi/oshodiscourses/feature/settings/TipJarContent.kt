@@ -2,6 +2,7 @@ package com.agraabhi.oshodiscourses.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,23 +38,24 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.agraabhi.oshodiscourses.core.ui.components.ActionSheet
+import com.agraabhi.oshodiscourses.core.ui.components.CardRow
 import com.agraabhi.oshodiscourses.core.ui.components.GlassMaterial
+import com.agraabhi.oshodiscourses.core.ui.components.GlassTextButton
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
+import com.agraabhi.oshodiscourses.core.ui.components.SheetAction
+import com.agraabhi.oshodiscourses.core.ui.components.SmallSpinner
 import com.agraabhi.oshodiscourses.core.ui.components.glass
+import com.agraabhi.oshodiscourses.core.ui.components.isAccessibilityTextSize
+import com.agraabhi.oshodiscourses.core.ui.components.rowContentPadding
+import com.agraabhi.oshodiscourses.core.ui.components.sectionFooter
+import com.agraabhi.oshodiscourses.core.ui.components.sectionGap
+import com.agraabhi.oshodiscourses.core.ui.components.sectionHeader
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.settings.ui.ActionSheet
-import com.agraabhi.oshodiscourses.feature.settings.ui.CardRow
-import com.agraabhi.oshodiscourses.feature.settings.ui.GlassTextButton
-import com.agraabhi.oshodiscourses.feature.settings.ui.GroupedPage
 import com.agraabhi.oshodiscourses.feature.settings.ui.IosAlert
-import com.agraabhi.oshodiscourses.feature.settings.ui.SheetAction
-import com.agraabhi.oshodiscourses.feature.settings.ui.SmallSpinner
-import com.agraabhi.oshodiscourses.feature.settings.ui.isAccessibilityTextSize
-import com.agraabhi.oshodiscourses.feature.settings.ui.rowContentPadding
-import com.agraabhi.oshodiscourses.feature.settings.ui.sectionFooter
-import com.agraabhi.oshodiscourses.feature.settings.ui.sectionGap
-import com.agraabhi.oshodiscourses.feature.settings.ui.sectionHeader
 
 internal const val PRIVACY_POLICY_URL = "https://github.com/aagrawal207/OshoDiscourses/blob/main/PRIVACY.md"
 
@@ -68,20 +72,21 @@ internal class TipJarActions(
     val onManageSubscriptions: () -> Unit = {},
     val onOpenUrl: (String) -> Unit = {},
     val onDismissMessages: () -> Unit = {},
-    /** Null hides "Request Was Declined"; `SupportStore` has no way to clear a pending request yet. */
+    /** Null hides "Request Was Declined", for stores that cannot forget a declined request. */
     val onClearDeclinedRequest: (() -> Unit)? = null,
 )
 
 @Composable
-internal fun TipJarContent(state: TipJarUiState, actions: TipJarActions, modifier: Modifier = Modifier) {
+internal fun TipJarContent(state: TipJarUiState, actions: TipJarActions, modifier: Modifier = Modifier, topInset: Dp? = null) {
     var confirmDeclined by remember { mutableStateOf(false) }
     GroupedPage(
         title = "Support Development",
         largeTitle = false,
         background = Osho.colors.systemGroupedBackground,
         modifier = modifier,
-        navigation = { GlassTextButton("Done", actions.onDone) },
+        navigation = { GlassTextButton("Done", actions.onDone, hazeState = null) },
         extraBottomPadding = if (state.isPending) 160.dp else 0.dp,
+        topInset = topInset ?: WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
         overlay = {
             if (state.isPending) PendingBar(actions.onDismissMessages, Modifier.align(Alignment.BottomCenter))
         },
@@ -245,9 +250,12 @@ private fun ProductRow(row: SupportRow, onClick: () -> Unit) {
             )
         }
     }
+    // A row that disables itself from its own tap (purchase starts) can keep its pressed ripple;
+    // a fresh interaction source per enabled state drops it.
+    val interactions = remember(row.enabled) { MutableInteractionSource() }
     val rowModifier = Modifier
         .fillMaxWidth()
-        .clickable(enabled = row.enabled, role = Role.Button, onClick = onClick)
+        .clickable(interactions, ripple(), enabled = row.enabled, role = Role.Button, onClick = onClick)
         .semantics(mergeDescendants = true) {}
         .heightIn(min = 44.dp)
         .padding(horizontal = 16.dp, vertical = 10.dp)

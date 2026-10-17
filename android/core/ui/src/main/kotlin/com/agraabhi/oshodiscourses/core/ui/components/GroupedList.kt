@@ -1,13 +1,12 @@
-package com.agraabhi.oshodiscourses.feature.downloads.ui
+package com.agraabhi.oshodiscourses.core.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -26,11 +25,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,16 +39,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -59,11 +56,10 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.bottomClearance
-import com.agraabhi.oshodiscourses.core.ui.components.glass
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 
 /** iOS 26 inset-grouped metrics (ui-style.md §3.3). */
-internal object Grouped {
+object Grouped {
     val sideInset = 16.dp
     val cornerRadius = 22.dp
     val rowPadding = 16.dp
@@ -73,10 +69,11 @@ internal object Grouped {
 
 /**
  * A navigation page: a lazy list under an iOS-style bar. A large title scrolls with the content
- * and the bar shows the inline title once it has scrolled away.
+ * and the bar shows the inline title once it has scrolled away. Sheets below the status bar pass
+ * a zero [topInset].
  */
 @Composable
-internal fun GroupedPage(
+fun GroupedPage(
     title: String,
     largeTitle: Boolean,
     background: Color,
@@ -85,10 +82,11 @@ internal fun GroupedPage(
     navigation: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     extraBottomPadding: Dp = 0.dp,
+    topInset: Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
     overlay: @Composable BoxScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = topInset
     val density = LocalDensity.current
     val collapseThreshold = with(density) { 36.dp.roundToPx() }
     val showInlineTitle by remember(largeTitle) {
@@ -191,69 +189,20 @@ private fun PageBar(
     }
 }
 
-/** 44 dp Liquid Glass circle used for back and toolbar icons. */
-@Composable
-internal fun GlassCircleButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    tint: Color = Osho.colors.label,
-    iconSize: Dp = 22.dp,
-) {
-    val colors = Osho.colors
-    Box(
-        modifier
-            .size(44.dp)
-            .shadow(8.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
-            // In-page chrome sits inside the shell's haze source, so it uses the tint fallback.
-            .glass(CircleShape, hazeState = null)
-            .border(0.5.dp, colors.glassBorder, CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize))
-    }
-}
-
-/** Glass capsule for text toolbar buttons such as "Done". */
-@Composable
-internal fun GlassTextButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, bold: Boolean = false) {
-    val colors = Osho.colors
-    Box(
-        modifier
-            .heightIn(min = 44.dp)
-            .shadow(8.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
-            .glass(CircleShape, hazeState = null)
-            .border(0.5.dp, colors.glassBorder, CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = Osho.typography.body, fontWeight = if (bold) FontWeight.SemiBold else null, color = colors.label)
-    }
-}
-
-@Composable
-internal fun BackButton(onBack: () -> Unit) {
-    GlassCircleButton(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", onBack, iconSize = 18.dp, modifier = Modifier)
-}
-
-internal fun LazyListScope.sectionHeader(key: Any, text: String, first: Boolean = false) {
+fun LazyListScope.sectionHeader(key: Any, text: String, first: Boolean = false) {
     item(key = key, contentType = "sectionHeader") { SectionHeaderText(text, first) }
 }
 
-internal fun LazyListScope.sectionFooter(key: Any, text: String) {
-    item(key = key, contentType = "sectionFooter") { SectionFooterText(text) }
+fun LazyListScope.sectionFooter(key: Any, text: String) {
+    item(key = key, contentType = "sectionFooter") { ListSectionFooter(text) }
 }
 
-internal fun LazyListScope.sectionGap(key: Any, height: Dp = 24.dp) {
+fun LazyListScope.sectionGap(key: Any, height: Dp = 24.dp) {
     item(key = key, contentType = "gap") { Spacer(Modifier.height(height)) }
 }
 
 @Composable
-internal fun SectionHeaderText(text: String, first: Boolean = false) {
+fun SectionHeaderText(text: String, first: Boolean = false) {
     Text(
         text,
         style = Osho.typography.listHeader,
@@ -266,8 +215,9 @@ internal fun SectionHeaderText(text: String, first: Boolean = false) {
     )
 }
 
+/** A section footer in a lazy grouped list, inset to the row text. */
 @Composable
-internal fun SectionFooterText(text: String, modifier: Modifier = Modifier) {
+fun ListSectionFooter(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = Osho.typography.listFooter,
@@ -280,7 +230,7 @@ internal fun SectionFooterText(text: String, modifier: Modifier = Modifier) {
 }
 
 /** Card corners for one row of a section: only the ends are rounded. */
-internal fun rowShape(isFirst: Boolean, isLast: Boolean): Shape {
+fun rowShape(isFirst: Boolean, isLast: Boolean): Shape {
     val r = Grouped.cornerRadius
     return RoundedCornerShape(
         topStart = if (isFirst) r else 0.dp,
@@ -295,7 +245,7 @@ internal fun rowShape(isFirst: Boolean, isLast: Boolean): Shape {
  * measured from the card's leading edge to the row's text.
  */
 @Composable
-internal fun CardRow(
+fun CardRow(
     isFirst: Boolean,
     isLast: Boolean,
     modifier: Modifier = Modifier,
@@ -332,12 +282,12 @@ internal fun CardRow(
 }
 
 /** Standard row padding inside a [CardRow]. */
-internal fun Modifier.rowContentPadding(vertical: Dp = 10.dp): Modifier =
+fun Modifier.rowContentPadding(vertical: Dp = 10.dp): Modifier =
     heightIn(min = Grouped.rowMinHeight).padding(horizontal = Grouped.rowPadding, vertical = vertical)
 
 /** SwiftUI `ContentUnavailableView` (ui-style.md §8). */
 @Composable
-internal fun EmptyState(icon: ImageVector, title: String, description: String, modifier: Modifier = Modifier) {
+fun EmptyState(icon: ImageVector, title: String, description: String, modifier: Modifier = Modifier) {
     Column(
         modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -364,10 +314,79 @@ internal fun EmptyState(icon: ImageVector, title: String, description: String, m
 
 /** `ProgressView()` at small control size: a gray spinner. */
 @Composable
-internal fun SmallSpinner(modifier: Modifier = Modifier, size: Dp = 20.dp) {
+fun SmallSpinner(modifier: Modifier = Modifier, size: Dp = 20.dp) {
     CircularProgressIndicator(
         modifier = modifier.size(size),
         color = Osho.colors.secondaryLabel,
         strokeWidth = 2.dp,
     )
+}
+
+/**
+ * An inset-grouped Form section outside a lazy list (ui-style.md §3.3, §8): 17/600 secondary
+ * header, r 22 card inset 16, 13 sp secondary footer. Headers are never uppercased.
+ */
+@Composable
+fun GroupedSection(
+    modifier: Modifier = Modifier,
+    header: String? = null,
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = Osho.colors
+    Column(modifier.fillMaxWidth().padding(horizontal = Grouped.sideInset)) {
+        if (header != null) {
+            Text(
+                header,
+                style = Osho.typography.listHeader,
+                color = colors.secondaryLabel,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp).semantics { heading() },
+            )
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Grouped.cornerRadius))
+                .background(colors.secondarySystemGroupedBackground),
+            content = content,
+        )
+        if (footer != null) {
+            Column(
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 7.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                content = footer,
+            )
+        }
+    }
+}
+
+/** Footer text for the [GroupedSection] footer slot, which supplies the inset. */
+@Composable
+fun SectionFooterText(text: String, color: Color = Osho.colors.secondaryLabel) {
+    Text(text, style = Osho.typography.listFooter, color = color)
+}
+
+/** Row separator inset to the text start, as UIKit draws it. */
+@Composable
+fun GroupedDivider(startInset: Dp = 16.dp) {
+    HorizontalDivider(Modifier.padding(start = startInset), thickness = Dp.Hairline, color = Osho.colors.separator)
+}
+
+/** The bold, small disclosure chevron at the end of a navigation row. */
+@Composable
+fun DisclosureChevron() {
+    Icon(
+        Icons.Rounded.ChevronRight,
+        contentDescription = null,
+        tint = Osho.colors.tertiaryLabel,
+        modifier = Modifier.size(22.dp),
+    )
+}
+
+/** Gap between grouped sections. */
+val SectionSpacing = 24.dp
+
+@Composable
+fun SectionGap() {
+    Box(Modifier.height(SectionSpacing))
 }

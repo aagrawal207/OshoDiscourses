@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -49,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -60,27 +60,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.domain.downloads.WaitingReason
 import com.agraabhi.oshodiscourses.core.ui.bottomClearance
+import com.agraabhi.oshodiscourses.core.ui.components.ActionSheet
+import com.agraabhi.oshodiscourses.core.ui.components.CardRow
+import com.agraabhi.oshodiscourses.core.ui.components.EmptyState
+import com.agraabhi.oshodiscourses.core.ui.components.GlassIconButton
+import com.agraabhi.oshodiscourses.core.ui.components.GlassTextButton
+import com.agraabhi.oshodiscourses.core.ui.components.Grouped
+import com.agraabhi.oshodiscourses.core.ui.components.GroupedPage
+import com.agraabhi.oshodiscourses.core.ui.components.ListSectionFooter
+import com.agraabhi.oshodiscourses.core.ui.components.MenuAction
+import com.agraabhi.oshodiscourses.core.ui.components.OshoMenu
+import com.agraabhi.oshodiscourses.core.ui.components.SearchField
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
+import com.agraabhi.oshodiscourses.core.ui.components.SheetAction
+import com.agraabhi.oshodiscourses.core.ui.components.SmallSpinner
 import com.agraabhi.oshodiscourses.core.ui.components.glass
+import com.agraabhi.oshodiscourses.core.ui.components.rowContentPadding
+import com.agraabhi.oshodiscourses.core.ui.components.sectionFooter
+import com.agraabhi.oshodiscourses.core.ui.components.sectionGap
+import com.agraabhi.oshodiscourses.core.ui.components.sectionHeader
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
-import com.agraabhi.oshodiscourses.feature.downloads.ui.ActionSheet
-import com.agraabhi.oshodiscourses.feature.downloads.ui.CardRow
-import com.agraabhi.oshodiscourses.feature.downloads.ui.EmptyState
-import com.agraabhi.oshodiscourses.feature.downloads.ui.GlassCircleButton
-import com.agraabhi.oshodiscourses.feature.downloads.ui.GlassTextButton
-import com.agraabhi.oshodiscourses.feature.downloads.ui.Grouped
-import com.agraabhi.oshodiscourses.feature.downloads.ui.GroupedPage
-import com.agraabhi.oshodiscourses.feature.downloads.ui.IosMenu
-import com.agraabhi.oshodiscourses.feature.downloads.ui.MenuAction
-import com.agraabhi.oshodiscourses.feature.downloads.ui.SearchField
-import com.agraabhi.oshodiscourses.feature.downloads.ui.SectionFooterText
-import com.agraabhi.oshodiscourses.feature.downloads.ui.SheetAction
-import com.agraabhi.oshodiscourses.feature.downloads.ui.SmallSpinner
-import com.agraabhi.oshodiscourses.feature.downloads.ui.rowContentPadding
-import com.agraabhi.oshodiscourses.feature.downloads.ui.sectionFooter
-import com.agraabhi.oshodiscourses.feature.downloads.ui.sectionGap
-import com.agraabhi.oshodiscourses.feature.downloads.ui.sectionHeader
 
 /** Callbacks the Downloads tab raises; the view model handles everything else. */
 internal class DownloadsActions(
@@ -124,14 +124,14 @@ internal fun DownloadsContent(
         actions = {
             if (state.groups.isNotEmpty()) {
                 if (state.isEditing) {
-                    GlassTextButton("Done", actions.onExitEditing)
+                    GlassTextButton("Done", actions.onExitEditing, hazeState = null)
                 } else {
                     Box {
-                        GlassCircleButton(Icons.Rounded.MoreHoriz, "More options", { toolbarMenu = true }, tint = Osho.colors.accent)
-                        IosMenu(
+                        GlassIconButton(Icons.Rounded.MoreHoriz, "More options", { toolbarMenu = true }, tint = Osho.colors.accent, iconSize = 22.dp, hazeState = null)
+                        OshoMenu(
                             expanded = toolbarMenu,
                             onDismiss = { toolbarMenu = false },
-                            items = listOf(
+                            actions = listOf(
                                 MenuAction("Select", Icons.Outlined.CheckCircle, onClick = actions.onStartEditing),
                                 MenuAction("Delete All", Icons.Outlined.Delete, destructive = true) { confirmDeleteAll = true },
                             ),
@@ -348,10 +348,10 @@ private fun SeriesHeader(
                         .clickable(role = Role.Button) { menu = true }
                         .padding(12.dp),
                 )
-                IosMenu(
+                OshoMenu(
                     expanded = menu,
                     onDismiss = { menu = false },
-                    items = listOf(MenuAction("Delete All in Series", Icons.Outlined.Delete, destructive = true, onClick = onDeleteSeries)),
+                    actions = listOf(MenuAction("Delete All in Series", Icons.Outlined.Delete, destructive = true, onClick = onDeleteSeries)),
                 )
             }
         }
@@ -431,10 +431,10 @@ private fun DownloadedRow(
                 )
             }
         }
-        IosMenu(
+        OshoMenu(
             expanded = menu,
             onDismiss = { menu = false },
-            items = buildList {
+            actions = buildList {
                 add(
                     MenuAction(if (isPlaying) "Pause" else "Play", if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow) {
                         actions.onPlayOrPause(id)
@@ -442,8 +442,7 @@ private fun DownloadedRow(
                 )
                 val addBookmark = actions.onAddBookmark
                 if (isCurrent && addBookmark != null) add(MenuAction("Add Bookmark…", Icons.Outlined.BookmarkBorder, onClick = addBookmark))
-                add(null)
-                add(MenuAction("Remove Download", Icons.Outlined.Delete, destructive = true) { actions.onDelete(id) })
+                add(MenuAction("Remove Download", Icons.Outlined.Delete, destructive = true, dividerBefore = true) { actions.onDelete(id) })
             },
         )
     }
@@ -455,7 +454,7 @@ private fun DownloadsFooter(state: DownloadsUiState) {
     if (!showHint && !state.showUsage) return
     Column(Modifier.fillMaxWidth()) {
         if (showHint) {
-            SectionFooterText("Swipe a discourse left to delete, or use a series' ••• menu to clear a whole series or select several.")
+            ListSectionFooter("Swipe a discourse left to delete, or use a series' ••• menu to clear a whole series or select several.")
         }
         if (showHint && state.showUsage) {
             Box(
@@ -468,7 +467,7 @@ private fun DownloadsFooter(state: DownloadsUiState) {
             )
         }
         if (state.showUsage) {
-            SectionFooterText("${Formats.bytes(state.totalBytes)} used on this device")
+            ListSectionFooter("${Formats.bytes(state.totalBytes)} used on this device")
         }
     }
 }

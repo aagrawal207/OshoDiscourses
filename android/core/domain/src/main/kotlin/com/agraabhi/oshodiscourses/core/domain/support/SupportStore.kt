@@ -56,12 +56,16 @@ interface SupportStore {
 /** Static product facts; [basePrice] is reference only, never a button label. */
 data class SupportProductInfo(val id: String, val name: String, val basePrice: String)
 
-/** A product as Play returns it, with the storefront's formatted price. */
+/**
+ * A product as Play returns it, with the storefront's formatted price. [priceMicros] is the
+ * storefront price in micros for ordering; null when the store did not report it.
+ */
 data class SupportProduct(
     val id: String,
     val name: String,
     val description: String,
     val displayPrice: String,
+    val priceMicros: Long? = null,
 )
 
 /** iOS `TipJarService.PurchaseState`, shared by tips and yearly support. */
