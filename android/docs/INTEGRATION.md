@@ -85,3 +85,11 @@ Collected from worker handoffs. Tick when wired in `:app` and verified on the em
 - [ ] Fix `AppShellTest` (duplicate series names on Home, row label "Discourse 1", player not auto-opened) and re-record `app_shell_*.png`.
 - [ ] Promote shared chrome to `:core:ui`: `LargeTitlePage` (duplicated in home + library), `CappedFontScale`, `GlassIconButton`, `InlineTopBar`, `OshoMenu`, `ActionSheet`, `DownloadRing`.
 - [ ] Emulator: thumbnail and menu shadows, support-card exposure timing.
+
+## A11 Downloads, Bookmarks, Stats, Settings, Support
+- [ ] `BookmarksScreen(onBack)`, `ListeningStatsScreen(onBack, onOpenHistory = push ListeningHistoryRoute)`, `entry<ListeningHistoryRoute>`, `DownloadsScreen(onAddBookmark)`, `SettingsScreen(versionName = BuildConfig.VERSION_NAME)`; Home support card opens `SupportDevelopmentSheet`.
+- [ ] Pass `onClearDeclinedRequest` once `SupportStore.clearDeclinedRequest()` exists.
+- [ ] Add `SupportProduct.priceMicros` for true price ordering.
+- [ ] Feature modules need `activity-compose` on the compile classpath for `BackHandler` (feature convention plugin).
+- [ ] Promote grouped list, card rows, action sheet, menu, segmented control and switch from `:feature:downloads/settings` `ui/` into `:core:ui`; remove the copies.
+- [ ] Emulator: `ModalBottomSheet` status-bar inset on the tip jar, blur, haptics.
