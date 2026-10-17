@@ -77,16 +77,17 @@ class NoiseReductionStream(
         val resetPending: Boolean = false,
     )
 
-    // Guarded by lock; the render path only bumps these while holding it.
+    // Written only under lock, read without it: a status poll holding the lock would fail the
+    // render path's try-lock, which skips a buffer and requests a reset during steady playback.
     private val tapGeneration = tapGeneration
-    private var preparations = 0L
-    private var isPreparedFlag = false
-    private var processedBuffers = 0L
-    private var disabledBuffers = 0L
-    private var invalidBuffers = 0L
-    private var modelBypassedBuffers = 0L
-    private var resetBypassedBuffers = 0L
-    private var streamResets = 0L
+    @Volatile private var preparations = 0L
+    @Volatile private var isPreparedFlag = false
+    @Volatile private var processedBuffers = 0L
+    @Volatile private var disabledBuffers = 0L
+    @Volatile private var invalidBuffers = 0L
+    @Volatile private var modelBypassedBuffers = 0L
+    @Volatile private var resetBypassedBuffers = 0L
+    @Volatile private var streamResets = 0L
 
     private val lockContentions = AtomicLong()
     private val unpreparedCallbacks = AtomicLong()
@@ -217,25 +218,20 @@ class NoiseReductionStream(
         }
     }
 
-    /** A control-thread snapshot; the render path only increments fixed counters. */
+    /** A control-thread snapshot that takes no lock the render path try-locks. */
     fun diagnosticsSnapshot(): Diagnostics {
-        val base = lock.withLock {
-            Diagnostics(
-                tapGeneration = tapGeneration,
-                isPrepared = isPreparedFlag,
-                preparations = preparations,
-                processedBuffers = processedBuffers,
-                disabledBuffers = disabledBuffers,
-                invalidBuffers = invalidBuffers,
-                modelBypassedBuffers = modelBypassedBuffers,
-                resetBypassedBuffers = resetBypassedBuffers,
-                streamResets = streamResets,
-            )
-        }
         val requests = requestedReset.get()
-        return base.copy(
+        return Diagnostics(
+            tapGeneration = tapGeneration,
+            isPrepared = isPreparedFlag,
+            preparations = preparations,
+            processedBuffers = processedBuffers,
+            disabledBuffers = disabledBuffers,
+            invalidBuffers = invalidBuffers,
+            modelBypassedBuffers = modelBypassedBuffers + preparationBypasses.get(),
+            resetBypassedBuffers = resetBypassedBuffers,
+            streamResets = streamResets,
             unpreparedBuffers = unpreparedCallbacks.get(),
-            modelBypassedBuffers = base.modelBypassedBuffers + preparationBypasses.get(),
             deepFilterStatus = deepFilter.currentStatus,
             lockContendedBuffers = lockContentions.get(),
             sourceReadFailures = sourceReadFailures.get(),

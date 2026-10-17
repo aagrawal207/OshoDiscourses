@@ -79,7 +79,8 @@ class DeepFilterProcessor(
 
     private val lock = ReentrantLock()
     private val voices = ArrayList<Voice>(2)
-    private var status: DeepFilterStatus = DeepFilterStatus.Idle
+    // Written under lock; read without it so a status poll never fails process()'s try-lock.
+    @Volatile private var status: DeepFilterStatus = DeepFilterStatus.Idle
     private var attenuationLimitDb = 100f
     private var parameters = VoiceFocusChain.Parameters.FOCUS
     private var sourceRate = 0.0
@@ -94,7 +95,7 @@ class DeepFilterProcessor(
     private var statusObserver: ((DeepFilterStatus) -> Unit)? = null
     private val runtimeNotifications = CoalescedTask(notifier) { publishRuntimeFailure() }
 
-    val currentStatus: DeepFilterStatus get() = lock.withLock { status }
+    val currentStatus: DeepFilterStatus get() = status
 
     /** Set once during setup. The observer runs outside the lock, on any thread. */
     fun observeStatus(observer: (DeepFilterStatus) -> Unit) {
