@@ -1,0 +1,20 @@
+appId: com.agraabhi.oshodiscourses
+name: 01 First launch shows Home with catalog shelves
+tags: [smoke]
+---
+- launchApp:
+    clearState: true
+    permissions:
+      notifications: allow
+- extendedWaitUntil:
+    visible: "Popular in English"
+    timeout: 15000
+- assertVisible: "Home"
+- assertVisible: "Beginner Friendly \\(English\\)"
+- assertVisible: "Popular in Hindi"
+- assertVisible: "Vigyan Bhairav Tantra Vol 1"
+- assertVisible: "40 discourses"
+- assertVisible:
+    id: "tab.home"
+    selected: true
+- takeScreenshot: 01_home

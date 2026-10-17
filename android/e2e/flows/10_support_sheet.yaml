@@ -1,0 +1,20 @@
+appId: com.agraabhi.oshodiscourses
+name: 10 Support sheet shows products or the could-not-load state
+---
+- launchApp
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: settings
+- scrollUntilVisible:
+    element: "Support Development"
+    direction: DOWN
+- tapOn: "Support Development"
+- assertVisible: "Osho Talks is free and has no ads or tracking.*"
+# The emulator has no Play products, so either state passes; a real listing shows the tip names.
+- extendedWaitUntil:
+    visible: "Couldn't load tips from Google Play.*|Small tip.*"
+    timeout: 15000
+- takeScreenshot: 10_support
+- tapOn: "Done"
+- assertNotVisible: "Osho Talks is free and has no ads or tracking.*"

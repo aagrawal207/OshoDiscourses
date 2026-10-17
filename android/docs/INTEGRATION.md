@@ -66,7 +66,7 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 - [x] Add `TranscriptTiming.matchedParagraphs` so the Timing note shows "<m> of <n> paragraphs". — emulator shows "Synced from speech: 89 of 93 paragraphs".
 - [x] Select Text hint: drop "or drag them into another app" (no drag-out on Android).
 - [x] Promote `ReplayFifteenIcon` and glass toolbar buttons to `:core:ui` (also needed by the player). — one `SkipIntervalIcon`/`ReplayFifteenIcon` in `TransportIcons.kt`; the player copy is gone.
-- [ ] Emulator: keep-screen-on, share chooser, clipboard.
+- [x] Emulator: keep-screen-on, share chooser, clipboard (A17a).
 
 ## A4 Playback
 - [x] Main thread: `sleepTimer = SleepTimerService(mainScope)`; `player = PlaybackEngine.create(context, catalog, downloads, bookmarks, settings, playbackState, listeningStats, sleepTimer, denoisePipeline, reviewPrompter)`; `sleepTimer.onExpire = { player.setPlaying(false) }`.
@@ -106,3 +106,6 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 - [x] Keep `DenoiseState` and `PlayerState.audioProcessingStatus` in step (UI reads `DenoiseState`); boost via `DenoiseController.setBoost`. — both come from `DenoiseEngine.status`; the debug `state` command prints `inStep`, true while playing, paused, off and re-enabled.
 - [x] Check the playback error line wording (`PlayerState.error`). — the engine uses the iOS `setupFailed(.playback)` detail verbatim.
 - [x] Promote `IosSlider`, `IosSwitch`, `SegmentedControl`, `SheetHost`, `AnchoredPopover`, glass buttons, grouped sections, `SkipIntervalIcon`/`ReplayFifteenIcon` into `:core:ui` and remove module copies (with A11's and A8's). — the player's `InlineTopBar` is `SheetToolbar`; `PortraitArtwork`, `PlayingBars` and `ShrinkToFitText` stay in the player.
+
+## Testing
+- Test layers, commands, Maestro flows and real-phone-only checks: `android/docs/testing.md`.

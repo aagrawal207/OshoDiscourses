@@ -1,0 +1,7 @@
+# Selects a tab and pops it to its root: the first tap selects, a second tap on the selected tab pops.
+appId: com.agraabhi.oshodiscourses
+---
+- tapOn:
+    id: "tab.${TAB}"
+- tapOn:
+    id: "tab.${TAB}"

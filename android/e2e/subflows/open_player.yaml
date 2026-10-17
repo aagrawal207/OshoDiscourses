@@ -1,0 +1,16 @@
+# Makes sure the test talk is loaded, then opens the full player from the mini-player.
+appId: com.agraabhi.oshodiscourses
+---
+# The launch overlay hides the restored mini-player for a moment.
+- extendedWaitUntil:
+    visible: "Discourse 19, New Alchemy To Turn You On"
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Discourse 19, New Alchemy To Turn You On"
+    commands:
+      - runFlow: ensure_downloaded.yaml
+      - tapOn: "Discourse 19(, completed)?, transcript available"
+- tapOn: "Discourse 19, New Alchemy To Turn You On"
+- assertVisible: "Playback position"

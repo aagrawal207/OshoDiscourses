@@ -1,0 +1,23 @@
+appId: com.agraabhi.oshodiscourses
+name: 11 Listening Stats and History
+---
+- launchApp
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: downloads
+- tapOn: "Listening Stats"
+- assertVisible: "All Time"
+- assertVisible: "Streak"
+- assertVisible: "Time Periods"
+- assertVisible: "Last 7 Days"
+- takeScreenshot: 11_stats
+- tapOn: "Full Listening History"
+- assertVisible: "Listening History"
+- assertVisible: "Daily Log"
+- assertVisible: "All Played Discourses \\(\\d+\\)"
+- assertVisible: "New Alchemy To Turn You On - #19"
+- takeScreenshot: 11_history
+- tapOn: "Back"
+- assertVisible: "Time Periods"
+- tapOn: "Back"
