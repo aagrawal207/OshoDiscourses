@@ -117,12 +117,13 @@ an activity provider (`() -> Activity?`) that `:app` supplies. Shared catalog JS
 
 ## Git and GitHub
 
-- Integration branch: `android`. Coordinator worktree:
-  `~/projects/OshoDiscourses-Android`.
-- Task branches `android-<task>` in worktrees under
-  `~/projects/OshoDiscourses-Android-wt/<task>`, merged by pull request into
-  `android`. Every task has a GitHub issue with label `android` in milestone
-  "Android phone v1".
+- The owner does not review pull requests and tests on his own device. Push
+  finished, verified work directly: commit on `android` (coordinator worktree
+  `~/projects/OshoDiscourses-Android`), then `git push origin android
+  android:main`. iOS fixes go straight to `main`.
+- Parallel workers still get their own worktree and branch for isolation; the
+  coordinator merges them locally and pushes. No review PRs.
+- Track work as GitHub issues with label `android`; reference them in commits.
 
 ## Task ledger
 
