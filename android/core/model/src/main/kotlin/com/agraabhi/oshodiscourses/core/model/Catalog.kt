@@ -53,6 +53,9 @@ data class CatalogDiscourse(
     val language: Language,
 ) {
     val displayTitle: String get() = "$seriesName - #$number"
+
+    /** The owning series id. Series ids contain hyphens, so the "-<number>" suffix is cut by length. */
+    val seriesID: String get() = id.dropLast(number.toString().length + 1)
 }
 
 /** A discourse together with the series that owns it (iOS `Catalog.discourseLookup` value). */
