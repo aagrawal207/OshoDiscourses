@@ -1,0 +1,12 @@
+# The Library search field stays folded above the list until it is pulled down, as on iOS 26.
+appId: com.agraabhi.oshodiscourses
+---
+- runFlow:
+    when:
+      notVisible: "Search by name or topic"
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 55%
+          duration: 600
+- assertVisible: "Search by name or topic"

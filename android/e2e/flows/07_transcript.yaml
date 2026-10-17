@@ -1,0 +1,39 @@
+appId: com.agraabhi.oshodiscourses
+name: 07 Transcript search and Play from here
+---
+- launchApp
+- runFlow: ../subflows/open_player.yaml
+# Starts outside the paragraph's time range so the seek below is observable.
+- runFlow:
+    when:
+      visible:
+        text: "4:\\d{2}|5:[01]\\d"
+        below: "Playback position"
+        leftOf: "Time remaining"
+    commands:
+      - tapOn: "Skip forward 30 seconds"
+      - tapOn: "Skip forward 30 seconds"
+      - tapOn: "Skip forward 30 seconds"
+- tapOn: "Transcript"
+- extendedWaitUntil:
+    visible: "Search transcript"
+    timeout: 15000
+- tapOn: "Search transcript"
+- inputText: "camp"
+- assertVisible: "1/2"
+- hideKeyboard
+- tapOn: "So in this camp, you are to do three things.*"
+- assertVisible: "Play from here"
+- takeScreenshot: 07_transcript_actions
+- tapOn: "Play from here"
+- assertNotVisible: "Play from here"
+- assertVisible: "Pause"
+# The aligned start of this paragraph is about 4:40; the clock must land between 4:00 and 5:19.
+- extendedWaitUntil:
+    visible:
+      text: "4:\\d{2}|5:[01]\\d"
+      below: "Close"
+      leftOf: "Back 15 seconds"
+    timeout: 5000
+- tapOn: "Pause"
+- tapOn: "Close"

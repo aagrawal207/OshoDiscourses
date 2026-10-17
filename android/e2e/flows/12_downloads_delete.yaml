@@ -1,0 +1,32 @@
+appId: com.agraabhi.oshodiscourses
+name: 12 Deleting the playing talk in Downloads clears its row and the mini-player
+---
+- launchApp
+- runFlow: ../subflows/open_player.yaml
+- runFlow:
+    when:
+      visible: "Play"
+    commands:
+      - tapOn: "Play"
+- assertVisible: "Pause"
+- back
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: downloads
+- assertVisible: "Discourse 19"
+# A full swipe deletes; it starts on the trailing button so it travels past half the row.
+- swipe:
+    from:
+      text: "Play|Pause"
+      childOf:
+        containsChild: "Discourse 19"
+    direction: LEFT
+- assertVisible: "No Downloads"
+- assertVisible: "Previously Downloaded"
+- assertVisible:
+    text: "GET.*"
+    childOf:
+      containsChild: "Discourse 19"
+- assertNotVisible: "Discourse 19, New Alchemy To Turn You On"
+- takeScreenshot: 12_downloads_empty

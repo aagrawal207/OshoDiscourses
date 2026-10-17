@@ -741,7 +741,7 @@ struct AudioPlayerIntegrationTests {
     }
 }
 
-private struct PlaybackAudioFixture {
+struct PlaybackAudioFixture {
     let directory: URL
     let url: URL
 

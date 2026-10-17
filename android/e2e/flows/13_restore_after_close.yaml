@@ -1,0 +1,96 @@
+appId: com.agraabhi.oshodiscourses
+name: 13 A talk closed while playing comes back paused in the mini-player
+---
+- launchApp
+- runFlow: ../subflows/open_player.yaml
+- runFlow:
+    when:
+      visible: "Play"
+    commands:
+      - tapOn: "Play"
+- assertVisible: "Pause"
+# A skip saves the position at once, so the restore does not wait for the 10 s auto-save.
+- runFlow:
+    when:
+      visible:
+        text: "\\d:\\d{2}"
+        below: "Playback position"
+        leftOf: "Time remaining"
+    commands:
+      - tapOn: "Skip forward 30 seconds"
+- runFlow:
+    when:
+      visible:
+        text: "\\d{2}:\\d{2}"
+        below: "Playback position"
+        leftOf: "Time remaining"
+    commands:
+      - tapOn: "Skip back 15 seconds"
+- assertVisible: "Pause"
+- copyTextFrom:
+    text: "\\d+:\\d{2}"
+    below: "Playback position"
+    leftOf: "Time remaining"
+- runScript:
+    file: ../scripts/elapsed.js
+    env:
+      KEY: closedAt
+
+# Closed while playing; stopApp force-stops the process, as a swipe on some phones does.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Discourse 19, New Alchemy To Turn You On"
+    timeout: 15000
+- assertNotVisible: "Pause"
+- takeScreenshot: 13_restored_mini_player
+- tapOn: "Discourse 19, New Alchemy To Turn You On"
+- assertVisible: "Playback position"
+- assertVisible: "Play"
+- copyTextFrom:
+    text: "\\d+:\\d{2}"
+    below: "Playback position"
+    leftOf: "Time remaining"
+- runScript:
+    file: ../scripts/elapsed.js
+    env:
+      KEY: restoredAt
+# Up to one auto-save tick behind the close, never ahead of it.
+- runScript:
+    file: ../scripts/within.js
+    env:
+      BASE: ${output.closedAt}
+      ACTUAL: ${output.restoredAt}
+      LOW: -12
+      HIGH: 1
+      KEY: restoredNearClose
+- assertTrue: ${output.restoredNearClose}
+- takeScreenshot: 13_restored_player
+
+- tapOn: "Play"
+- assertVisible: "Pause"
+- extendedWaitUntil:
+    notVisible:
+      text: ${output.restoredAt}
+      below: "Playback position"
+      leftOf: "Time remaining"
+    timeout: 10000
+- copyTextFrom:
+    text: "\\d+:\\d{2}"
+    below: "Playback position"
+    leftOf: "Time remaining"
+- runScript:
+    file: ../scripts/elapsed.js
+    env:
+      KEY: resumedAt
+- runScript:
+    file: ../scripts/within.js
+    env:
+      BASE: ${output.restoredAt}
+      ACTUAL: ${output.resumedAt}
+      LOW: 0
+      HIGH: 10
+      KEY: resumedFromRestore
+- assertTrue: ${output.resumedFromRestore}
+- tapOn: "Pause"
+- back

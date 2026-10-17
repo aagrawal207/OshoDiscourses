@@ -62,4 +62,17 @@ final class PlaybackLauncher {
         let queue = try seriesQueue(startingAt: bookmark.discourseID)
         player.playQueue(items: queue.items, startIndex: queue.start, resumeAt: bookmark.timestamp)
     }
+
+    /// Loads the talk Home's Continue Listening shows first, paused, with its series as the queue.
+    @discardableResult
+    func restoreLastSession(from playbackState: PlaybackStateService) -> String? {
+        guard player.currentTrackId == nil else { return nil }
+        let downloads = downloads
+        guard let id = playbackState.restorableDiscourseID(
+            isDownloaded: downloads.isDownloaded,
+            hasFile: { downloads.localFileURL(for: $0) != nil }
+        ), let queue = try? seriesQueue(startingAt: id) else { return nil }
+        player.restoreQueue(items: queue.items, startIndex: queue.start)
+        return player.currentTrackId
+    }
 }

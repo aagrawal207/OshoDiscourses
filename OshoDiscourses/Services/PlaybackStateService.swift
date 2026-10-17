@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 @Observable
 @MainActor
@@ -19,6 +20,7 @@ final class PlaybackStateService {
     private let maxRecent = 20
 
     private var autoSaveTask: Task<Void, Never>?
+    @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
     private weak var audioPlayer: AudioPlayerService?
     private var lastRecordedTime: TimeInterval = 0
     private var lastRecordedTrackId: String?
@@ -57,6 +59,26 @@ final class PlaybackStateService {
         audioPlayer = player
         resetListeningContinuity()
         startAutoSave()
+    }
+
+    /// Saves as the app leaves the foreground. A swipe-away from the app switcher
+    /// ends the process without another callback, so autosave alone loses up to 10 s.
+    func saveWhenLeavingForeground(center: NotificationCenter = .default) {
+        guard lifecycleObservers.isEmpty else { return }
+        // Resign-active comes first: the switcher opens at once, background follows seconds later.
+        let names = [
+            UIApplication.willResignActiveNotification,
+            UIApplication.didEnterBackgroundNotification,
+            UIApplication.willTerminateNotification,
+        ]
+        lifecycleObservers = names.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.audioPlayer?.syncCurrentTimeFromPlayer()
+                    self?.saveCurrentPosition()
+                }
+            }
+        }
     }
 
     // MARK: - Public API
@@ -169,6 +191,22 @@ final class PlaybackStateService {
     func completedCount(for seriesId: String) -> Int {
         guard Self.isOriginalDiscourseID(seriesId) else { return 0 }
         return completedDiscourseIDs.filter { $0.hasPrefix(seriesId + "-") }.count
+    }
+
+    /// Home's Continue Listening order: recent talks that are downloaded and started,
+    /// or loaded in the player. CarPlay, the Watch and relaunch restore read this list too.
+    func continueListeningIDs(isDownloaded: (String) -> Bool, currentTrackID: String?) -> [String] {
+        recentlyPlayed.filter { id in
+            isDownloaded(id)
+                && (getPosition(discourseId: id) > 0 || id == currentTrackID)
+                && Catalog.discourseLookup[id] != nil
+        }
+    }
+
+    /// The talk a cold launch puts back in the player: the first Continue Listening
+    /// row whose file is still on disk.
+    func restorableDiscourseID(isDownloaded: (String) -> Bool, hasFile: (String) -> Bool) -> String? {
+        continueListeningIDs(isDownloaded: isDownloaded, currentTrackID: nil).first(where: hasFile)
     }
 
     // MARK: - iCloud Sync (NSUbiquitousKeyValueStore)

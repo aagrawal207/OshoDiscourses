@@ -1,0 +1,3957 @@
+{
+  "curated" : {
+    "beginnerEnglish" : [
+      "A Bird on the Wing",
+      "Ancient Music In The Pines",
+      "A Sudden Clash of Thunder",
+      "Come Come Yet Again Come",
+      "Be Still and Know",
+      "The Hidden Harmony",
+      "Ah This",
+      "And the Flowers Showered"
+    ],
+    "beginnerHindi" : [
+      "Main Mrityu Sikhata Hun",
+      "Dhyan Sutra",
+      "Antar Ki Khoj",
+      "Agyat Ki Aur",
+      "Amrit Ki Disha",
+      "Naye Samaj Ki Khoj",
+      "Jeevan Kranti Ke Sutra"
+    ],
+    "popularEnglish" : [
+      "Vigyan Bhairav Tantra Vol 1",
+      "Vigyan Bhairav Tantra Vol 2",
+      "Beyond Enlightenment",
+      "The Mustard Seed",
+      "The Book of Wisdom",
+      "Tao Vol 1 Absolute Tao",
+      "Beyond Psychology",
+      "The Dhammapada Way of Buddha Vol 1"
+    ],
+    "popularHindi" : [
+      "Ashtavakra Maha Geeta",
+      "Geeta Darshan Vol 1-2",
+      "Tao Upanishad",
+      "Bhakti Sutra",
+      "Athato Bhakti Jigyasa",
+      "Sahaj Yog",
+      "Shiv Sutra"
+    ]
+  },
+  "descriptions" : {
+    "A Bird on the Wing" : {
+      "location" : "Mumbai",
+      "sourceText" : "Eleven Zen stories. Each one is a koan that refuses to make rational sense, and that's the point: awakening comes as a jolt, not a conclusion.",
+      "themes" : [
+        "Zen",
+        "koans",
+        "stories",
+        "awakening",
+        "paradox",
+        "beginner friendly"
+      ],
+      "year" : "1974"
+    },
+    "A Sudden Clash of Thunder" : {
+      "location" : "Pune",
+      "sourceText" : "Zen stories about the moment of awakening. It arrives like thunder, sudden and uninvited, not as the last step of a gradual climb.",
+      "themes" : [
+        "Zen",
+        "sudden awakening",
+        "satori",
+        "stories",
+        "discontinuity"
+      ],
+      "year" : "1976"
+    },
+    "Agyat Ki Aur" : {
+      "location" : "Mumbai",
+      "sourceText" : "Toward the unknown. On the courage to drop the safety of knowledge and belief and step into uncertainty, because that's where truth is.",
+      "themes" : [
+        "unknown",
+        "courage",
+        "uncertainty",
+        "truth seeking",
+        "Hindi"
+      ],
+      "year" : "1970"
+    },
+    "Ah This" : {
+      "location" : "Pune",
+      "sourceText" : "Zen talks circling one recognition: what you're looking for is already here. 'Ah, this!' The ordinary turns out to be the extraordinary.",
+      "themes" : [
+        "Zen",
+        "here and now",
+        "ordinary mind",
+        "recognition",
+        "simplicity"
+      ],
+      "year" : "1980"
+    },
+    "Amrit Ki Disha" : {
+      "location" : "Mumbai",
+      "sourceText" : "The direction of nectar, of immortality. Talks on the consciousness in you that doesn't die, and tasting it through meditation and awareness.",
+      "themes" : [
+        "immortality",
+        "nectar",
+        "consciousness",
+        "awareness",
+        "Hindi"
+      ],
+      "year" : "1969"
+    },
+    "Ancient Music In The Pines" : {
+      "location" : "Pune",
+      "sourceText" : "Zen stories about listening to existence. Silence, the music between sounds, and what it's like to simply be present.",
+      "themes" : [
+        "Zen",
+        "silence",
+        "listening",
+        "presence",
+        "nature",
+        "music"
+      ],
+      "year" : "1976"
+    },
+    "And the Flowers Showered" : {
+      "location" : "Pune",
+      "sourceText" : "Eleven Zen stories of disciples suddenly flowering into awakening. In each one the mind drops in a different way, without effort.",
+      "themes" : [
+        "Zen",
+        "stories",
+        "awakening",
+        "flowering",
+        "effortlessness",
+        "grace"
+      ],
+      "year" : "1974"
+    },
+    "Antar Ki Khoj" : {
+      "location" : "Mumbai",
+      "sourceText" : "The inner search. Turning inward, from the noise of the outer world to inner silence. A gentle place to start with meditation and self-inquiry.",
+      "themes" : [
+        "inner search",
+        "meditation",
+        "silence",
+        "self-inquiry",
+        "beginner",
+        "Hindi"
+      ],
+      "year" : "1970"
+    },
+    "Ashtavakra Maha Geeta" : {
+      "location" : "Pune",
+      "sourceText" : "The Ashtavakra Gita (Ashtavakra Samhita), a dialogue between the sage Ashtavakra and King Janaka about the Self, reality, and liberation. Possibly the most direct Advaita teaching there is.",
+      "themes" : [
+        "Ashtavakra",
+        "Advaita",
+        "self-realization",
+        "Janaka",
+        "liberation",
+        "non-duality"
+      ],
+      "year" : "1976"
+    },
+    "Athato Bhakti Jigyasa" : {
+      "location" : "Pune",
+      "sourceText" : "An inquiry into devotion. Bhakti as a spiritual path: love as a method, the lover and the beloved, and the ego dissolving through surrender.",
+      "themes" : [
+        "bhakti",
+        "devotion",
+        "inquiry",
+        "love",
+        "ego dissolution",
+        "Hindi"
+      ],
+      "year" : "1978"
+    },
+    "Be Still and Know" : {
+      "location" : "Pune",
+      "sourceText" : "'Be still and know that I am God.' Talks on stillness as the doorway to knowing, and why belief is a poor substitute for experience.",
+      "themes" : [
+        "stillness",
+        "silence",
+        "knowing",
+        "meditation",
+        "God",
+        "experience"
+      ],
+      "year" : "1979"
+    },
+    "Beyond Enlightenment" : {
+      "location" : "Pune",
+      "sourceText" : "What happens after awakening? Consciousness beyond the mind, living an ordinary life after realization, and why knowing is not the same as knowledge.",
+      "themes" : [
+        "enlightenment",
+        "consciousness",
+        "beyond mind",
+        "awakening",
+        "spiritual growth"
+      ],
+      "year" : "1986"
+    },
+    "Beyond Psychology" : {
+      "location" : "Uruguay",
+      "sourceText" : "Talks from the world tour after Oregon. Where Western psychology stops, why therapy isn't meditation, and the difference between mind and consciousness.",
+      "themes" : [
+        "psychology",
+        "meditation vs therapy",
+        "consciousness",
+        "mind",
+        "freedom"
+      ],
+      "year" : "1986"
+    },
+    "Bhakti Sutra" : {
+      "location" : "Pune",
+      "sourceText" : "Narada's Bhakti Sutras, his aphorisms on devotion. Love and surrender as a path, how divine love differs from attachment, and where bhakti finally leads.",
+      "themes" : [
+        "Narada",
+        "bhakti",
+        "devotion",
+        "love",
+        "surrender",
+        "Hindi"
+      ],
+      "year" : "1976"
+    },
+    "Bodhidharma The Greatest Zen Master" : {
+      "location" : "Pune",
+      "sourceText" : "Bodhidharma, the man who carried Zen from India to China. Mind, emptiness, direct pointing, and his famous nine years of gazing at a wall.",
+      "themes" : [
+        "Bodhidharma",
+        "Zen",
+        "China",
+        "wall-gazing",
+        "direct pointing",
+        "emptiness"
+      ],
+      "year" : "1987"
+    },
+    "Christianity and Zen" : {
+      "location" : "Pune",
+      "sourceText" : "Christian mysticism and Zen Buddhism side by side. They meet in silence. They part ways over theology, ritual, and how each approaches the divine.",
+      "themes" : [
+        "Christianity",
+        "Zen",
+        "mysticism",
+        "comparison",
+        "silence"
+      ],
+      "year" : "1987"
+    },
+    "Come Come Yet Again Come" : {
+      "location" : "Pune",
+      "sourceText" : "Named after Rumi's poem of unconditional welcome. Sufi stories on love, devotion, and surrender. Whatever your past, the door stays open.",
+      "themes" : [
+        "Sufism",
+        "Rumi",
+        "love",
+        "devotion",
+        "acceptance",
+        "welcome"
+      ],
+      "year" : "1980"
+    },
+    "Dhyan Sutra" : {
+      "location" : "Mumbai",
+      "sourceText" : "Practical meditation instruction. Posture, breathing, watching thoughts, and techniques for anyone just starting out.",
+      "themes" : [
+        "meditation",
+        "practical instructions",
+        "beginner",
+        "techniques",
+        "Hindi"
+      ],
+      "year" : "1970"
+    },
+    "Geeta Darshan Vol 1-2" : {
+      "location" : "Mumbai",
+      "sourceText" : "The Bhagavad Gita read as an inner dialogue. The battlefield is your own conflict, and Krishna and Arjuna argue out action, renunciation, and the paths of yoga.",
+      "themes" : [
+        "Bhagavad Gita",
+        "Krishna",
+        "Arjuna",
+        "karma yoga",
+        "dharma",
+        "action"
+      ],
+      "year" : "1970-71"
+    },
+    "Jeevan Kranti Ke Sutra" : {
+      "location" : "Mumbai",
+      "sourceText" : "Sutras for a revolution in living. Practical principles for changing your daily life from the inside, through awareness, love, and meditation.",
+      "themes" : [
+        "revolution",
+        "transformation",
+        "practical",
+        "daily life",
+        "Hindi"
+      ],
+      "year" : "1969"
+    },
+    "Main Mrityu Sikhata Hun" : {
+      "location" : "Mumbai",
+      "sourceText" : "'I teach death.' Death as a doorway: facing mortality changes how you live, and dying consciously is the last meditation.",
+      "themes" : [
+        "death",
+        "awareness",
+        "mortality",
+        "conscious dying",
+        "transformation",
+        "Hindi"
+      ],
+      "year" : "1969"
+    },
+    "Naye Samaj Ki Khoj" : {
+      "location" : "Mumbai",
+      "sourceText" : "In search of a new society. Society doesn't change by decree, it changes when individuals do. Talks on what a new human consciousness could build.",
+      "themes" : [
+        "society",
+        "transformation",
+        "new man",
+        "consciousness",
+        "Hindi"
+      ],
+      "year" : "1969"
+    },
+    "Sahaj Yog" : {
+      "location" : "Mumbai",
+      "sourceText" : "Natural, spontaneous yoga. Meditation without technique, living in the flow, growth that arises on its own instead of being forced.",
+      "themes" : [
+        "sahaj",
+        "natural yoga",
+        "spontaneity",
+        "effortless meditation",
+        "Hindi"
+      ],
+      "year" : "1970"
+    },
+    "Shiv Sutra" : {
+      "location" : "Pune",
+      "sourceText" : "The Shiva Sutras of Kashmir Shaivism, attributed to the sage Vasugupta. The nature of consciousness, methods of awakening, and recognizing what you already are.",
+      "themes" : [
+        "Shiva Sutras",
+        "Kashmir Shaivism",
+        "consciousness",
+        "Vasugupta",
+        "recognition",
+        "Hindi"
+      ],
+      "year" : "1974"
+    },
+    "Tao Upanishad" : {
+      "location" : "Mumbai",
+      "sourceText" : "Lao Tzu's Tao Te Ching in Hindi. Effortlessness, flowing with nature, the wisdom of the valley, and how doing nothing gets everything done.",
+      "themes" : [
+        "Lao Tzu",
+        "Tao",
+        "effortlessness",
+        "nature",
+        "wu-wei",
+        "Hindi"
+      ],
+      "year" : "1971-72"
+    },
+    "Tao Vol 1 Absolute Tao" : {
+      "location" : "Pune",
+      "sourceText" : "Lao Tzu's Tao Te Ching. The Tao that can't be put into words, the art of effortless living, and what water and emptiness have to teach.",
+      "themes" : [
+        "Lao Tzu",
+        "Tao Te Ching",
+        "Taoism",
+        "effortlessness",
+        "wu-wei",
+        "emptiness"
+      ],
+      "year" : "1975"
+    },
+    "The Book of Wisdom" : {
+      "location" : "Pune",
+      "sourceText" : "Atisha's Seven Points of Mind Training, a Tibetan Buddhist text on compassion and awareness. About the bodhisattva's path, and how everyday life becomes the meditation.",
+      "themes" : [
+        "Atisha",
+        "Tibetan Buddhism",
+        "compassion",
+        "mind training",
+        "bodhisattva"
+      ],
+      "year" : "1979"
+    },
+    "The Dhammapada Way of Buddha Vol 1" : {
+      "location" : "Pune",
+      "sourceText" : "The Dhammapada, Gautama Buddha's collected sayings. Practical talks on suffering, desire, awareness, and the middle way.",
+      "themes" : [
+        "Buddha",
+        "Dhammapada",
+        "Buddhism",
+        "suffering",
+        "middle way",
+        "awareness"
+      ],
+      "year" : "1979"
+    },
+    "The Hidden Harmony" : {
+      "location" : "Pune",
+      "sourceText" : "The surviving fragments of Heraclitus, the pre-Socratic Greek. Opposites that turn out to be one, a world in constant flow, and the logos.",
+      "themes" : [
+        "Heraclitus",
+        "Greek philosophy",
+        "opposites",
+        "change",
+        "logos",
+        "unity"
+      ],
+      "year" : "1974"
+    },
+    "The Mustard Seed" : {
+      "location" : "Pune",
+      "sourceText" : "Jesus through the Gospel of Thomas, the gnostic text found at Nag Hammadi. Osho reads Christ's parables the way an Eastern mystic would, and they come out looking very different.",
+      "themes" : [
+        "Jesus",
+        "Gospel of Thomas",
+        "Christianity",
+        "mysticism",
+        "parables"
+      ],
+      "year" : "1974"
+    },
+    "Vigyan Bhairav Tantra Vol 1" : {
+      "location" : "Mumbai",
+      "sourceText" : "The 112 meditation techniques Shiva gives Devi in the Vigyan Bhairav Tantra. Each talk takes up specific methods from this old tantra text and how to actually practice them.",
+      "themes" : [
+        "meditation techniques",
+        "tantra",
+        "Shiva",
+        "awareness",
+        "consciousness"
+      ],
+      "year" : "1972-73"
+    },
+    "Vigyan Bhairav Tantra Vol 2" : {
+      "location" : "Mumbai",
+      "sourceText" : "Picks up where Vol 1 left off with the remaining techniques of the Vigyan Bhairav Tantra: breathing methods, visualization, sound meditation, awareness practices.",
+      "themes" : [
+        "meditation techniques",
+        "tantra",
+        "breathing",
+        "visualization",
+        "sound"
+      ],
+      "year" : "1972-73"
+    }
+  },
+  "series" : [
+    {
+      "count" : 11,
+      "filePrefix" : "A_Bird_on_the_Wing__",
+      "fileTitle" : null,
+      "folderName" : "A_Bird_on_the_Wing",
+      "language" : "english",
+      "name" : "A Bird on the Wing",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "A_Sudden_Clash_of_Thunder",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "A Sudden Clash of Thunder",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Ah_This",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Ah This",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Ancient_Music_In_The_Pines",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Ancient Music In The Pines",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "And_the_Flowers_Showerd",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "And the Flowers Showered",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Be_Still_and_Know",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Be Still and Know",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 32,
+      "filePrefix" : "Beyond_Enlightenment",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Beyond Enlightenment",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 44,
+      "filePrefix" : "Beyond_Psychology",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Beyond Psychology",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Bodhidharma_The_Greatest_Zen_Master",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Bodhidharma The Greatest Zen Master",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Christianity_and_Zen",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Christianity and Zen",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Come_Come_Yet_Again_Come",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Come Come Yet Again Come",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Come_Follow_to_You_Vol_1-",
+      "fileTitle" : null,
+      "folderName" : "Come_Follow_to_You_Vol_1",
+      "language" : "english",
+      "name" : "Come Follow to You Vol 1",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Come_Follow_to_You_Vol_2-",
+      "fileTitle" : null,
+      "folderName" : "Come_Follow_to_You_Vol_2",
+      "language" : "english",
+      "name" : "Come Follow to You Vol 2",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Come_Follow_to_You_Vol_3-",
+      "fileTitle" : null,
+      "folderName" : "Come_Follow_to_You_Vol_3",
+      "language" : "english",
+      "name" : "Come Follow to You Vol 3",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Come_Follow_to_You_Vol_4-",
+      "fileTitle" : null,
+      "folderName" : "Come_Follow_to_You_Vol_4",
+      "language" : "english",
+      "name" : "Come Follow to You Vol 4",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Communism_And_Zen__Fire__Zen_Wind",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Communism And Zen Fire Zen Wind",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dang_Dang_Doko_Dang",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Dang Dang Doko Dang",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Ecstasy_Forgotten_Language",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Ecstasy Forgotten Language",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Fish_In_the_Sea_Is_Not_Thirsty",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Fish In the Sea Is Not Thirsty",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 43,
+      "filePrefix" : "From_Bondage_to_Freedom",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Bondage to Freedom",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 40,
+      "filePrefix" : "Vigyan_Bhairav_Tantra_Vol_1",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Vigyan Bhairav Tantra Vol 1",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 40,
+      "filePrefix" : "Vigyan_Bhairav_Tantra_Vol_2",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Vigyan Bhairav Tantra Vol 2",
+      "slug" : null,
+      "urlType" : "underscore"
+    },
+    {
+      "count" : 28,
+      "filePrefix" : "The_Book_Of_Wisdom",
+      "fileTitle" : "The Book Of Wisdom",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Book of Wisdom",
+      "slug" : "the-book-of-wisdom-buddha-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_1",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 1",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 1",
+      "slug" : "the-dhammapada-way-of-buddha-vol-1-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_2",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 2",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 2",
+      "slug" : "the-dhammapada-way-of-buddha-vol-2-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_3",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 3",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 3",
+      "slug" : "the-dhammapada-way-of-buddha-vol-3-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_4",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 4",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 4",
+      "slug" : "the-dhammapada-way-of-buddha-vol-4-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_5",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 5",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 5",
+      "slug" : "the-dhammapada-way-of-buddha-vol-5-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_6",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 6",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 6",
+      "slug" : "the-dhammapada-way-of-buddha-vol-6-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_7",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 7",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 7",
+      "slug" : "the-dhammapada-way-of-buddha-vol-7-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_8",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 8",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 8",
+      "slug" : "the-dhammapada-way-of-buddha-vol-8-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_9",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 9",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 9",
+      "slug" : "the-dhammapada-way-of-buddha-vol-9-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_10",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 10",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 10",
+      "slug" : "the-dhammapada-way-of-buddha-vol-10-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_11",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 11",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 11",
+      "slug" : "the-dhammapada-way-of-buddha-vol-11-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhammapada_Way_Of_Buddha_Vol_12",
+      "fileTitle" : "Dhammapada Way Of Buddha Vol 12",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Dhammapada Way of Buddha Vol 12",
+      "slug" : "the-dhammapada-way-of-buddha-vol-12-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "The_Diamond_Sutra",
+      "fileTitle" : "The Diamond Sutra",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Diamond Sutra",
+      "slug" : "the-diamond-sutra-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Discipline_Of_Transcendence_Vol_1",
+      "fileTitle" : "The Discipline Of Transcendence Vol 1",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Discipline of Transcendence Vol 1",
+      "slug" : "the-discipline-of-transcendence-vol-1-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "The_Discipline_Of_Transcendence_Vol_2",
+      "fileTitle" : "The Discipline Of Transcendence Vol 2",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Discipline of Transcendence Vol 2",
+      "slug" : "the-discipline-of-transcendence-vol-2-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Dogen_The_Zen_Master",
+      "fileTitle" : "Dogen The Zen Master A Search And A Fulfilment",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Dogen The Zen Master A Search and A Fulfilment",
+      "slug" : "dogen-the-zen-master-a-search-and-a-fulfilment-01-08",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "God_Is_Dead_Zen_Is_The_Only_Living_Truth",
+      "fileTitle" : "God Is Dead Zen Is The Only Living Truth",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "God is Dead Zen is the Only Living Truth",
+      "slug" : "god-is-dead-zen-is-the-only-living-truth-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Hyakujo_The_Everest_Of_Zen",
+      "fileTitle" : "Hyakujo The Everest Of Zen",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Hyakujo The Everest of Zen",
+      "slug" : "hyakujo-the-everest-of-zen-with-bashos-haikus-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "I_Celebrate_Myself",
+      "fileTitle" : "I Celebrate Myself",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "I Celebrate Myself",
+      "slug" : "i-celebrate-myself-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Isan_No_Footprints_In_The_Blue_Sky",
+      "fileTitle" : "Isan No Footprints In The Blue Sky",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Isan No Footprints In the Blue Sky",
+      "slug" : "isan-no-footprints-in-the-blue-sky-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Joshu_The_Lions_Roar",
+      "fileTitle" : "Joshu The Lions Roar",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Joshu The Lion's Roar",
+      "slug" : "joshu-the-lions-roar-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "Kyozan_A_True_Man_Of_Zen",
+      "fileTitle" : "Kyozan A True Man Of Zen",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Kyozan A True Man of Zen",
+      "slug" : "kyozan-a-true-man-of-zen-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Live_Zen",
+      "fileTitle" : "Live Zen",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Live Zen",
+      "slug" : "live-zen-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Ma_Tzu_The_Empty_Mirror",
+      "fileTitle" : "Ma Tzu The Empty Mirror",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Ma Tzu The Empty Mirror",
+      "slug" : "ma-tzu-the-empty-mirror-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Nansen_The_Point_Of_Departure",
+      "fileTitle" : "Nansen The Point Of Departure",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Nansen The Point of Departure",
+      "slug" : "nansen-the-point-of-departure-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "No_Mind_The_Flowers_Of_Eternity",
+      "fileTitle" : "No Mind The Flowers Of Eternity",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "No Mind The Flowers of Eternity",
+      "slug" : "no-mind-the-flowers-of-eternity-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "No_Water_No_Moon",
+      "fileTitle" : "No Water No Moon",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "No Water No Moon",
+      "slug" : "no-water-no-moon-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "One_Seed_Makes_The_Whole_Earth_Green",
+      "fileTitle" : "One Seed Makes The Whole Earth Green",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "One Seed Makes The Whole Earth Green",
+      "slug" : "one-seed-makes-the-whole-earth-green-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Returning_To_The_Source",
+      "fileTitle" : "Returning To The Source",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Returning To The Source",
+      "slug" : "returning-to-the-source-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Rinzai_Master_Of_The_Irrational",
+      "fileTitle" : "Rinzai Master Of The Irrational",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Rinzai Master of the Irrational",
+      "slug" : "rinzai-master-of-the-irrational-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "The_Grass_Grows_By_Itself",
+      "fileTitle" : "The Grass Grows By Itself",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Grass Grows By Itself",
+      "slug" : "the-grass-grows-by-itself-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Heart_Sutra",
+      "fileTitle" : "The Heart Sutra",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Heart Sutra",
+      "slug" : "the-heart-sutra-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "The_Language_Of_Existence",
+      "fileTitle" : "The Language Of Existence",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Language of Existence",
+      "slug" : "the-language-of-existence-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Miracle",
+      "fileTitle" : "The Miracle",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Miracle",
+      "slug" : "the-miracle-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "The_Original_Man",
+      "fileTitle" : "The Original Man",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Original Man",
+      "slug" : "the-original-man-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Turning_In",
+      "fileTitle" : "Turning In",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Turning In",
+      "slug" : "turning-in-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Yakusan_Straight_To_The_Point_Of_Enlightenment",
+      "fileTitle" : "Yakusan Straight To The Point Of Enlightenment",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yakusan Straight To The Point of Enlightenment",
+      "slug" : "yakusan-straight-to-the-point-of-enlightenment-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Zen_The_Diamond_Thunderbolt",
+      "fileTitle" : "Zen The Diamond Thunderbolt",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zen The Diamond Thunderbolt",
+      "slug" : "zen-the-diamond-thunderbolt-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Zen_The_Special_Transmission",
+      "fileTitle" : "Zen The Special Transmission",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zen The Special Transmission",
+      "slug" : "zen-the-special-transmission-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Nirvana_The_Last_Nightmare",
+      "fileTitle" : "Nirvana The Last Nightmare",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Nirvana The Last Nightmare",
+      "slug" : "nirvana-the-last-nightmare-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Take_It_Easy_Vol_1",
+      "fileTitle" : "Take It Easy Vol 1",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Take It Easy Vol 1",
+      "slug" : "take-it-easy-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_First_Principle",
+      "fileTitle" : "The First Principle",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The First Principle",
+      "slug" : "the-first-principle-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Theologia_Mystica",
+      "fileTitle" : "Theologia Mystica",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Theologia Mystica",
+      "slug" : "theologia-mystica-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Walking_In_Zen_Sitting_In_Zen",
+      "fileTitle" : "Walking In Zen Sitting In Zen",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Walking In Zen Sitting In Zen",
+      "slug" : "walking-in-zen-sitting-in-zen-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Journey_To_The_Heart",
+      "fileTitle" : "Journey To The Heart",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Journey to the Heart Sufism",
+      "slug" : "journey-to-the-heart-sufism-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Just_Like_That",
+      "fileTitle" : "Just Like That",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Just Like That",
+      "slug" : "just-like-that-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 31,
+      "filePrefix" : "Sufis_People_Of_The_Path",
+      "fileTitle" : "Sufis People Of The Path",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Sufis People of the Path",
+      "slug" : "sufis-people-of-the-path-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "The_Perfect_Master",
+      "fileTitle" : "The Perfect Master",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Perfect Master",
+      "slug" : "the-perfect-master-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "The_Secret",
+      "fileTitle" : "The Secret",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Secret",
+      "slug" : "the-secret-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Unio_Mystica",
+      "fileTitle" : "Unio Mystica",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Unio Mystica",
+      "slug" : "unio-mystica-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 18,
+      "filePrefix" : "Wisdom_Of_The_Sands",
+      "fileTitle" : "Wisdom Of The Sands",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Wisdom of The Sands",
+      "slug" : "wisdom-of-the-sands-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Tantra_The_Supreme_Understanding",
+      "fileTitle" : "Tantra The Supreme Understanding",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tantra The Supreme Understanding",
+      "slug" : "tantra-the-supreme-understanding-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Tantra_Vision_Vol_1",
+      "fileTitle" : "Tantra Vision Vol 1",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tantra Vision Vol 1",
+      "slug" : "tantra-vision-vol-1-tantra-experience-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Tantra_Vision_Vol_2",
+      "fileTitle" : "Tantra Vision Vol 2",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tantra Vision Vol 2",
+      "slug" : "tantra-vision-vol-2-tantric-transformation-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 28,
+      "filePrefix" : "Tao_The_Pathless_Path",
+      "fileTitle" : "Tao The Pathless Path",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tao The Pathless Path",
+      "slug" : "tao-the-pathless-path-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Tao_Vol_1_Absolute_Tao",
+      "fileTitle" : "Tao Vol 1 Absolute Tao",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tao Vol 1 Absolute Tao",
+      "slug" : "tao-vol-1-absolute-tao-the-three-treasures-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Tao_Vol_2_Living_Tao",
+      "fileTitle" : "Tao Vol 2 Living Tao",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tao Vol 2 Living Tao",
+      "slug" : "tao-vol-2-living-tao-the-three-treasures-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Tao_Vol_3_Undone",
+      "fileTitle" : "Tao Vol 3 Undone",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tao Vol 3 Undone",
+      "slug" : "tao-vol-3-undone-the-three-treasures-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Tao_Vol_4_Talking",
+      "fileTitle" : "Tao Vol 4 Talking",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Tao Vol 4 Talking",
+      "slug" : "tao-vol-4-talking-the-three-treasures-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Empty_Boat",
+      "fileTitle" : "The Empty Boat",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Empty Boat",
+      "slug" : "the-empty-boat-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "The_Golden_Gate",
+      "fileTitle" : "The Golden Gate",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Golden Gate",
+      "slug" : "the-golden-gate-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 31,
+      "filePrefix" : "The_Secret_Of_Secrets",
+      "fileTitle" : "The Secret Of Secrets",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Secret of Secrets",
+      "slug" : "the-secret-of-secrets-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "When_The_Shoe_Fits",
+      "fileTitle" : "When The Shoe Fits",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "When the Shoe Fits",
+      "slug" : "when-the-shoe-fits-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "I_Am_That",
+      "fileTitle" : "I Am That",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "I Am That",
+      "slug" : "i-am-that-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Philosophia_Ultima",
+      "fileTitle" : "Philosophia Ultima",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Philosophia Ultima",
+      "slug" : "philosophia-ultima-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 50,
+      "filePrefix" : "That_Art_Thou",
+      "fileTitle" : "That Art Thou",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "That Art Thou",
+      "slug" : "that-art-thou-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "The_Supreme_Doctrine",
+      "fileTitle" : "The Supreme Doctrine",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Supreme Doctrine",
+      "slug" : "the-supreme-doctrine-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 34,
+      "filePrefix" : "The_Ultimate_Alchemy",
+      "fileTitle" : "The Ultimate Alchemy",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Ultimate Alchemy",
+      "slug" : "the-ultimate-alchemy-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 17,
+      "filePrefix" : "Vedanta_Seven_Steps_To_Samadhi",
+      "fileTitle" : "Vedanta Seven Steps To Samadhi",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Vedanta Seven Steps to Samadhi",
+      "slug" : "vedanta-seven-steps-to-samadhi-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Guida_Spirituale",
+      "fileTitle" : "Guida Spirituale",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Guida Spirituale",
+      "slug" : "guida-spirituale-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 34,
+      "filePrefix" : "New_Alchemy_To_Turn_You_On",
+      "fileTitle" : "New Alchemy To Turn You On",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "New Alchemy To Turn You On",
+      "slug" : "new-alchemy-to-turn-you-on-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Philosophia_Perennis",
+      "fileTitle" : "Philosophia Perennis",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Philosophia Perennis",
+      "slug" : "philosophia-perennisia-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "The_Hidden_Harmony",
+      "fileTitle" : "The Hidden Harmony",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Hidden Harmony",
+      "slug" : "the-hidden-harmony-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 27,
+      "filePrefix" : "The_Hidden_Splendor",
+      "fileTitle" : "The Hidden Splendor",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Hidden Splendor",
+      "slug" : "the-hidden-splendor-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 47,
+      "filePrefix" : "The_Prophet",
+      "fileTitle" : "The Prophet",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Prophet",
+      "slug" : "the-prophet-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 23,
+      "filePrefix" : "Zarathustra_A_God_Can_Dance",
+      "fileTitle" : "Zarathustra A God Can Dance",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zarathustra A God Can Dance",
+      "slug" : "zarathustra-a-god-can-dance-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 23,
+      "filePrefix" : "Zarathustra_The_Laughing_Prophet",
+      "fileTitle" : "Zarathustra The Laughing Prophet",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zarathustra The Laughing Prophet",
+      "slug" : "zarathustra-the-laughing-prophet-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "The_Path_Of_Yoga",
+      "fileTitle" : "The Path Of Yoga",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 1 The Path of Yoga",
+      "slug" : "yoga-vol-1-the-path-of-yoga-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Science_Of_Soul",
+      "fileTitle" : "The Science Of Soul",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 2 The Science of Soul",
+      "slug" : "yoga-vol-2-the-science-of-soul-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Mystery_Beyond_Mind",
+      "fileTitle" : "The Mystery Beyond Mind",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 3 The Mystery Beyond Mind",
+      "slug" : "yoga-vol-3-the-mystery-beyond-mind-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Alchemy_Of_Yoga",
+      "fileTitle" : "The Alchemy Of Yoga",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 4 The Alchemy of Yoga",
+      "slug" : "yoga-vol-4-the-alchemy-of-yoga-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "A_New_Direction",
+      "fileTitle" : "A New Direction",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 5 A New Direction",
+      "slug" : "yoga-vol-5-a-new-direction-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Essence_Of_Yoga",
+      "fileTitle" : "The Essence Of Yoga",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 6 The Essence of Yoga",
+      "slug" : "yoga-vol-6-the-essence-of-yoga-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Science_Of_Living",
+      "fileTitle" : "The Science Of Living",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 7 The Science of Living",
+      "slug" : "yoga-vol-7-the-science-of-living-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Secret_Of_Yoga",
+      "fileTitle" : "The Secret Of Yoga",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 8 The Secret of Yoga",
+      "slug" : "yoga-vol-8-the-secret-of-yoga-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Path_Of_Liberation",
+      "fileTitle" : "The Path Of Liberation",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 9 The Path of Liberation",
+      "slug" : "yoga-vol-9-the-path-of-liberation-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Supreme_Science",
+      "fileTitle" : "The Supreme Science",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yoga Vol 10 The Supreme Science",
+      "slug" : "yoga-vol-10-the-supreme-science-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "The_Beloved",
+      "fileTitle" : "The Beloved",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Beloved",
+      "slug" : "the-beloved-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Divine_Melody",
+      "fileTitle" : "The Divine Melody",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Divine Melody",
+      "slug" : "the-divine-melody-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "The_Guest",
+      "fileTitle" : "The Guest",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Guest",
+      "slug" : "the-guest-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Path_Of_Love",
+      "fileTitle" : "The Path Of Love",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Path of Love",
+      "slug" : "the-path-of-love-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Revolution",
+      "fileTitle" : "The Revolution",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Revolution Kabir",
+      "slug" : "the-revolution-kabir-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "I_Say_Unto_You",
+      "fileTitle" : "I Say Unto You",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "I Say Unto You",
+      "slug" : "i-say-unto-you-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "The_Mustard_Seed",
+      "fileTitle" : "The Mustard Seed",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Mustard Seed",
+      "slug" : "the-mustard-seed-jesus-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Art_Of_Dying",
+      "fileTitle" : "The Art Of Dying",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Art of Dying",
+      "slug" : "the-art-of-dying-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_True_Sage",
+      "fileTitle" : "The True Sage",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The True Sage",
+      "slug" : "the-true-sage-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "From_Darkness_To_Light",
+      "fileTitle" : "From Darkness To Light",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Darkness to Light",
+      "slug" : "from-darkness-to-light-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "From_Ignorance_To_Innocence",
+      "fileTitle" : "From Ignorance To Innocence",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Ignorance to Innocence",
+      "slug" : "from-ignorance-to-innocence-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "From_Misery_To_Enlightenment",
+      "fileTitle" : "From Misery To Enlightenment",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Misery to Enlightenment",
+      "slug" : "from-misery-to-enlightenment-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "From_Personality_To_Individuality",
+      "fileTitle" : "From Personality To Individuality",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Personality to Individuality",
+      "slug" : "from-personality-to-individuality-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "From_Unconscious_To_Consciousness",
+      "fileTitle" : "From Unconscious To Consciousness",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Unconscious to Consciousness",
+      "slug" : "from-unconscious-to-consciousness-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 34,
+      "filePrefix" : "From_The_False_To_The_Truth",
+      "fileTitle" : "From The False To The Truth",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From the False to the Truth",
+      "slug" : "from-the-false-to-the-truth-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 44,
+      "filePrefix" : "Osho_Upanishad",
+      "fileTitle" : "Osho Upanishad",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Osho Upanishad",
+      "slug" : "osho-upanishad-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Sermons_In_Stones",
+      "fileTitle" : "Sermons In Stones",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Sermons in Stones",
+      "slug" : "sermons-in-stones-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 27,
+      "filePrefix" : "Socrates_Poisoned_Again",
+      "fileTitle" : "Socrates Poisoned Again After Twenty Five Centuries",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Socrates Poisoned Again After Twenty Five Centuries",
+      "slug" : "socrates-poisoned-again-after-twenty-five-centuries-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 44,
+      "filePrefix" : "The_Path_Of_The_Mystic",
+      "fileTitle" : "The Path Of The Mystic",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Path of the Mystic",
+      "slug" : "the-path-of-the-mystic-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 24,
+      "filePrefix" : "The_Sword_And_The_Lotus",
+      "fileTitle" : "The Sword And The Lotus",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Sword and the Lotus",
+      "slug" : "the-sword-and-the-lotus-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 46,
+      "filePrefix" : "The_Transmission_Of_The_Lamp",
+      "fileTitle" : "The Transmission Of The Lamp",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Transmission of the Lamp",
+      "slug" : "the-transmission-of-the-lamp-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Rebellious_Spirit",
+      "fileTitle" : "Rebellious Spirit",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Rebellious Spirit",
+      "slug" : "rebellious-spirit-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 40,
+      "filePrefix" : "The_Golden_Future",
+      "fileTitle" : "The Golden Future",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Golden Future",
+      "slug" : "the-golden-future-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 33,
+      "filePrefix" : "The_New_Dawn",
+      "fileTitle" : "The New Dawn",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The New Dawn",
+      "slug" : "the-new-dawn-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 35,
+      "filePrefix" : "The_Rebel",
+      "fileTitle" : "The Rebel",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Rebel",
+      "slug" : "the-rebel-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Hari_Om_Tat_Sat",
+      "fileTitle" : "Hari Om Tat Sat",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Hari Om Tat Sat",
+      "slug" : "hari-om-tat-sat-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Om_Mani_Padme_Hum",
+      "fileTitle" : "Om Mani Padme Hum",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Om Mani Padme Hum",
+      "slug" : "om-mani-padme-hum-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 27,
+      "filePrefix" : "Om_Shantih_Shantih_Shantih",
+      "fileTitle" : "Om Shantih Shantih Shantih",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Om Shantih Shantih Shantih",
+      "slug" : "om-shantih-shantih-shantih-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Sat_Chit_Anand",
+      "fileTitle" : "Sat Chit Anand",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Sat Chit Anand",
+      "slug" : "sat-chit-anand-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Satyam_Shivam_Sundaram",
+      "fileTitle" : "Satyam Shivam Sundaram",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Satyam Shivam Sundaram",
+      "slug" : "satyam-shivam-sundaram-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "The_Last_Testament_Vol_1",
+      "fileTitle" : "The Last Testament Vol 1",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Last Testament Vol 1",
+      "slug" : "the-last-testament-vol-1-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "The_Last_Testament_Vol_2",
+      "fileTitle" : "The Last Testament Vol 2",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Last Testament Vol 2",
+      "slug" : "the-last-testament-vol-2-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "The_Last_Testament_Vol_3",
+      "fileTitle" : "The Last Testament Vol 3",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Last Testament Vol 3",
+      "slug" : "the-last-testament-vol-3-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 27,
+      "filePrefix" : "The_Last_Testament_Vol_4",
+      "fileTitle" : "The Last Testament Vol 4",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Last Testament Vol 4",
+      "slug" : "the-last-testament-vol-4-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 28,
+      "filePrefix" : "The_Last_Testament_Vol_5",
+      "fileTitle" : "The Last Testament Vol 5",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Last Testament Vol 5",
+      "slug" : "the-last-testament-vol-5-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "The_Last_Testament_Vol_6",
+      "fileTitle" : "The Last Testament Vol 6",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Last Testament Vol 6",
+      "slug" : "the-last-testament-vol-6-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Goose_Is_Out",
+      "fileTitle" : "The Goose Is Out",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Goose Is Out",
+      "slug" : "the-goose-is-out-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 28,
+      "filePrefix" : "The_Great_Pilgrimage",
+      "fileTitle" : "The Great Pilgrimage",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Great Pilgrimage",
+      "slug" : "the-great-pilgrimage-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "The_Invitation",
+      "fileTitle" : "The Invitation",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Invitation",
+      "slug" : "the-invitation-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "The_Razors_Edge",
+      "fileTitle" : "The Razors Edge",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Razors Edge",
+      "slug" : "the-razors-edge-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 14,
+      "filePrefix" : "The_Wild_Geese_And_The_Water",
+      "fileTitle" : "The Wild Geese And The Water",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Wild Geese and the Water",
+      "slug" : "the-wild-geese-and-the-water-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Walk_Without_Feet_Fly_Without_Wings",
+      "fileTitle" : "Walk Without Feet Fly Without Wings",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Walk Without Feet Fly Without Wings",
+      "slug" : "walk-without-feet-fly-without-wings-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Zen_Zest_Zip_Zap_And_Zing",
+      "fileTitle" : "Zen Zest Zip Zap And Zing",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zen Zest Zip Zap and Zing",
+      "slug" : "zen-zest-zip-zap-and-zing-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "Yaa_Hoo_The_Mystic_Rose",
+      "fileTitle" : "Yaa Hoo The Mystic Rose",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Yaa Hoo The Mystic Rose",
+      "slug" : "yaa-hoo-the-mystic-rose-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 40,
+      "filePrefix" : "From_Death_To_Deathlessness",
+      "fileTitle" : "From Death To Deathlessness",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "From Death to Deathlessness",
+      "slug" : "from-death-to-deathlessness-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "My_Way_The_Way_Of_White_Clouds",
+      "fileTitle" : "My Way The Way Of White Clouds",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "My Way: The Way of White Clouds",
+      "slug" : "my-way-way-of-white-clouds-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Sun_Rises_In_The_Evening",
+      "fileTitle" : "Sun Rises In The Evening",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Sun Rises in the Evening",
+      "slug" : "sun-rises-in-the-evening-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 38,
+      "filePrefix" : "The_Great_Zen_Master_Ta_Hui",
+      "fileTitle" : "The Great Zen Maste Ta Hui",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Great Zen Master Ta Hui",
+      "slug" : "ta-hui-great-zen-master-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Book_Of_Nothing_Hsin_Hsin_Ming",
+      "fileTitle" : "The Book Of Nothing Hsin Hsin Ming",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Book of Nothing: Hsin Hsin Ming",
+      "slug" : "the-book-of-nothing-hsin-hsin-ming-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Buddha_The_Emptiness_Of_The_Heart",
+      "fileTitle" : "Buddha The Emptiness Of The Heart",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Buddha: The Emptiness of the Heart",
+      "slug" : "the-buddha-the-emptiness-of-the-heart-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "The_Discipline_Of_Transcendence_Vol_3",
+      "fileTitle" : "The Discipline Of Transcendence Vol 3",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Discipline of Transcendence Vol 3",
+      "slug" : "the-discipline-of-transcendence-vol-3-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "The_Discipline_Of_Transcendence_Vol_4",
+      "fileTitle" : "The Discipline Of Transcendence Vol 4",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Discipline of Transcendence Vol 4",
+      "slug" : "the-discipline-of-transcendence-vol-4-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "The_White_Lotus",
+      "fileTitle" : "The White Lotus",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The White Lotus",
+      "slug" : "the-white-lotus-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "This_This_A_Thousand_Times_This",
+      "fileTitle" : "This, This, A Thousand Times This",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "This, This, A Thousand Times This",
+      "slug" : "this-this-a-thousand-times-this-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "This_Very_Body_The_Buddha",
+      "fileTitle" : "This Very Body The Buddha",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "This Very Body the Buddha",
+      "slug" : "this-very-body-the-buddha-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "The_Zen_Manifesto_Freedom_From_Oneself",
+      "fileTitle" : "The Zen Manifesto Freedom From Oneself",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Zen Manifesto: Freedom From Oneself",
+      "slug" : "zen-manifesto-freedom-from-oneself-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Zen_Mystery_And_The_Poetry_Of_The_Beyond",
+      "fileTitle" : "Zen Mystery And The Poetry Of The Beyond",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zen: The Mystery and the Poetry of the Beyond",
+      "slug" : "zen-mystery-and-the-poetry-of-the-beyond-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Zen_The_Quantum_Leap_From_Mind_To_No_Mind",
+      "fileTitle" : "Zen The Quantum Leap From Mind To No Mind",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zen: The Quantum Leap From Mind to No Mind",
+      "slug" : "zen-the-quantum-leap-from-mind-to-no-mind-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Zen_The_Solitary_Bird_Cockoo_Of_The_Forest",
+      "fileTitle" : "Zen The Solitary Bird Cockoo Of The Forest",
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Zen: The Solitary Bird, Cuckoo of the Forest",
+      "slug" : "zen-the-solitary-bird-cockoo-of-the-forest-series",
+      "urlType" : "slug"
+    },
+    {
+      "count" : 1,
+      "filePrefix" : "Jesus_Crucified_Again",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Jesus Crucified Again",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Press_Conference",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Press Conference",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 30,
+      "filePrefix" : "The_Path_of_Paradox",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Path of Paradox",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "The_Psychology_of_the_Esoteric",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Psychology of the Esoteric",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "The_Search",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "The Search",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 38,
+      "filePrefix" : "Light_on_the_Path",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "english",
+      "name" : "Light on the Path",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 17,
+      "filePrefix" : "Adhyatam_Upanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Adhyatam Upanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Ishavashya_Upanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ishavashya Upanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Kaivalya_Upanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kaivalya Upanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Kathopanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kathopanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 17,
+      "filePrefix" : "Nirvan_Upanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Nirvan Upanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Saravsar_Upanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Saravsar Upanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 18,
+      "filePrefix" : "Geeta_Darshan_Vol_1-2",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 1-2",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Geeta_Darshan_Vol_3",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 3",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 18,
+      "filePrefix" : "Geeta_Darshan_Vol_4",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 4",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Geeta_Darshan_Vol_5",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 5",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Geeta_Darshan_Vol_6",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 6",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Geeta_Darshan_Vol_7",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 7",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Geeta_Darshan_Vol_8",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 8",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Geeta_Darshan_Vol_9",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 9",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Geeta_Darshan_Vol_10",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 10",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Geeta_Darshan_Vol_11",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 11",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Geeta_Darshan_Vol_12",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 12",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Geeta_Darshan_Vol_13",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 13",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Geeta_Darshan_Vol_14",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 14",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Geeta_Darshan_Vol_15",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 15",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Geeta_Darshan_Vol_16",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 16",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Geeta_Darshan_Vol_17",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 17",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Geeta_Darshan_Vol_18",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Geeta Darshan Vol 18",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Kahe_Kabir_Diwana",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kahe Kabir Diwana",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Kahe_Kabir_Main_Pura_Paya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kahe Kabir Main Pura Paya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Suno_Bhai_Sadho",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Suno Bhai Sadho",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Ek_Omkar_Satnam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ek Omkar Satnam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Shiv_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Shiv Sutra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Bin_Bati_Bin_Tel",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bin Bati Bin Tel",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Diya_Tale_Andhera",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Diya Tale Andhera",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Sahaj_Samadhi_Bhali",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sahaj Samadhi Bhali",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Piv_Piv_Lagi_Pyas",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Piv Piv Lagi Pyas",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Sabai_Sayane_Ek_Mat",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sabai Sayane Ek Mat",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 127,
+      "filePrefix" : "Tao_Upanishad",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Tao Upanishad",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 62,
+      "filePrefix" : "Jin_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jin Sutra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 25,
+      "filePrefix" : "Mahaveer_Meri_Drishti_Mein",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Mahaveer Meri Drishti Mein",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 54,
+      "filePrefix" : "Mahaveer_Vani",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Mahaveer Vani",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Bhakti_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bhakti Sutra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 91,
+      "filePrefix" : "Maha_Geeta",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ashtavakra Maha Geeta",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Mare_He_Jogi_Maro",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Mare He Jogi Maro",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Sahaj_Yog",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sahaj Yog",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Birhani_Mandir_Diyana_Baar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Birhani Mandir Diyana Baar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Dariya_Kahe_Sabad_Nirvana",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dariya Kahe Sabad Nirvana",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Hansa_To_Moti_Chuge",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Hansa To Moti Chuge",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Guru_Partap_Sadh_Ki_Sangati",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Guru Partap Sadh Ki Sangati",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Man_Hi_Pooja_Man_Hi_Dhoop",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Man Hi Pooja Man Hi Dhoop",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Ram_Duware_Jo_Mare",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ram Duware Jo Mare",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Jharat_Dashahun_Dis_Moti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jharat Dashahun Dis Moti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Jagat_Taraiya_Bhor_Ki",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jagat Taraiya Bhor Ki",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Nahin_Sanjh_Nahin_Bhor",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Nahin Sanjh Nahin Bhor",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Jas_Panihar_Dhare_Sir_Gagar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jas Panihar Dhare Sir Gagar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Ka_Sovai_Din_Rain",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ka Sovai Din Rain",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Hari_Bolo_Hari_Bol",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Hari Bolo Hari Bol",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Jyoti_Se_Jyoti_Jale",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jyoti Se Jyoti Jale",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Kahe_Vajid_Pukar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kahe Vajid Pukar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Santo_Magan_Bhaya_Man_Mera",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Santo Magan Bhaya Man Mera",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Ari_Main_To_Naam_Ke_Rang_Chhaki",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ari Main To Naam Ke Rang Chhaki",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Nam_Sumir_Man_Bavre",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Nam Sumir Man Bavre",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Prem_Rang_Ras_Audh_Chadariya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Prem Rang Ras Audh Chadariya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 14,
+      "filePrefix" : "Ami_Jharat_Bigsat_Kanwal",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ami Jharat Bigsat Kanwal",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Kano_Suni_So_Juth_Sab",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kano Suni So Juth Sab",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Kan_Thore_Kankar_Ghane",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kan Thore Kankar Ghane",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Anahad_Mein_Bisram",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Anahad Mein Bisram",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Bahuri_Na_Aiso_Daon",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bahuri Na Aiso Daon",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "Bahutere_Hain_Ghat",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bahutere Hain Ghat",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Deepak_Bara_Naam_Ka",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Deepak Bara Naam Ka",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Jo_Bole_To_Hari_Katha",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jo Bole To Hari Katha",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Jyun_Macchali_Bin_Neer",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jyun Macchali Bin Neer",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Jyun_Tha_Tyun_Thaharaya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jyun Tha Tyun Thaharaya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Lagan_Mahurat_Jhooth_Sab",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Lagan Mahurat Jhooth Sab",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Mrityoma_Amritam_Gamaya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Mrityoma Amritam Gamaya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Nahin_Ram_Bin_Thaon",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Nahin Ram Bin Thaon",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Peevat_Ramras_Lagi_Khumari",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Peevat Ramras Lagi Khumari",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Piya_KoKhojan_Main_Chali",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Piya KoKhojan Main Chali",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Preetam_Chhabi_Nainan_Basee",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Preetam Chhabi Nainan Basee",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Prem_Panth_Aiso_Kathin",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Prem Panth Aiso Kathin",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Rahiman_Dhaga_Prem_Ka",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Rahiman Dhaga Prem Ka",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Ramnam_Janyo_Nahin",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ramnam Janyo Nahin",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Asambhav_Kranti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Asambhav Kranti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Bharat_Ka_Bhavishya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bharat Ka Bhavishya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dharam_Sadhana_Ke_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dharam Sadhana Ke Sutra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Dhyan_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dhyan Sutra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "Gahre_Pani_Paith",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Gahre Pani Paith",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Jeevan_Hi_Hain_Prabhu",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jeevan Hi Hain Prabhu",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Jeevan_Kranti_Ke_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jeevan Kranti Ke Sutra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Jevan_Rahasya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jevan Rahasya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 2,
+      "filePrefix" : "Jyotish",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jyotish",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Koplen_Phir_Phoot_Aayeen",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Koplen Phir Phoot Aayeen",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Main_Kahta_Akhan_Dekhi",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Main Kahta Akhan Dekhi",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Main_Mrityu_Sikhata_Hun",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Main Mrityu Sikhata Hun",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 17,
+      "filePrefix" : "Naye_Samaj_Ki_Khoj",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Naye Samaj Ki Khoj",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Prabhu_Mandir_Ke_Dwar_Par",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Prabhu Mandir Ke Dwar Par",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Sanch_Sanch_So_Sanch",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sanch Sanch So Sanch",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Sumiran_Mera_Hari_Kare",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sumiran Mera Hari Kare",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Agyat_Ki_Aur",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Agyat Ki Aur",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 21,
+      "filePrefix" : "Ajhun_Chet_Ganwar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ajhun Chet Ganwar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Amrit_Dwar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Amrit Dwar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Amrit_Ki_Disha",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Amrit Ki Disha",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Amrit_Varsha",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Amrit Varsha",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Anant_Ki_Pukar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Anant Ki Pukar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Antar_Ki_Khoj",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Antar Ki Khoj",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Apne_Mahin_Tatol",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Apne Mahin Tatol",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Apui_Gai_Hiray",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Apui Gai Hiray",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 40,
+      "filePrefix" : "Athato_Bhakti_Jigyasa",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Athato Bhakti Jigyasa",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Bhaj_Govindam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bhaj Govindam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Bin_Ghan_Parat_Phuhar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Bin Ghan Parat Phuhar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Cheti_Sake_To_Chet",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Cheti Sake To Cheti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Chit_Chakmak_Lage_Nahin",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Chit Chakmak Lage Nahin",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Dharam_Aur_Anand",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dharam Aur Anand",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dharam_Ki_Yatra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dharam Ki Yatra",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhyan_Darshan",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dhyan Darshan",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Dhyan_Ke_Kamal",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dhyan Ke Kamal",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Ek_Ek_Kadam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ek Ek Kadam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Ek_Naya_Dwar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Ek Naya Dwar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 122,
+      "filePrefix" : "Es_Dhammo_Sanantano",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Es Dhammo Sanantano",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 3,
+      "filePrefix" : "Hasiba_Kheliba_Dhariba_Dhyanam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Hasiba Kheliba Dhariba Dhyanam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Jeevan_Darshan",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jeevan Darshan",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Jeevan_Ki_Khoj",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jeevan Ki Khoj",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Jeevan_Sangeet",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jeevan Sangeet",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Jin_Khoja_Tin_Paiyan",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jin Khoja Tin Paiyan",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Jo_Ghar_Bare_Aapna",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jo Ghar Bare Aapna",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Jyon_Ki_Tyon",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Jyon Ki Tyon",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 2,
+      "filePrefix" : "Kaha_Kahun_Us_Desh_Ki",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kaha Kahun Us Desh Ki",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Kahe_Hot_Adheer",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kahe Hot Adheer",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Karuna_Aur_Kranti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Karuna Aur Kranti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 22,
+      "filePrefix" : "Krishna_Smriti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Krishna Smriti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Kya_Ishwar_Mar_Gaya_Hai",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kya Ishwar Mar Gaya Hai",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "Kya_Sove_Tu_Bavri",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Kya Sove Tu Bavri",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Mahaveer_Ya_Mahavinash",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Mahaveer Ya Mahavinash",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Main_Kaun_Hun",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Main Kaun Hun",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Mati_Kahe_Kumhar_Su",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Mati Kahe Kumhar Su",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Na_Kano_Suna",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Na Kano Suna",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Nanak_Dukhya_Sab_Sansar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Nanak Dukhya Sab Sansar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Nari_Aur_Kranti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Nari Aur Kranti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Naye_Bharat_Ka_Janm",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Naye Bharat Ka Janm",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Naye_Manushya_Ka_Dharam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Naye Manushya Ka Dharam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Sambhavnaon_Ki_Aahat",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Neti Neti Sambhavnaon Ki Aahat",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Satya_Ki_Khoj",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Neti Neti Satya Ki Khoj",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Pad_Gungharoo_Bandh",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Pad Gungharoo Bandh",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 3,
+      "filePrefix" : "Panth_Prem_Ko_Atpato",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Panth Prem Ko Atpato",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Phir_Amrit_Ki_Boond_Padi",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Phir Amrit Ki Boond Padi",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "Prem_Darshan",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Prem Darshan",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Prem_Ganga",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Prem Ganga",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Prem_Nadi_Ke_Teera",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Prem Hai Dwar Prabhu Ka",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Rom_Rom_Ras_Peejiye",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Rom Rom Ras Peejiye",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Sahaj_Mile_Avinashi",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sahaj Mile Avinashi",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Saheb_Mil_Saheb_Bhave",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Saheb Mil Saheb Bhave",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 13,
+      "filePrefix" : "Sakshi_Ki_Sadhana",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sakshi Ki Sadhana",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 15,
+      "filePrefix" : "Samadhi_Kamal",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Samadhi Kamal",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Samadhi_Ke_Dwar_Par",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Samadhi Ke Dwar Par",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Sambhog_Se_Samadhi_Ki_Aur",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sambhog Se Samadhi Ki Aur",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Sambodhi_Ke_Kshan",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sambodhi Ke Kshan",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Samund_Samana_Bund_Main",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Samund Samana Bund Main",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Sapna_Yeh_Sansar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sapna Yeh Sansar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Satya_Ki_Pyas",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Satya Ki Pyas",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Shiksha_Aur_Dharam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Shiksha Aur Dharam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 4,
+      "filePrefix" : "Shunya_Ke_Par",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Shunya Ke Par",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Shunya_Samadhi",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Shunya Samadhi",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 9,
+      "filePrefix" : "Sukh_Aur_Shanti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sukh Aur Shanti",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Swayam_Ki_Satta",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Swayam Ki Satta",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 8,
+      "filePrefix" : "Tamso_Ma_Jyotirgamaya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Tamso Ma Jyotirgamaya",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Trisha_Gai_Ek_Bund_Se",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Trisha Gai Ek Bund Se",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Udio_Pankh_Pasar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Udio Pankh Pasar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 12,
+      "filePrefix" : "Upasana_Ke_Kshan",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Upasana Ke Kshan",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 10,
+      "filePrefix" : "Utsav_Amar_Jati_Anand_Amar_Gotar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Utsav Amar Jati Anand Amar Gotar",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 11,
+      "filePrefix" : "Vigyan_Dharam_Aur_Kala",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Vigyan Dharam Aur Kala",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Vysat_Jeevan_Main_Ishwar_Ki_Khoj",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Vysat Jeevan Main Ishwar Ki Khoj",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 6,
+      "filePrefix" : "Yog_Naye_Aayam",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Yog Naye Aayam",
+      "slug" : null,
+      "urlType" : "osho-prefix"
+    },
+    {
+      "count" : 25,
+      "filePrefix" : "Dekh_Kabira_Roya",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Dekh Kabira Roya",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 7,
+      "filePrefix" : "Naye_Bharat_Ki_Khoj",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Naye Bharat Ki Khoj",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 5,
+      "filePrefix" : "Neti_Neti_Shunya_Ki_Naon",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Neti Neti Shunya Ki Naon",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 16,
+      "filePrefix" : "Sadhana_Path",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sadhana Path",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 20,
+      "filePrefix" : "Sadhana_Sutra",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Sadhana Sutra",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 19,
+      "filePrefix" : "Samadhi_Ke_Sapat_Dwar",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Samadhi Ke Sapat Dwar",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 22,
+      "filePrefix" : "Shiksha_Main_Kranti",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Shiksha Main Kranti",
+      "slug" : null,
+      "urlType" : "catalog"
+    },
+    {
+      "count" : 22,
+      "filePrefix" : "Swarn_Pakhi_Tha_Jo_Kabhi",
+      "fileTitle" : null,
+      "folderName" : null,
+      "language" : "hindi",
+      "name" : "Swarn Pakhi Tha Jo Kabhi",
+      "slug" : null,
+      "urlType" : "catalog"
+    }
+  ]
+}

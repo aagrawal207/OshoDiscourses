@@ -170,14 +170,9 @@ struct HomeView: View {
     }
 
     private var recentRecordings: [ContinueItem] {
-        playbackState.recentlyPlayed.compactMap { discourseID in
-            guard downloads.isDownloaded(discourseID) else { return nil }
-            let position = playbackState.getPosition(discourseId: discourseID)
-            let savedDuration = playbackState.getDuration(discourseId: discourseID)
-            let isCurrentlyPlaying = player.currentTrackId == discourseID
-
-            guard position > 0 || isCurrentlyPlaying else { return nil }
-
+        playbackState.continueListeningIDs(
+            isDownloaded: downloads.isDownloaded, currentTrackID: player.currentTrackId
+        ).compactMap { discourseID in
             guard let (disc, series) = Catalog.discourseLookup[discourseID] else { return nil }
             // Deliberately use only the saved position/duration here. Reading
             // player.currentTime/duration would invalidate the whole Home body
@@ -187,8 +182,8 @@ struct HomeView: View {
                 id: discourseID,
                 discourse: disc,
                 seriesInfo: series,
-                position: position,
-                savedDuration: savedDuration
+                position: playbackState.getPosition(discourseId: discourseID),
+                savedDuration: playbackState.getDuration(discourseId: discourseID)
             )
         }
     }

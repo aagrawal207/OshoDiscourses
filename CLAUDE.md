@@ -135,6 +135,7 @@ OshoDiscoursesTests/
 ├── MacWindowConfiguratorTests.swift    # Minimum window size on Catalyst, inert elsewhere
 ├── UnclaimedDownloadTests.swift        # Keep/discard rules for transfers that finish with no app process waiting
 ├── PlaybackStateTests.swift            # Position/recent/completed + cloud-merge tests
+├── SessionRestoreTests.swift           # Relaunch restore: Continue Listening selection, paused load, no session claim, first play, background save
 ├── ListeningStatsTests.swift           # Daily totals + streak tests
 ├── SeriesMetadataTests.swift           # Theme/metadata tests
 ├── UserSettingsTests.swift             # Defaults + persisted-rate/cellular tests
@@ -284,11 +285,12 @@ simulates an update.
 - [x] Mini-player bar (ultraThinMaterial glass)
 - [x] Full player screen (Apple Music style)
 - [x] Downloads screen grouped by series + total storage-used meter
-- [x] Smart Download (auto-download next 10 min before end)
+- [x] Smart Download (auto-download the next discourse 20 s before the end, and again at completion)
 - [x] Smart Delete (remove after finishing)
 - [x] Download-over-cellular toggle (default off; guards Smart Download data use)
 - [x] Settings (appearance, language, player/download prefs, noise reduction)
-- [x] Playback position persistence (auto-save every 10s)
+- [x] Playback position persistence (auto-save every 10s, plus a save on resign-active, background and terminate so an app-switcher swipe-away keeps the position)
+- [x] Relaunch restore: after the app is closed or ended by iOS, a cold launch puts the talk Home's Continue Listening shows first back in the mini-player, paused at its saved position with its series as the queue. A talk finished earlier and started again counts; a manifest entry whose file is gone is skipped. One tap resumes. Runs in `AppRuntime`, so CarPlay and the Watch see it too.
 - [x] Series thumbnails (gradient hash + initials)
 - [x] Light/Dark/System appearance switching
 - [x] Bookmarks — list with filter chips, swipe-delete, play/redownload (BookmarksView)
@@ -329,6 +331,9 @@ simulates an update.
 
 - **DeNoise first-use defaults:** Best Quality, Medium noise reduction, Medium volume boost (2×) and Gentle Lift. DeNoise starts off; saved preferences take precedence over registered defaults.
 - **`AppRuntime` owns the services, not the SwiftUI scene.** CarPlay can cold-launch the app with no phone window, so the player, downloads, playback state, launcher and companion library are created and wired in `AppRuntime.shared.start()` (idempotent, called from `App.init`). Windows, CarPlay and the Watch session all read the same instances.
+- **A restored talk claims nothing until the first play.** `AudioPlayerService.restoreQueue` loads the `AVPlayerItem` paused. It does not activate the audio session, publish Now Playing info or attach the DeNoise tap, because each of these can interrupt or take over another app's audio. `resumePlayback` does all three on the first play (`hasClaimedAudioSession`); foreground return and route changes reclaim the session only after that. CarPlay's system Now Playing screen therefore fills on the first play, while its lists and the Watch snapshot show the paused talk at once. The restore runs one main-actor turn after `start()`, behind the launch splash, so the first frame is not delayed. Unit-test hosts and `-debugPlayerDiscourse` skip it.
+- **Continue Listening has one definition.** `PlaybackStateService.continueListeningIDs` (recent, downloaded, started or loaded, in the catalog) feeds Home, `CompanionLibrary` for CarPlay and the Watch, and relaunch restore, so the restored talk is always the first row Home shows.
+- **Leaving the foreground saves the position.** `PlaybackStateService.saveWhenLeavingForeground` listens to `UIApplication` resign-active, background and terminate notifications rather than a scene phase, because CarPlay can run with no window. It reads the player's live clock first. Resign-active matters: on the simulator, background arrived about 2.6 s after the switch, and a swipe-away gives no later callback.
 - **The companion wire contract is versioned and guarded per request.** `CompanionWire.version` is 1 and a peer on another version is rejected. Transport actions carry `expectedDiscourseID`, the talk the Watch displayed, and the phone rejects a mismatch. That replaces a control lease: a tap made against stale state never lands on another talk, and no lease can be left held. Play and pause send `setPlaying(Bool)`, not a toggle, so a late or repeated delivery cannot flip playback back.
 - **Watch offline listening uses `transferFile` and position reports.** The phone sends a clone of the download plus metadata; the Watch owns its copy, and deleting the phone download does not remove it. The Watch reports positions with `transferUserInfo`, which arrives once and possibly late. The phone applies a report only if it is newer than its own last listening to that discourse (`playbackSavedAt_<id>`, bumped only when the position moves), and moves a paused, loaded player to the reported position. A playing discourse ignores reports, except that a stretch resumed under 60 s ago from an older point catches up, since a report usually arrives because the listener just pressed play on the phone. The other direction: snapshots carry the phone's saved positions for talks on the Watch, and the Watch adopts newer ones unless the talk is loaded in its own player.
 - **CarPlay signing is opt-in.** Apple must approve `com.apple.developer.carplay-audio`. Normal Debug/Release request no CarPlay entitlement so automatic signing works; the scene code ships in them but iOS will not list the app in CarPlay. `Debug-CarPlay`/`Release-CarPlay` (scheme `OshoDiscoursesCarPlay`) sign with `Signing/CarPlay.entitlements`.

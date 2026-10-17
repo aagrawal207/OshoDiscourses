@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icons use only alpha; the lotus sits inside the 66 dp safe circle. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/launch_lotus"
+    android:inset="27dp" />
