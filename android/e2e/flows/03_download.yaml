@@ -1,0 +1,37 @@
+appId: com.agraabhi.oshodiscourses
+name: 03 Series row downloads a short real talk
+---
+- launchApp
+- runFlow: ../subflows/open_series.yaml
+- runFlow:
+    when:
+      visible:
+        text: "Play|Pause"
+        childOf:
+          containsChild:
+            text: "Discourse 19(, completed)?, transcript available"
+    commands:
+      # A leftover download from an earlier run is removed so the download itself is exercised.
+      - longPressOn: "Discourse 19(, completed)?, transcript available"
+      - tapOn: "Remove Download"
+- assertVisible:
+    text: "GET.*"
+    childOf:
+      containsChild:
+        text: "Discourse 19(, completed)?, transcript available"
+- tapOn: "Discourse 19(, completed)?, transcript available"
+- extendedWaitUntil:
+    visible:
+      text: "Play"
+      childOf:
+        containsChild:
+          text: "Discourse 19(, completed)?, transcript available"
+    timeout: 120000
+- takeScreenshot: 03_downloaded
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: downloads
+- assertVisible: "New Alchemy To Turn You On"
+- assertVisible: "Discourse 19"
+- assertVisible: ".* used on this device"

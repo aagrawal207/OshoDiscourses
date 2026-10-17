@@ -1,0 +1,19 @@
+# Workspace config for `maestro test flows`. The order matters: later flows reuse the talk that
+# 03 downloads (they fetch it again if it is missing) and 12 deletes it at the end.
+flows:
+  - "*.yaml"
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - "01 First launch shows Home with catalog shelves"
+    - "02 Library search and filter chip open a series"
+    - "03 Series row downloads a short real talk"
+    - "04 Row plays into mini-player and full player; transport and speed persist"
+    - "05 Sleep timer set and cancel"
+    - "06 Add bookmark, find it in Bookmarks and play it"
+    - "07 Transcript search and Play from here"
+    - "08 DeNoise Best Quality reports its status"
+    - "09 Settings appearance dark and accent change"
+    - "10 Support sheet shows products or the could-not-load state"
+    - "11 Listening Stats and History"
+    - "12 Deleting the playing talk in Downloads clears its row and the mini-player"

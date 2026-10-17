@@ -1,0 +1,20 @@
+# Opens the series and downloads the test talk unless its row already offers Play or Pause.
+appId: com.agraabhi.oshodiscourses
+---
+- runFlow: open_series.yaml
+- runFlow:
+    when:
+      notVisible:
+        text: "Play|Pause"
+        childOf:
+          containsChild:
+            text: "Discourse 19(, completed)?, transcript available"
+    commands:
+      - tapOn: "Discourse 19(, completed)?, transcript available"
+- extendedWaitUntil:
+    visible:
+      text: "Play|Pause"
+      childOf:
+        containsChild:
+          text: "Discourse 19(, completed)?, transcript available"
+    timeout: 120000

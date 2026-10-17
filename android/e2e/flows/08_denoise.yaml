@@ -1,0 +1,32 @@
+appId: com.agraabhi.oshodiscourses
+name: 08 DeNoise Best Quality reports its status
+---
+- launchApp
+- runFlow: ../subflows/open_player.yaml
+- runFlow:
+    when:
+      visible: "Play"
+    commands:
+      - tapOn: "Play"
+- tapOn: "DeNoise"
+- assertVisible: "Enable DeNoise"
+- runFlow:
+    when:
+      visible: "Original sound"
+    commands:
+      - tapOn: "Enable DeNoise"
+- tapOn: "Listening mode"
+- assertVisible: "Other Options"
+- tapOn: "Best Quality"
+# Picking a mode returns to DeNoise, as on iOS.
+- assertNotVisible: "Other Options"
+- extendedWaitUntil:
+    visible: "Enhancement is on"
+    timeout: 20000
+- assertVisible: "Noise Reduction"
+- takeScreenshot: 08_denoise_on
+- tapOn: "Enable DeNoise"
+- assertVisible: "Original sound"
+- tapOn: "Done"
+- tapOn: "Pause"
+- back
