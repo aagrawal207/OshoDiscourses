@@ -13,7 +13,7 @@ final class WhatsNewPresentationTests: XCTestCase {
         let continueButton = app.buttons["whatsNew.continue"]
         XCTAssertTrue(continueButton.waitForExistence(timeout: 15))
         XCTAssertTrue(app.navigationBars["What's New"].exists)
-        XCTAssertTrue(app.staticTexts["Listen in Hindi or English"].exists)
+        XCTAssertTrue(app.staticTexts["Listen in another language"].exists)
         XCTAssertTrue(app.staticTexts["At Osho's pace"].exists)
         capture(app, name: "What's New after an update")
 
@@ -36,7 +36,7 @@ final class WhatsNewPresentationTests: XCTestCase {
         for _ in 0..<8 where !row.exists || !row.isHittable { app.swipeUp() }
         XCTAssertTrue(row.exists)
         row.tap()
-        XCTAssertTrue(app.staticTexts["Listen in Hindi or English"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Listen in another language"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["whatsNew.continue"].exists)
     }
 

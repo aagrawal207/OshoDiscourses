@@ -1,0 +1,21 @@
+Osho Talks remains free to use, with no ads, no account and no sign-in. No demo account is needed.
+
+NEW IN 1.17.0: LISTEN IN TRANSLATION
+A discourse can be heard in another language. The app translates the discourse's transcript with Apple's Translation framework on the device, and an ordinary iOS system voice (AVSpeechSynthesizer) reads the translation. It does not imitate Osho's voice. The original recording does not need to be downloaded.
+
+To try it:
+1. Open the Library tab and choose an English series with transcripts, for example "A Bird on the Wing".
+2. At the top of the series page, tap the menu labelled "Osho's original recording" and choose Hindi, or another listed language. A discourse row's menu also has "Listen in Hindi...", and the full player has a globe button.
+3. Tap a discourse. The "Listen in Translation" screen opens. Choose a voice and a pace, then tap "Translate into Hindi".
+4. If the language is not yet on the device, iOS shows Apple's own Translation prompt to download it. The app shows this system prompt only after the tap, and translation starts only if the reviewer agrees. The app has no server and sends transcript text nowhere.
+5. When the first passages are ready, tap "Play Finished Part". The rest keeps translating while the translation plays.
+
+Translation needs a network connection only to fetch the transcript and, the first time, Apple's language download. If iOS stops translating after the app leaves the screen, it continues from the last saved passage when the app is open again. Translated audio is saved on the device and can be deleted from Downloads. More voices can be downloaded in the iOS Settings app under Accessibility > Read & Speak > Voices. Machine translation may contain mistakes.
+
+ALSO NEW
+After the app is closed, the last downloaded talk the listener was hearing returns paused in the mini-player. Nothing plays until the listener taps Play.
+
+OPTIONAL SUPPORT (UNCHANGED FROM 1.16.3)
+Settings > About > Support Development offers one-time tips and three optional yearly support subscriptions. None unlocks recordings, translations or features.
+
+The app is an independent player for publicly available recordings and is not affiliated with any Osho organisation.

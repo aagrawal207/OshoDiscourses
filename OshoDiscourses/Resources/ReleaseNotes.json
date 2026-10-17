@@ -3,17 +3,19 @@
   {
    "version": "1.17.0",
    "items": [
-    "Listen in Hindi or English. A system voice reads the translated transcript, so you don't need the recording.",
+    "Listen to a talk in Hindi, English or another language. Apple Translation translates the transcript on your device, and a system voice reads it.",
     "Translations follow Osho's pace, pausing so each paragraph takes about as long as in his talk.",
-    "Translation keeps going when you lock your phone, with progress on the Lock Screen, and you can listen to the finished part right away.",
-    "Switch between the translation and the recording at the same moment, and bookmark either one.",
+    "Play the finished part while the rest translates.",
+    "While the translation plays, translating continues in the background. Otherwise iOS stops it soon after you leave the app or lock the phone, and it continues from where it stopped when you come back.",
+    "Switch between the translation and the recording at the same moment. Bookmarks save the moment in the recording.",
+    "Your last talk now waits in the mini-player when you reopen the app.",
     "A What's New screen after each update, with earlier updates under Settings > About."
    ],
    "highlights": [
     {
      "symbol": "globe",
-     "title": "Listen in Hindi or English",
-     "detail": "Choose Hindi on an English series page, or English on a Hindi one. A system voice reads the translated transcript, so you don't need the recording. The wording may not be perfect."
+     "title": "Listen in another language",
+     "detail": "On a series page with transcripts, choose Hindi for an English series, English for a Hindi one, or another language. Apple Translation translates the transcript on your device and a system voice reads it. The wording may not be perfect."
     },
     {
      "symbol": "waveform",
@@ -21,14 +23,19 @@
      "detail": "The voice pauses the way Osho does, so each paragraph takes about as long as in his talk."
     },
     {
-     "symbol": "lock.iphone",
-     "title": "Keeps going when you lock your phone",
-     "detail": "Follow the progress on the Lock Screen, and start listening to the finished part while the rest is prepared."
+     "symbol": "headphones",
+     "title": "Keeps translating while you listen",
+     "detail": "Play the finished part while the rest translates. While the translation plays, translating continues in the background, even with the phone locked. Otherwise iOS stops it soon after you leave the app or lock the phone, and it continues from where it stopped when you come back."
     },
     {
      "symbol": "arrow.left.arrow.right",
      "title": "The same moment in both",
      "detail": "Switch between the translation and Osho's recording without losing your place. Bookmarks save the moment in the recording."
+    },
+    {
+     "symbol": "play.circle",
+     "title": "Your last talk waits for you",
+     "detail": "When you reopen the app, the last recording you were listening to is back in the mini-player, paused at your place."
     }
    ]
   },
