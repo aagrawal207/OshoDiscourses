@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LaunchBackground.colorset in the iOS asset catalog. -->
+    <color name="launch_background">#FF1E0F44</color>
+</resources>

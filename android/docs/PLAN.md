@@ -26,12 +26,25 @@ layout. Read the root `CLAUDE.md` for the iOS architecture and key decisions.
 - StoreKit tips and yearly support become Google Play Billing products with
   the same names and prices.
 
+## Decisions
+
+- Shared visual reference: `android/docs/spec/ui-style.md`. Use it with the
+  Swift views.
+- Apple service names get Android wording: iCloud becomes Google Drive, App
+  Store becomes Google Play, Apple Account becomes Google account.
+- Settings > About > My Other Apps is hidden. Those apps have no Android
+  versions.
+- Keep the iOS hardcoded system blue where the iOS app uses it (playing-row
+  titles, Add Bookmark), for parity.
+- Glass blur uses the Haze library where the platform supports it, with the
+  tinted fallback from the style guide.
+
 ## Stack
 
 | Concern | Choice |
 | --- | --- |
 | Language/UI | Kotlin, Jetpack Compose, Material 3 |
-| SDK levels | `minSdk 26`, `compileSdk`/`targetSdk 36` |
+| SDK levels | `minSdk 26`, `compileSdk 37` (current AndroidX needs it), `targetSdk 36` |
 | Playback | Media3 ExoPlayer + `MediaSessionService` (later `MediaLibraryService` for Auto) |
 | DSP | Media3 `AudioProcessor` calling JNI: RNNoise C sources (CMake) and the DeepFilterNet Rust bridge (`cargo-ndk`, prebuilt `.so` committed like the iOS xcframework) |
 | Downloads | WorkManager (expedited/foreground) + OkHttp |
@@ -71,7 +84,9 @@ Package root: `com.agraabhi.oshodiscourses`. Application ID matches iOS:
 | `:feature:settings` | `android/feature/settings` | Settings, appearance, about, support sheet |
 
 Feature modules depend only on `:core:*`. Only `:app` depends on
-implementation modules. Shared catalog JSON is read from
+implementation modules, with one exception: `:playback` depends on `:denoise`
+for its Media3 `AudioProcessor`. Billing, review and Drive authorization take
+an activity provider (`() -> Activity?`) that `:app` supplies. Shared catalog JSON is read from
 `OshoDiscourses/Resources/` through Gradle source sets, never copied.
 
 ## Working rules for workers
@@ -101,7 +116,7 @@ implementation modules. Shared catalog JSON is read from
 
 | ID | Task | Depends on | Status |
 | --- | --- | --- | --- |
-| A1 | Foundation: Gradle project, all modules, contracts, fakes, theme, tab shell, CI | - | in progress |
+| A1 | Foundation: Gradle project, all modules, contracts, fakes, theme, tab shell, CI | - | done |
 | A2 | Catalog data, URL builder, download source policy | A1 | todo |
 | A3 | Persistence repositories and merge rules | A1 | todo |
 | A4 | Playback engine and sleep timer | A1 | todo |
