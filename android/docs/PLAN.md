@@ -132,4 +132,4 @@ an activity provider (`() -> Activity?`) that `:app` supplies. Shared catalog JS
 | A14 | Integration, emulator E2E, screenshot parity, polish | all | done | `android-integration` | `ses_eb75e9441ffem9kpidg5uoEjsX` |
 | A15 | Final wiring of Player/Settings screens, shared UI in `:core:ui` | A9, A11, A14 | done | `android-final-wiring` | `ses_eb7185293ffeVFOqfCEiVuuz3t` |
 | A16 | Playback queue and DeNoise status fixes | A14 | done | `android-fixes` | `ses_eb718323fffew9N5YsIuiTlMcb` |
-| A17 | Emulator parity pass and Maestro E2E flows | A15, A16 | in progress | `android-e2e`, `android-parity` | `ses_eb6963547ffes150SD9jvvV4Ae`, `ses_eb613db60ffedyY73cW5YS5jph` |
+| A17 | Emulator parity pass and Maestro E2E flows | A15, A16 | done | `android-e2e`, `android-parity` | `ses_eb6963547ffes150SD9jvvV4Ae`, `ses_eb613db60ffedyY73cW5YS5jph` |
