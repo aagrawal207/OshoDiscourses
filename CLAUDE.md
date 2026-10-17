@@ -248,7 +248,7 @@ Translated narration is not on `main`. It is preserved on branch
 - [x] Mini-player bar (ultraThinMaterial glass)
 - [x] Full player screen (Apple Music style)
 - [x] Downloads screen grouped by series + total storage-used meter
-- [x] Smart Download (auto-download next 10 min before end)
+- [x] Smart Download (auto-download the next discourse 20 s before the end, and again at completion)
 - [x] Smart Delete (remove after finishing)
 - [x] Download-over-cellular toggle (default off; guards Smart Download data use)
 - [x] Settings (appearance, language, player/download prefs, noise reduction)

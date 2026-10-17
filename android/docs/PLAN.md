@@ -124,9 +124,12 @@ an activity provider (`() -> Activity?`) that `:app` supplies. Shared catalog JS
 | A6 | DeNoise DSP and native bridges | A1 | done | `android-denoise` | `ses_eb78558e3ffe8eQZjlQ7T4kSYL` |
 | A7 | Transcript data | A1 | done | `android-transcript-data` | `ses_eb7852ee0ffeRPENK2ORSS8csv` |
 | A8 | Home, Library, Series screens | A1 | done | `android-browse-ui` | `ses_eb784fc41ffeA2D3ODBMeaKWCn` |
-| A9 | Player, mini-player, DeNoise screen | A1 | in progress | `android-player-ui` | `ses_eb784cd1cffeePupQHBsMqbTho` |
+| A9 | Player, mini-player, DeNoise screen | A1 | done | `android-player-ui` | `ses_eb784cd1cffeePupQHBsMqbTho` |
 | A10 | Transcript reader UI | A1 | done | `android-transcript-ui` | `ses_eb784a019ffetrjlyth3xd08Ws` |
-| A11 | Downloads, Bookmarks, Stats, Settings screens | A1 | in progress | `android-library-settings-ui` | `ses_eb78470b3ffeWiO51Bhx0s6orz` |
+| A11 | Downloads, Bookmarks, Stats, Settings screens | A1 | done | `android-library-settings-ui` | `ses_eb78470b3ffeWiO51Bhx0s6orz` |
 | A12 | Billing, review and engagement | A1 | done | `android-billing` | `ses_eb7844d1affeoINsLcrNaq7ah6` |
 | A13 | Google Drive sync | A1, A3 | done | `android-sync` | `ses_eb7841d5fffePuPbTFWkzbT7Cm` |
-| A14 | Integration, emulator E2E, screenshot parity, polish | all | in progress | `android-integration` | `ses_eb75e9441ffem9kpidg5uoEjsX` |
+| A14 | Integration, emulator E2E, screenshot parity, polish | all | done | `android-integration` | `ses_eb75e9441ffem9kpidg5uoEjsX` |
+| A15 | Final wiring of Player/Settings screens, shared UI in `:core:ui` | A9, A11, A14 | in progress | `android-final-wiring` | `ses_eb7185293ffeVFOqfCEiVuuz3t` |
+| A16 | Playback queue and DeNoise status fixes | A14 | in progress | `android-fixes` | `ses_eb718323fffew9N5YsIuiTlMcb` |
+| A17 | Emulator parity pass and Maestro E2E flows | A15, A16 | todo | | |
