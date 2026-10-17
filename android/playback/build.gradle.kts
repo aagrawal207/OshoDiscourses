@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     api(projects.core.domain)
+    implementation(projects.denoise)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.common)

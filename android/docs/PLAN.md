@@ -107,7 +107,7 @@ an activity provider (`() -> Activity?`) that `:app` supplies. Shared catalog JS
 
 - Integration branch: `android`. Coordinator worktree:
   `~/projects/OshoDiscourses-Android`.
-- Task branches `android/<task>` in worktrees under
+- Task branches `android-<task>` in worktrees under
   `~/projects/OshoDiscourses-Android-wt/<task>`, merged by pull request into
   `android`. Every task has a GitHub issue with label `android` in milestone
   "Android phone v1".
