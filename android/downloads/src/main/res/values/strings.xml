@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="downloads_channel_name">Downloads</string>
+    <string name="downloads_channel_description">Progress of discourses being downloaded.</string>
+    <string name="downloads_notification_title">Downloads</string>
+    <string name="downloads_notification_downloading">Downloading</string>
+    <string name="downloads_notification_waiting_wifi">Waiting for Wi-Fi</string>
+    <string name="downloads_notification_waiting_connection">Waiting for a connection</string>
+    <plurals name="downloads_notification_queued">
+        <item quantity="one">%d more queued</item>
+        <item quantity="other">%d more queued</item>
+    </plurals>
+    <string name="downloads_notification_cancel">Cancel</string>
+</resources>
