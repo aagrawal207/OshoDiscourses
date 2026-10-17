@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and higher (android:dataExtractionRules). Same exclusions as downloads_backup_rules. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="Osho Discourses/" />
+        <exclude domain="file" path=".download_queue.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="Osho Discourses/" />
+        <exclude domain="file" path=".download_queue.json" />
+    </device-transfer>
+</data-extraction-rules>
