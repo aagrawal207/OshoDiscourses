@@ -25,6 +25,8 @@ interface CatalogRepository {
     /** Discourse and series for a discourse id, or null if the catalog no longer has it. */
     fun entry(discourseID: String): CatalogEntry?
 
+    fun discourse(discourseID: String): CatalogDiscourse? = entry(discourseID)?.discourse
+
     fun description(seriesName: String): SeriesDescription?
 
     fun themes(seriesName: String): List<String> = description(seriesName)?.themes.orEmpty()
