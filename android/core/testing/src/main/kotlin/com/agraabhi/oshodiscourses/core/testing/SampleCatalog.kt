@@ -103,4 +103,7 @@ class FakeCatalogRepository(
     override fun hasTranscript(discourseID: String): Boolean = discourseID in transcriptIDs
 
     override fun transcriptCount(seriesID: String): Int = transcriptIDs.count { it.startsWith("$seriesID-") }
+
+    override fun transcriptPageURL(discourseID: String): String? =
+        if (discourseID in transcriptIDs) "https://oshoworld.com/${discourseID.lowercase()}" else null
 }

@@ -99,6 +99,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import com.agraabhi.oshodiscourses.core.ui.components.CappedFontScale
+import com.agraabhi.oshodiscourses.core.ui.components.OshoMenu
+import com.agraabhi.oshodiscourses.core.ui.components.OshoMenuItem
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.feature.transcript.text.RowID
 import com.agraabhi.oshodiscourses.feature.transcript.text.TranscriptRow

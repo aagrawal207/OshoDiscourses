@@ -53,6 +53,14 @@ class FakeSupportStore(
     override suspend fun restore() = annualSupport.update { it.copy(statusIsCurrent = true) }
 
     override suspend fun dismissAnnualMessage() = annualSupport.update { it.copy(state = PurchaseState.Idle) }
+
+    var clearedDeclinedRequests: Int = 0
+        private set
+
+    override suspend fun clearDeclinedRequest() {
+        clearedDeclinedRequests++
+        annualSupport.update { it.copy(pendingProductID = null, state = PurchaseState.Idle) }
+    }
 }
 
 /** Allows a support card whenever [allowSupport] is true; records what the UI asked. */

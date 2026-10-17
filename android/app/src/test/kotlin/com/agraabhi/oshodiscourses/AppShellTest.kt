@@ -7,12 +7,16 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.agraabhi.oshodiscourses.core.model.Appearance
 import com.agraabhi.oshodiscourses.core.testing.FakeAppServices
+import com.agraabhi.oshodiscourses.core.testing.FakeDownloadManager
 import com.agraabhi.oshodiscourses.core.testing.SampleCatalog
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
 import com.agraabhi.oshodiscourses.core.ui.theme.OshoTheme
@@ -32,7 +36,7 @@ class AppShellTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val services = FakeAppServices()
+    private val services = FakeAppServices(downloads = FakeDownloadManager(downloaded = setOf(SampleCatalog.firstDiscourse.id)))
 
     private fun launch(appearance: Appearance = Appearance.LIGHT) {
         compose.setContent {
@@ -54,30 +58,35 @@ class AppShellTest {
         tab("Home").assertIsSelected()
     }
 
+    /** Home lists a series on more than one shelf; any of them opens it. */
+    private fun openFromHome(name: String) = compose.onAllNodesWithText(name).onFirst().performClick()
+
     @Test
-    fun seriesPushesFromHomeAndPlayingOpensThePlayerModal() {
+    fun seriesRowPlaysIntoTheMiniPlayerWithoutOpeningThePlayer() {
         launch()
-        compose.onNodeWithText(SampleCatalog.birdOnTheWing.name).performClick()
-        compose.onNodeWithText(SampleCatalog.firstDiscourse.displayTitle).performClick()
-        compose.waitForIdle()
-        assertThat(services.player.state.value.currentTrackId).isEqualTo(SampleCatalog.firstDiscourse.id)
-        compose.onNodeWithText("Close").performClick()
+        openFromHome(SampleCatalog.birdOnTheWing.name)
+        compose.onNodeWithContentDescription("Discourse 1", substring = true).performClick()
         compose.mainClock.advanceTimeBy(1_000)
-        // The mini-player shows the discourse number above the series.
-        compose.onNodeWithText("Discourse 1").assertExists()
+        assertThat(services.player.state.value.currentTrackId).isEqualTo(SampleCatalog.firstDiscourse.id)
+        // As on iOS, a row tap starts playback and shows only the mini-player.
+        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onAllNodesWithText("Discourse 1").onFirst().assertExists()
         compose.onRoot().captureRoboImage("src/test/screenshots/app_shell_mini_player_light.png")
     }
 
     @Test
     fun eachTabKeepsItsOwnBackStack() {
         launch()
-        compose.onNodeWithText(SampleCatalog.mahaGeeta.name).performClick()
-        compose.onNodeWithText(SampleCatalog.hindiDiscourse.displayTitle).assertExists()
+        compose.onNodeWithContentDescription("Back").assertDoesNotExist()
+        openFromHome(SampleCatalog.mahaGeeta.name)
+        compose.onNodeWithContentDescription("Back").assertExists()
         tab("Library").performClick()
         tab("Library").assertIsSelected()
-        compose.onNodeWithText(SampleCatalog.hindiDiscourse.displayTitle).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Back").assertDoesNotExist()
         tab("Home").performClick()
-        compose.onNodeWithText(SampleCatalog.hindiDiscourse.displayTitle).assertExists()
+        compose.onNodeWithContentDescription("Back").assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Back").assertDoesNotExist()
     }
 
     @Test

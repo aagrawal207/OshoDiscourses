@@ -94,6 +94,8 @@ data class TranscriptUiState(
     val fontSize: Double = UserSettings.DEFAULT_TRANSCRIPT_FONT_SIZE,
     val sentenceLayout: Boolean = true,
     val timingSource: TimingSource? = null,
+    /** Paragraphs the timing in use has an aligned start for; null for the estimate. */
+    val timingMatched: Int? = null,
     /** Matched paragraphs of the device alignment in use, for the Timing note. */
     val deviceAlignment: Pair<Int, Int>? = null,
     val anchorCount: Int = 0,
@@ -122,11 +124,14 @@ data class TranscriptUiState(
         get() {
             if (!isPlayingThis) return null
             val counts = deviceAlignment
-            return when (timingSource) {
-                TimingSource.DEVICE_ALIGNMENT if counts != null -> "Synced from speech: ${counts.first} of ${counts.second} paragraphs"
-                // The timing contract does not carry the shipped matched count.
-                TimingSource.SHIPPED_ALIGNMENT, TimingSource.DEVICE_ALIGNMENT -> "Synced from speech"
-                else -> "Estimated from text length. Tap a paragraph and choose “Audio is here” to correct it."
+            val matched = timingMatched
+            val total = transcript?.paragraphs?.size
+            return when {
+                timingSource == TimingSource.DEVICE_ALIGNMENT && counts != null -> "Synced from speech: ${counts.first} of ${counts.second} paragraphs"
+                timingSource == null || timingSource == TimingSource.ESTIMATE ->
+                    "Estimated from text length. Tap a paragraph and choose “Audio is here” to correct it."
+                matched != null && total != null -> "Synced from speech: $matched of $total paragraphs"
+                else -> "Synced from speech"
             }
         }
 
@@ -174,6 +179,7 @@ class TranscriptViewModel(
     private var playerState: PlayerState = player.state.value
     private var discourseState: TranscriptDiscourseState? = null
     private var savedReadParagraph: Int? = null
+    private var speechSync: Boolean = settings.settings.value.transcriptSpeechSync
     private var loadJob: Job? = null
     private var toastJob: Job? = null
 
@@ -272,6 +278,10 @@ class TranscriptViewModel(
         val before = mutableState.value
         mutableState.update { it.copy(fontSize = s.transcriptFontSize, sentenceLayout = s.transcriptSentenceLayout) }
         val transcript = before.transcript ?: return
+        if (speechSync != s.transcriptSpeechSync) {
+            speechSync = s.transcriptSpeechSync
+            rebuildModel()
+        }
         if (before.sentenceLayout == s.transcriptSentenceLayout) return
         val paragraph = before.row(before.scrolledRow)?.paragraph
         val rows = TranscriptRows.build(transcript, s.transcriptSentenceLayout)
@@ -301,16 +311,18 @@ class TranscriptViewModel(
         if (transcript == null || playerState.currentTrackId != discourseID) {
             model = null
             modelInputs = null
-            mutableState.update { it.copy(currentRow = null, currentSentence = null, timingSource = null) }
+            mutableState.update { it.copy(currentRow = null, currentSentence = null, timingSource = null, timingMatched = null) }
             return
         }
-        val stateNow = discourseState ?: transcriptState.state(discourseID, transcript.paragraphs.size)
+        val stored = discourseState ?: transcriptState.state(discourseID, transcript.paragraphs.size)
+        // A device alignment applies only while the listener has speech sync turned on (iOS).
+        val stateNow = if (settings.settings.value.transcriptSpeechSync) stored else stored.copy(alignment = null)
         val inputs = listOf(transcript, playerState.duration, stateNow.anchors, stateNow.alignment)
         if (inputs != modelInputs || model == null) {
             model = timing(transcript, playerState.duration, stateNow)
             modelInputs = inputs
         }
-        mutableState.update { it.copy(timingSource = model?.source) }
+        mutableState.update { it.copy(timingSource = model?.source, timingMatched = model?.matchedParagraphs) }
         updateCurrentRow()
     }
 

@@ -98,7 +98,9 @@ class PlaySupportStore internal constructor(
 
     override suspend fun dismissAnnualMessage() = withContext(dispatcher) { annual.dismissMessage() }
 
-    /** iOS's explicit clear for a request the listener says was declined; not yet in [SupportStore]. */
+    override suspend fun clearDeclinedRequest() = clearDeclinedAnnualRequest()
+
+    /** iOS's explicit clear for a request the listener says was declined. */
     suspend fun clearDeclinedAnnualRequest() = withContext(dispatcher) { annual.clearDeclinedRequest() }
 
     internal companion object {

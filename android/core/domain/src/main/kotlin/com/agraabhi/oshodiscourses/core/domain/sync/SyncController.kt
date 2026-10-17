@@ -25,6 +25,15 @@ interface SyncController {
 
     /** Stops syncing and forgets the authorization on this device. */
     suspend fun signOut()
+
+    /**
+     * Signs out and also withdraws the app's Drive grant from the account; the synced file stays.
+     * False when the provider could not be reached. The device is signed out either way.
+     */
+    suspend fun disconnect(): Boolean {
+        signOut()
+        return true
+    }
 }
 
 sealed interface SyncStatus {

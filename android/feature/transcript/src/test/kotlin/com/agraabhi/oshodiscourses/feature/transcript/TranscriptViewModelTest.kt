@@ -83,7 +83,8 @@ class TranscriptViewModelTest {
         val vm = viewModel(ModelTimingRepository(TranscriptFixtures.repository(), aligned = true))
         assertThat(vm.state.value.alignmentInUse).isTrue()
         assertThat(vm.state.value.currentSentence).isNotNull()
-        assertThat(vm.state.value.timingNote).isEqualTo("Synced from speech")
+        val count = transcript.paragraphs.size
+        assertThat(vm.state.value.timingNote).isEqualTo("Synced from speech: $count of $count paragraphs")
     }
 
     @Test

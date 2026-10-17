@@ -31,8 +31,9 @@ class DriveSyncController internal constructor(
     private val appVisibility: Flow<Boolean>,
     private val clock: () -> Long,
     private val timing: SyncTiming = SyncTiming(),
+    codec: SnapshotCodec = SnapshotJson,
 ) : SyncController {
-    private val engine = DriveSyncEngine(api, store)
+    private val engine = DriveSyncEngine(api, store, codec = codec)
     private val mutableStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
     override val status: StateFlow<SyncStatus> = mutableStatus.asStateFlow()
 
@@ -97,7 +98,7 @@ class DriveSyncController internal constructor(
      * Signs out and withdraws the app's Drive grant from the Google account. The snapshot file
      * stays in Drive. False if Google could not be reached; the device is signed out regardless.
      */
-    suspend fun disconnect(): Boolean {
+    override suspend fun disconnect(): Boolean {
         val account = preferences.accountName
         signOut()
         preferences.accountName = null

@@ -6,7 +6,10 @@ import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptAvailability
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptDiscourseState
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptException
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptRepository
+import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptSyncModel
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptTiming
+import com.agraabhi.oshodiscourses.core.model.TranscriptCatalog
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -21,7 +24,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import java.io.File
 
 /**
  * Fetches, caches and serves transcripts (iOS `TranscriptService`). Text is fetched behind each
@@ -158,7 +160,7 @@ class TranscriptService(
             else -> null to TimingSource.ESTIMATE
         }
         val knots = starts?.let { base.knots(it, state.anchors) } ?: state.anchors.mapNotNull { base.knot(it) }
-        return base.with(knots, source)
+        return base.with(knots, source, starts?.count { it != null })
     }
 
     /** The shipped entry only when it describes this paragraph split and recording. */

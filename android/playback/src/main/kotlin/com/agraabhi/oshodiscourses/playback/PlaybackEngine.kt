@@ -12,6 +12,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
 import com.agraabhi.oshodiscourses.core.domain.bookmarks.BookmarkRepository
 import com.agraabhi.oshodiscourses.core.domain.downloads.DownloadManager
 import com.agraabhi.oshodiscourses.core.domain.engagement.ReviewPrompter
@@ -269,14 +270,47 @@ class PlaybackEngine(
      * Loads the latest downloaded discourse paused at its saved position, without opening the file
      * until play. Call once progress and downloads have loaded; false when nothing was restored.
      */
-    suspend fun restoreLastSession(): Boolean = onMain {
-        if (current != null) return@onMain false
-        val id = playbackState.state.value.recentlyPlayed.firstOrNull { downloads.localFileURI(it) != null }
-            ?: return@onMain false
-        val result = seriesQueue(id) as? SeriesQueue.Ready ?: return@onMain false
+    suspend fun restoreLastSession(): Boolean = onMain { restoreLastSessionNow() }
+
+    private fun restoreLastSessionNow(): Boolean {
+        if (current != null) return false
+        val id = playbackState.state.value.recentlyPlayed.firstOrNull { downloads.localFileURI(it) != null } ?: return false
+        val result = seriesQueue(id) as? SeriesQueue.Ready ?: return false
         loadItem(result.start, resumeAt = null, autoPlay = false, playlist = result.items)
         Log.i(TAG, "outcome=session_restored")
-        true
+        return true
+    }
+
+    /**
+     * The loaded queue for media-session playback resumption, restoring the last session first
+     * when nothing is loaded. Null when there is nothing downloaded to resume. Main thread only.
+     */
+    internal fun resumptionItems(): MediaSession.MediaItemsWithStartPosition? {
+        if (current == null && !restoreLastSessionNow()) return null
+        if (queue.isEmpty()) return null
+        return MediaSession.MediaItemsWithStartPosition(queue.map(::mediaItem), currentIndex, (currentTime * 1000).toLong())
+    }
+
+    /**
+     * A controller replacing the playlist (playback resumption or an assistant). The engine's queue
+     * is kept when it already holds these items; otherwise the downloaded ones are loaded paused.
+     */
+    internal fun setMediaItemsFromSession(mediaIDs: List<String>, startIndex: Int, startPositionMs: Long) {
+        val index = startIndex.coerceAtLeast(0)
+        val explicit = if (startPositionMs == C.TIME_UNSET || startPositionMs < 0) null else startPositionMs / 1000.0
+        if (current != null && mediaIDs == queue.map { it.id }) {
+            if (index != currentIndex && index in queue.indices) loadItem(index, explicit, autoPlay = wantsPlayback)
+            return
+        }
+        val items = mediaIDs.mapNotNull { id ->
+            val entry = catalog.entry(id) ?: return@mapNotNull null
+            downloads.localFileURI(id)?.let { QueueItem(id, it, entry.discourse.displayTitle, entry.series.name) }
+        }
+        val target = mediaIDs.getOrNull(index)
+        val start = items.indexOfFirst { it.id == target }.coerceAtLeast(0)
+        if (items.isEmpty()) return
+        // A position for the start item only makes sense if that item is what loads.
+        loadItem(start, if (items[start].id == target) explicit else null, autoPlay = false, playlist = items)
     }
 
     /** Releases the player and stops background work; the engine is unusable afterwards. */

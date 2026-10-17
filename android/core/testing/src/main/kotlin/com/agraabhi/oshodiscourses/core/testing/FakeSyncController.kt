@@ -33,4 +33,15 @@ class FakeSyncController(
         authorized = false
         status.value = SyncStatus.SignInNeeded
     }
+
+    /** What [disconnect] reports, as if Google was or was not reachable. */
+    var revokeSucceeds: Boolean = true
+    var disconnectCount: Int = 0
+        private set
+
+    override suspend fun disconnect(): Boolean {
+        disconnectCount++
+        signOut()
+        return revokeSucceeds
+    }
 }

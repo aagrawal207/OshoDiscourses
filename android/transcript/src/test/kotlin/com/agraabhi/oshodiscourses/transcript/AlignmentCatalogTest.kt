@@ -1,5 +1,6 @@
 package com.agraabhi.oshodiscourses.transcript
 
+import com.agraabhi.oshodiscourses.core.model.TranscriptCatalog
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 

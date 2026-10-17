@@ -46,6 +46,7 @@ import androidx.navigation3.runtime.NavKey
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerState
 import com.agraabhi.oshodiscourses.core.model.SeriesInfo
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
+import com.agraabhi.oshodiscourses.core.ui.components.LargeTitlePage
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import kotlinx.coroutines.flow.StateFlow

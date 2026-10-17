@@ -48,4 +48,7 @@ interface CatalogRepository {
 
     /** Number of discourses in a series that have a transcript, for the series-row indicator. */
     fun transcriptCount(seriesID: String): Int
+
+    /** The discourse's oshoworld.com transcript page, or null when it has none. */
+    fun transcriptPageURL(discourseID: String): String? = null
 }

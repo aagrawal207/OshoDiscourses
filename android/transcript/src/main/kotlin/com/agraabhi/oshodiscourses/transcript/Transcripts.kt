@@ -3,16 +3,23 @@ package com.agraabhi.oshodiscourses.transcript
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.agraabhi.oshodiscourses.core.model.TranscriptCatalog
 import okhttp3.OkHttpClient
 import java.io.File
 
 /** Builds the Android [TranscriptService] for `AppContainer`. */
 object Transcripts {
-    fun create(context: Context, client: OkHttpClient): TranscriptService {
+    /** Pass the catalog repository's [TranscriptCatalog] so the shipped JSON is parsed once per process. */
+    fun create(
+        context: Context,
+        client: OkHttpClient,
+        catalog: Lazy<TranscriptCatalog> = lazy(TranscriptCatalog::loadShipped),
+    ): TranscriptService {
         val app = context.applicationContext
         val fetcher = TranscriptFetcher(client, isCellularOnly = cellularCheck(app))
         return TranscriptService(
             directory = File(app.noBackupFilesDir, TranscriptService.DIRECTORY_NAME),
+            catalog = catalog,
             fetchHTML = fetcher::fetchDescriptionHTML,
         )
     }

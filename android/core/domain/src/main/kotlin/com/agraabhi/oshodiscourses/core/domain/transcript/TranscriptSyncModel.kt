@@ -1,9 +1,4 @@
-package com.agraabhi.oshodiscourses.feature.transcript.text
-
-import com.agraabhi.oshodiscourses.core.domain.transcript.TimingSource
-import com.agraabhi.oshodiscourses.core.domain.transcript.Transcript
-import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptAnchor
-import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptTiming
+package com.agraabhi.oshodiscourses.core.domain.transcript
 
 /**
  * Maps playback time to a paragraph and back for a transcript with no timestamps
@@ -17,11 +12,13 @@ class TranscriptSyncModel private constructor(
     val starts: List<Double>,
     override val duration: Double,
     interior: List<Knot>,
+    override val matchedParagraphs: Int?,
 ) : TranscriptTiming {
 
     data class Knot(
         /** Character offset from the start of the transcript. */
         val position: Double,
+        /** Seconds. */
         val time: Double,
     )
 
@@ -30,7 +27,7 @@ class TranscriptSyncModel private constructor(
         duration: Double,
         knots: List<Knot> = emptyList(),
         source: TimingSource = TimingSource.ESTIMATE,
-    ) : this(source, cumulativeStarts(paragraphs), maxOf(0.0, duration), knots)
+    ) : this(source, cumulativeStarts(paragraphs), maxOf(0.0, duration), knots, null)
 
     /** Strictly increasing in both axes, framed by (0, 0) and (total, duration). */
     val knots: List<Knot> = frame(interior, starts.last(), duration)
@@ -73,9 +70,9 @@ class TranscriptSyncModel private constructor(
         return result + anchorKnots
     }
 
-    /** Same transcript and duration with different knots. */
-    fun with(knots: List<Knot>, source: TimingSource = this.source): TranscriptSyncModel =
-        TranscriptSyncModel(source, starts, duration, knots)
+    /** Same transcript and duration with different knots; [matched] is the aligned paragraph count. */
+    fun with(knots: List<Knot>, source: TimingSource = this.source, matched: Int? = matchedParagraphs): TranscriptSyncModel =
+        TranscriptSyncModel(source, starts, duration, knots, matched)
 
     override fun startTime(paragraph: Int): Double {
         if (paragraphCount == 0) return 0.0
@@ -146,8 +143,26 @@ class TranscriptSyncModel private constructor(
         ): TranscriptSyncModel {
             val base = TranscriptSyncModel(paragraphs, duration)
             if (alignedStarts == null) return base.with(anchors.mapNotNull { base.knot(it) })
-            return base.with(base.knots(alignedStarts, anchors), alignedSource)
+            return base.with(base.knots(alignedStarts, anchors), alignedSource, alignedStarts.count { it != null })
         }
+
+        /**
+         * Whitespace-free length in Unicode scalars, the unit of every text weight (iOS
+         * `unicodeScalars` filtered by the White_Space property), over UTF-16 range [start, end).
+         */
+        fun textWeight(text: CharSequence, start: Int = 0, end: Int = text.length): Int {
+            var count = 0
+            var i = start
+            while (i < end) {
+                val cp = Character.codePointAt(text, i)
+                if (!isUnicodeWhitespace(cp)) count++
+                i += Character.charCount(cp)
+            }
+            return count
+        }
+
+        private fun isUnicodeWhitespace(cp: Int): Boolean = cp in 0x09..0x0D || cp == 0x20 || cp == 0x85 || cp == 0xA0 ||
+            cp == 0x1680 || cp in 0x2000..0x200A || cp == 0x2028 || cp == 0x2029 || cp == 0x202F || cp == 0x205F || cp == 0x3000
 
         private fun cumulativeStarts(paragraphs: List<Transcript.Paragraph>): List<Double> {
             val starts = ArrayList<Double>(paragraphs.size + 1)
@@ -198,9 +213,14 @@ class TranscriptSyncModel private constructor(
             return (kept + anchor).sortedWith(compareBy({ it.paragraph }, { it.fraction ?: 0.5 }))
         }
 
-        /** Order-independent sync merge: the union replayed oldest first through [inserting]. */
+        /**
+         * Order-independent merge: the union replayed oldest first through [inserting], so devices
+         * holding the same anchors keep the same survivors whatever order they arrived in.
+         */
         fun merge(a: List<TranscriptAnchor>, b: List<TranscriptAnchor>): List<TranscriptAnchor> {
-            val union = (a + b).distinct().sortedWith(compareBy({ it.createdAt }, { it.paragraph }, { it.time }))
+            val union = (a + b).distinct().sortedWith(
+                compareBy<TranscriptAnchor> { it.createdAt }.thenBy { it.paragraph }.thenBy { it.time }.thenBy { it.fraction ?: 0.5 },
+            )
             return union.fold(emptyList()) { acc, anchor -> inserting(anchor, acc) }
         }
     }

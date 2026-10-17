@@ -6,7 +6,10 @@ import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptAnchor
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptAvailability
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptDiscourseState
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptException
+import com.agraabhi.oshodiscourses.core.model.TranscriptCatalog
 import com.google.common.truth.Truth.assertThat
+import java.io.File
+import kotlin.test.assertFailsWith
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,8 +23,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
-import kotlin.test.assertFailsWith
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TranscriptServiceTest {

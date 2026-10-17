@@ -11,6 +11,7 @@ internal class DriveSyncEngine(
     private val api: DriveApi,
     private val store: SnapshotStore,
     private val maxAttempts: Int = MAX_ATTEMPTS,
+    private val codec: SnapshotCodec = SnapshotJson,
 ) {
     private data class RemoteCopy(val id: String, val version: Long, val snapshot: CloudSnapshot)
 
@@ -45,7 +46,7 @@ internal class DriveSyncEngine(
             .sortedWith(compareBy<DriveFile> { it.createdTime ?: "" }.thenBy { it.id })
         if (files.isEmpty()) {
             val local = store.export()
-            val created = api.create(token, DriveApi.SNAPSHOT_FILE_NAME, SnapshotJson.encode(local))
+            val created = api.create(token, DriveApi.SNAPSHOT_FILE_NAME, codec.encode(local))
             cache = RemoteCopy(created.id, created.version, local)
             return Outcome.PUSHED
         }
@@ -65,7 +66,7 @@ internal class DriveSyncEngine(
         }
 
         if (api.getFile(token, primary.id).version != primary.version) return null
-        val updated = api.update(token, primary.id, SnapshotJson.encode(merged))
+        val updated = api.update(token, primary.id, codec.encode(merged))
         cache = RemoteCopy(updated.id, updated.version, merged)
         for (extra in extras) {
             try {
@@ -83,7 +84,7 @@ internal class DriveSyncEngine(
     private suspend fun read(token: String, file: DriveFile): CloudSnapshot? {
         val cached = cache
         if (cached != null && cached.id == file.id && cached.version == file.version) return cached.snapshot
-        return SnapshotJson.decode(api.download(token, file.id))
+        return codec.decode(api.download(token, file.id))
     }
 
     companion object {
