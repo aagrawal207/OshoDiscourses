@@ -15,6 +15,16 @@ final class AppRuntime {
 
     private var didStart = false
 
+    /// Unit tests share this host process, and the debug player fixture sets the
+    /// current talk without loading it.
+    private static var restoresLastSession: Bool {
+        if NSClassFromString("XCTestCase") != nil { return false }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-debugPlayerDiscourse") { return false }
+        #endif
+        return true
+    }
+
     private init() {
         audioPlayer = AudioPlayerService()
         downloadService = DownloadService()
@@ -37,8 +47,15 @@ final class AppRuntime {
         // thumbnail render doesn't pay it (static let init is thread-safe).
         Task.detached(priority: .utility) { _ = ArchiveCatalog.mappedSeriesCount }
         playbackState.attach(to: audioPlayer)
+        playbackState.saveWhenLeavingForeground()
         audioPlayer.playbackStateService = playbackState
         audioPlayer.downloadService = downloadService
+        // Here, not in a view, so a CarPlay or Watch launch with no window restores too.
+        // Deferred past the first frame, which the launch splash covers.
+        if Self.restoresLastSession {
+            let launcher = launcher
+            Task { launcher.restoreLastSession(from: playbackState) }
+        }
         // setPlaying also stops a next talk that is still loading after auto-advance.
         SleepTimerService.shared.onExpire = { [weak audioPlayer] in audioPlayer?.setPlaying(false) }
         // Silent iCloud sync through the user's own iCloud: push on each local

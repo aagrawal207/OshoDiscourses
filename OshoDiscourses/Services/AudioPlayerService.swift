@@ -260,6 +260,13 @@ final class AudioPlayerService {
     private var processingMonitor: Task<Void, Never>?
     private var audioMixFailure: AudioMixFailure?
     private var wantsPlayback = false
+    /// False until the first play in this process. Claiming the session or Now Playing
+    /// earlier would interrupt another app's audio or take over its controls.
+    @ObservationIgnored private(set) var hasClaimedAudioSession = false
+    /// A relaunch-restored item gets its DeNoise tap on first play, not at launch.
+    private var defersAudioMix = false
+    /// Restored talks are already in recent history but move to its front on first play.
+    @ObservationIgnored private var playRecordPendingID: String?
     private var readyItemID: ObjectIdentifier?
     // Pending original offsets are explicit restorations; ordinary saved resume is read at readiness.
     private var pendingResumePosition: TimeInterval?
@@ -272,6 +279,7 @@ final class AudioPlayerService {
     private let makePlayer: @MainActor () -> AVPlayer
     private let loadAudioTrack: @MainActor (AVPlayerItem) async throws -> AVAssetTrack?
     private let makeAudioMix: @MainActor (NoiseReductionProcessor, AVAssetTrack, UInt64) -> AVAudioMix?
+    private let activateAudioSession: @MainActor () throws -> Void
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "AudioProcessing")
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
@@ -323,7 +331,8 @@ final class AudioPlayerService {
         },
         makeAudioMix: @escaping @MainActor (NoiseReductionProcessor, AVAssetTrack, UInt64) -> AVAudioMix? = {
             processor, track, generation in processor.createAudioMix(for: track, generation: generation)
-        }
+        },
+        activateAudioSession: (@MainActor () throws -> Void)? = nil
     ) {
         self.settings = settings
         self.connectsToSystem = connectsToSystem
@@ -332,6 +341,13 @@ final class AudioPlayerService {
         self.makePlayer = makePlayer
         self.loadAudioTrack = loadAudioTrack
         self.makeAudioMix = makeAudioMix
+        if let activateAudioSession {
+            self.activateAudioSession = activateAudioSession
+        } else if connectsToSystem {
+            self.activateAudioSession = { try AVAudioSession.sharedInstance().setActive(true) }
+        } else {
+            self.activateAudioSession = {}
+        }
         isNoiseReductionEnabled = settings?.noiseReduction ?? false
         noiseReductionMode = settings?.noiseReductionMode ?? .deepFilterNet
         denoiseStrength = DenoiseStrength(rawValue: settings?.denoiseStrength ?? "") ?? .medium
@@ -367,6 +383,23 @@ final class AudioPlayerService {
         guard loadAndPlay(item: items[index], resumeAt: position) else { return }
         queue = items
         currentIndex = index
+    }
+
+    /// Loads a talk paused at its saved position, as a relaunch leaves it. Nothing
+    /// system-wide happens until the first play: no session, Now Playing or tap.
+    func restoreQueue(items: [QueueItem], startIndex: Int = 0) {
+        guard currentTrackId == nil, !items.isEmpty else { return }
+        let index = max(0, min(startIndex, items.count - 1))
+        let item = items[index]
+        guard loadAndPlay(item: item, startsPlayback: false) else { return }
+        queue = items
+        currentIndex = index
+        playRecordPendingID = item.id
+        // Shown until readiness seeks the item to the same saved position.
+        let saved = playbackStateService?.getPosition(discourseId: item.id) ?? 0
+        let savedDuration = playbackStateService?.getDuration(discourseId: item.id) ?? 0
+        if saved.isFinite, saved > 0 { currentTime = saved }
+        if savedDuration.isFinite, savedDuration > 0 { duration = savedDuration }
     }
 
     func togglePlayPause() {
@@ -409,11 +442,15 @@ final class AudioPlayerService {
             refreshAudioProcessingStatus()
             return
         }
+        hasClaimedAudioSession = true
         if audioMixFailure == .playback {
             audioMixFailure = nil
             if isNoiseReductionEnabled, !isAudioProcessingAttached, let item = player.currentItem {
                 applyAudioMix(to: item)
             }
+        }
+        if defersAudioMix, let item = player.currentItem {
+            applyAudioMix(to: item)
         }
         // A pending seek can defer play(); its default must carry the requested speed.
         player.defaultRate = playbackRate
@@ -425,6 +462,10 @@ final class AudioPlayerService {
             )
         }
         isPlaying = true
+        if let id = playRecordPendingID {
+            playRecordPendingID = nil
+            if id == currentTrackId { playbackStateService?.recordPlay(discourseId: id) }
+        }
         refreshAudioProcessingStatus()
         updateNowPlayingInfo()
     }
@@ -482,6 +523,15 @@ final class AudioPlayerService {
         }
     }
 
+    /// Pulls the live clock into `currentTime` before a save. The periodic observer
+    /// lags by up to 0.5 s and stalls while the app leaves the foreground.
+    func syncCurrentTimeFromPlayer() {
+        guard isPlaying, pendingSeekTarget == nil, pendingResumePosition == nil,
+              let player, let item = player.currentItem, readyItemID == ObjectIdentifier(item) else { return }
+        let seconds = player.currentTime().seconds
+        if seconds.isFinite, seconds > 0 { currentTime = seconds }
+    }
+
     func seekWithHistory(to time: TimeInterval) {
         if Self.isNearEndSeek(target: time, duration: duration) {
             didManuallySeekNearEnd = true
@@ -524,6 +574,8 @@ final class AudioPlayerService {
     /// the player itself knows where playback actually is.
     private var skipAnchor: TimeInterval {
         if let pendingResumePosition { return pendingResumePosition }
+        // An item still loading reads 0; a restored talk already shows its saved position.
+        if let item = player?.currentItem, readyItemID != ObjectIdentifier(item) { return currentTime }
         let liveClock = player?.currentTime().seconds
         let clock = (liveClock?.isFinite == true) ? liveClock! : currentTime
         return Self.skipAnchor(
@@ -817,7 +869,7 @@ final class AudioPlayerService {
     // MARK: - Private: Playback
 
     @discardableResult
-    private func loadAndPlay(item: QueueItem, resumeAt position: TimeInterval? = nil) -> Bool {
+    private func loadAndPlay(item: QueueItem, resumeAt position: TimeInterval? = nil, startsPlayback: Bool = true) -> Bool {
         // Outgoing identity belongs to the loaded item, even if a caller has replaced its queue.
         if let outgoingId = currentTrackId, currentTime > 0 {
             playbackStateService?.savePosition(discourseId: outgoingId, position: currentTime, duration: duration)
@@ -836,7 +888,8 @@ final class AudioPlayerService {
         didManuallySeekNearEnd = false
         didTriggerPreemptiveDownload = false
         pendingResumePosition = position
-        wantsPlayback = true
+        playRecordPendingID = nil
+        wantsPlayback = startsPlayback
         isPlaying = false
 
         let playerItem = AVPlayerItem(url: item.url)
@@ -856,7 +909,12 @@ final class AudioPlayerService {
 
         player?.volume = min(volume, 1.0)
         configureNoiseProcessor()
-        applyAudioMix(to: playerItem)
+        if startsPlayback {
+            applyAudioMix(to: playerItem)
+        } else {
+            defersAudioMix = isNoiseReductionEnabled
+            refreshAudioProcessingStatus()
+        }
         return true
     }
 
@@ -885,6 +943,9 @@ final class AudioPlayerService {
             Self.log.info("outcome=original_position_restored clamped=\(position != saved)")
         } else if let saved, saved.isFinite, saved > 0, saved < duration - 5 {
             seek(to: saved)
+        } else {
+            // A restored talk shows its saved position while loading; this one starts at the top.
+            currentTime = 0
         }
         setupTimeObserver()
         observePlayerEnd()
@@ -939,9 +1000,8 @@ final class AudioPlayerService {
     /// Returns true on success so callers can decide whether to proceed.
     @discardableResult
     private func activateSession() -> Bool {
-        guard connectsToSystem else { return true }
         do {
-            try AVAudioSession.sharedInstance().setActive(true)
+            try activateAudioSession()
             return true
         } catch {
             Self.log.error("outcome=audio_session_unavailable")
@@ -953,7 +1013,7 @@ final class AudioPlayerService {
     /// foreground. iOS may have handed audio focus to another app while we were
     /// backgrounded; this puts our controls back without requiring a relaunch.
     func handleForegroundReturn() {
-        guard currentTrackId != nil else { return }
+        guard currentTrackId != nil, hasClaimedAudioSession else { return }
         activateSession()
         updateNowPlayingInfo()
     }
@@ -991,10 +1051,9 @@ final class AudioPlayerService {
             updateNowPlayingInfo()
 
         case .ended:
-            // Reactivate the session no matter what, so the controls come back even
-            // if we don't auto-resume. Then resume only if iOS grants .shouldResume
-            // AND we were playing before.
-            activateSession()
+            // Reactivate a claimed session even without resuming, so the controls come back.
+            // Resume only if iOS grants .shouldResume and we were playing before.
+            if hasClaimedAudioSession { activateSession() }
             let options = optionValue.map { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
             if Self.shouldResumeAfterInterruption(wasPlaying: wasPlayingBeforeInterruption, options: options) {
                 resumePlayback()
@@ -1082,7 +1141,7 @@ final class AudioPlayerService {
         case .newDeviceAvailable, .categoryChange, .override:
             // A new output appeared or the route otherwise changed; make sure we
             // still hold the session and the controls reflect current state.
-            if currentTrackId != nil {
+            if currentTrackId != nil, hasClaimedAudioSession {
                 activateSession()
                 updateNowPlayingInfo()
             }
@@ -1207,7 +1266,7 @@ final class AudioPlayerService {
     }()
 
     private func updateNowPlayingInfo() {
-        guard connectsToSystem else { return }
+        guard connectsToSystem, hasClaimedAudioSession else { return }
         let commandCenter = MPRemoteCommandCenter.shared()
         commandCenter.nextTrackCommand.isEnabled = hasNext
         // Previous restarts the current discourse when nothing precedes it.
@@ -1379,6 +1438,7 @@ final class AudioPlayerService {
         processingMonitor = nil
         player?.currentItem?.audioMix = nil
         isAudioProcessingAttached = false
+        defersAudioMix = false
         audioMixFailure = nil
         deepFilterStatus = .idle
         resetProcessingEvidence()
@@ -1418,6 +1478,11 @@ final class AudioPlayerService {
             return
         }
         guard currentTrackId != nil, let player else {
+            deepFilterStatus = .idle
+            setProcessingStatus(.waitingForPlayback)
+            return
+        }
+        if defersAudioMix {
             deepFilterStatus = .idle
             setProcessingStatus(.waitingForPlayback)
             return

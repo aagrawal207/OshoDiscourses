@@ -45,15 +45,12 @@ final class CompanionLibrary {
 
     /// Mirrors Home > Continue Listening: downloaded, started or currently loaded.
     func continueListening(limit: Int = 25, watchInventory: Set<String> = []) -> [CompanionRow] {
-        var rows: [CompanionRow] = []
-        for id in playbackState.recentlyPlayed {
-            guard rows.count < limit, downloads.isDownloaded(id),
-                  let entry = Catalog.discourseLookup[id] else { continue }
-            let position = playbackState.getPosition(discourseId: id)
-            guard position > 0 || player.currentTrackId == id else { continue }
-            rows.append(discourseRow(entry.discourse, series: entry.series, watchInventory: watchInventory))
-        }
-        return rows
+        playbackState.continueListeningIDs(isDownloaded: downloads.isDownloaded, currentTrackID: player.currentTrackId)
+            .prefix(limit)
+            .compactMap { id in
+                guard let entry = Catalog.discourseLookup[id] else { return nil }
+                return discourseRow(entry.discourse, series: entry.series, watchInventory: watchInventory)
+            }
     }
 
     func downloadedSeries() -> [CompanionRow] {
