@@ -27,7 +27,7 @@ import com.agraabhi.oshodiscourses.core.ui.theme.ProvideElevatedSurfaces
 /** One iOS menu row; destructive rows are red. */
 data class MenuAction(
     val label: String,
-    val icon: ImageVector,
+    val icon: ImageVector?,
     val destructive: Boolean = false,
     /** Draws a divider above this row, as iOS does before a destructive group. */
     val dividerBefore: Boolean = false,
@@ -59,7 +59,7 @@ fun OshoMenu(
                 val tint = if (action.destructive) colors.systemRed else colors.label
                 DropdownMenuItem(
                     text = { Text(action.label, style = Osho.typography.body, color = tint) },
-                    leadingIcon = { Icon(action.icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                    leadingIcon = action.icon?.let { icon -> { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) } },
                     onClick = {
                         onDismiss()
                         action.onClick()

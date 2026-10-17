@@ -22,6 +22,8 @@ class AndroidFeatureConventionPlugin : Plugin<Project> {
             add("implementation", project(":core:testing"))
             add("testImplementation", project(":core:testing"))
 
+            // BackHandler for in-place sub-pages, sheets and popovers.
+            add("implementation", catalog.lib("androidx-activity-compose"))
             add("implementation", catalog.lib("androidx-lifecycle-runtime-compose"))
             add("implementation", catalog.lib("androidx-lifecycle-viewmodel-compose"))
             add("implementation", catalog.lib("androidx-navigation3-runtime"))

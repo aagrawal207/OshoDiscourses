@@ -3,6 +3,7 @@ package com.agraabhi.oshodiscourses.navigation
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -16,11 +17,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,10 +35,11 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.agraabhi.oshodiscourses.BuildConfig
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
-import com.agraabhi.oshodiscourses.core.ui.components.LocalHazeState
 import com.agraabhi.oshodiscourses.core.ui.LocalMiniPlayerClearance
 import com.agraabhi.oshodiscourses.core.ui.LocalTabBarClearance
+import com.agraabhi.oshodiscourses.core.ui.components.LocalHazeState
 import com.agraabhi.oshodiscourses.core.ui.components.OshoTabBar
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.ProvideElevatedSurfaces
@@ -42,12 +47,15 @@ import com.agraabhi.oshodiscourses.feature.downloads.BookmarksRoute
 import com.agraabhi.oshodiscourses.feature.downloads.BookmarksScreen
 import com.agraabhi.oshodiscourses.feature.downloads.DownloadsRoute
 import com.agraabhi.oshodiscourses.feature.downloads.DownloadsScreen
+import com.agraabhi.oshodiscourses.feature.downloads.ListeningHistoryRoute
+import com.agraabhi.oshodiscourses.feature.downloads.ListeningHistoryScreen
 import com.agraabhi.oshodiscourses.feature.downloads.ListeningStatsRoute
 import com.agraabhi.oshodiscourses.feature.downloads.ListeningStatsScreen
 import com.agraabhi.oshodiscourses.feature.home.HomeRoute
 import com.agraabhi.oshodiscourses.feature.home.HomeScreen
 import com.agraabhi.oshodiscourses.feature.library.LibraryRoute
 import com.agraabhi.oshodiscourses.feature.library.LibraryScreen
+import com.agraabhi.oshodiscourses.feature.player.AddBookmarkSheet
 import com.agraabhi.oshodiscourses.feature.player.DenoiseRoute
 import com.agraabhi.oshodiscourses.feature.player.DenoiseScreen
 import com.agraabhi.oshodiscourses.feature.player.MiniPlayer
@@ -56,9 +64,11 @@ import com.agraabhi.oshodiscourses.feature.series.SeriesRoute
 import com.agraabhi.oshodiscourses.feature.series.SeriesScreen
 import com.agraabhi.oshodiscourses.feature.settings.SettingsRoute
 import com.agraabhi.oshodiscourses.feature.settings.SettingsScreen
+import com.agraabhi.oshodiscourses.feature.settings.SupportDevelopmentSheet
 import com.agraabhi.oshodiscourses.feature.transcript.TranscriptScreen
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.launch
 
 /** Gap between the tab bar and the mini-player, and the extra scroll room below it (iOS). */
 private val MiniPlayerGap = 6.dp
@@ -76,6 +86,7 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
     var tabBarHeight by remember { mutableStateOf(0.dp) }
     var miniPlayerHeight by remember { mutableStateOf(64.dp) }
     val hazeState = rememberHazeState()
+    val scope = rememberCoroutineScope()
 
     // Every tab's entries stay decorated, so switching tabs keeps scroll state and view models.
     val entriesByTab = AppTab.entries.associateWith { tab ->
@@ -130,7 +141,10 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
             )
         }
 
-        ModalLayer(visible = navigator.isPlayerPresented && player.hasTrack, onBack = navigator::closePlayer) {
+        AddBookmarkSheet(visible = navigator.isAddBookmarkPresented, onDismiss = navigator::closeAddBookmark)
+
+        // The player draws its own page and follows the finger, so it needs only a dimmed backdrop.
+        ModalLayer(visible = navigator.isPlayerPresented && player.hasTrack, onBack = navigator::closePlayer, opaque = false) {
             PlayerScreen(
                 onDismiss = navigator::closePlayer,
                 onOpenTranscript = navigator::showTranscript,
@@ -145,13 +159,26 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
             }
         }
 
+        if (navigator.isSupportPresented) {
+            SupportDevelopmentSheet(
+                onDismiss = navigator::closeSupport,
+                onClearDeclinedRequest = { scope.launch { services.support.clearDeclinedRequest() } },
+            )
+        }
+
         LaunchOverlay()
     }
 }
 
 private fun tabEntryProvider(navigator: AppNavigator): (NavKey) -> NavEntry<NavKey> = entryProvider {
+    val back: () -> Unit = { navigator.pop() }
     entry<HomeRoute> {
-        HomeScreen(onOpenSeries = { navigator.push(SeriesRoute(it)) }, isPlayerPresented = navigator.isPlayerPresented)
+        HomeScreen(
+            onOpenSeries = { navigator.push(SeriesRoute(it)) },
+            onOpenSupport = { onDismissed -> navigator.showSupport(onDismissed) },
+            isPlayerPresented = navigator.isPlayerPresented,
+            isOtherSheetPresented = navigator.isSupportPresented || navigator.isAddBookmarkPresented,
+        )
     }
     entry<LibraryRoute> { LibraryScreen(onOpenSeries = { navigator.push(SeriesRoute(it)) }) }
     entry<DownloadsRoute> {
@@ -159,33 +186,43 @@ private fun tabEntryProvider(navigator: AppNavigator): (NavKey) -> NavEntry<NavK
             onOpenSeries = { navigator.push(SeriesRoute(it)) },
             onOpenBookmarks = { navigator.push(BookmarksRoute) },
             onOpenListeningStats = { navigator.push(ListeningStatsRoute) },
+            onAddBookmark = navigator::showAddBookmark,
         )
     }
     entry<SettingsRoute> {
         SettingsScreen(
             onOpenDenoise = { navigator.push(DenoiseRoute) },
             onOpenListeningStats = { navigator.push(ListeningStatsRoute) },
+            versionName = BuildConfig.VERSION_NAME,
+            onOpenSupport = { navigator.showSupport() },
         )
     }
     entry<SeriesRoute> { route ->
         SeriesScreen(
             seriesID = route.seriesID,
             onOpenPlayer = navigator::showPlayer,
-            onBack = { navigator.pop() },
+            onBack = back,
             onOpenTranscript = navigator::showTranscript,
+            onAddBookmark = navigator::showAddBookmark,
         )
     }
-    entry<BookmarksRoute> { BookmarksScreen() }
-    entry<ListeningStatsRoute> { ListeningStatsScreen() }
-    entry<DenoiseRoute> { DenoiseScreen() }
+    entry<BookmarksRoute> { BookmarksScreen(onBack = back) }
+    entry<ListeningStatsRoute> { ListeningStatsScreen(onBack = back, onOpenHistory = { navigator.push(ListeningHistoryRoute) }) }
+    entry<ListeningHistoryRoute> { ListeningHistoryScreen(onBack = back) }
+    entry<DenoiseRoute> { DenoiseScreen(onBack = back) }
 }
 
 /**
  * A full-height sheet over the shell (iOS `.sheet` large): slides up, elevated surfaces, and no
- * tab or mini-player clearance. A9 may replace it with a draggable sheet.
+ * tab or mini-player clearance. A non-[opaque] layer dims the shell instead of covering it.
  */
 @Composable
-private fun ModalLayer(visible: Boolean, onBack: () -> Unit, content: @Composable () -> Unit) {
+private fun ModalLayer(visible: Boolean, onBack: () -> Unit, opaque: Boolean = true, content: @Composable () -> Unit) {
+    if (!opaque) {
+        AnimatedVisibility(visible = visible, enter = fadeIn(tween(350)), exit = fadeOut(tween(300))) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).clearAndSetSemantics {})
+        }
+    }
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(tween(350)) { it },
@@ -198,7 +235,7 @@ private fun ModalLayer(visible: Boolean, onBack: () -> Unit, content: @Composabl
             LocalHazeState provides null,
         ) {
             ProvideElevatedSurfaces {
-                Box(Modifier.fillMaxSize().background(Osho.colors.systemBackground)) { content() }
+                Box(Modifier.fillMaxSize().then(if (opaque) Modifier.background(Osho.colors.systemBackground) else Modifier)) { content() }
             }
         }
     }

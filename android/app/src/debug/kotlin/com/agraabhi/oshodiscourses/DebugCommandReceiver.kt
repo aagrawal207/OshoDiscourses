@@ -54,10 +54,12 @@ class DebugCommandReceiver : BroadcastReceiver() {
         Log.i(
             TAG,
             "player track=${p.currentTrackId} playing=${p.isPlaying} buffering=${p.isBuffering} t=${"%.1f".format(p.currentTime)}" +
-                " d=${"%.1f".format(p.duration)} queue=${p.queue.size} error=${p.error?.message}",
+                " d=${"%.1f".format(p.duration)} queue=${p.queue.size} error=${p.error?.message}" +
+                " processing=${p.audioProcessingStatus.outcome} boost=${p.isBoostAvailable}",
         )
         val d = c.denoise.state.value
-        Log.i(TAG, "denoise enabled=${d.isEnabled} mode=${d.mode.rawValue} status=${d.status.outcome} label=\"${d.status.label}\" model=${d.deepFilterStatus.label}")
+        Log.i(TAG, "denoise enabled=${d.isEnabled} mode=${d.mode.rawValue} status=${d.status.outcome} label=\"${d.status.label}\" model=${d.deepFilterStatus.label}" +
+            " boost=${d.isBoostAvailable} inStep=${d.status == p.audioProcessingStatus}")
         Log.i(TAG, "sleep ${c.sleepTimer.state.value}")
         Log.i(TAG, "downloads states=${c.downloads.states.value} downloaded=${c.downloads.downloadedIDs.value} network=${c.downloads.network.value}")
         id?.let { Log.i(TAG, "progress $it position=${c.playbackState.getPosition(it)} duration=${c.playbackState.getDuration(it)}") }

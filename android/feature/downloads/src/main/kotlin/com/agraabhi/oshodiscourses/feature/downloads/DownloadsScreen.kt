@@ -1,5 +1,6 @@
 package com.agraabhi.oshodiscourses.feature.downloads
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,6 +109,7 @@ fun ListeningStatsScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     var showHistory by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.onAppear() }
+    BackHandler(enabled = showHistory) { showHistory = false }
     if (showHistory) {
         ListeningHistoryContent(state, onBack = { showHistory = false }, modifier = modifier)
     } else {

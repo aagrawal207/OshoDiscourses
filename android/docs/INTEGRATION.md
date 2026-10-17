@@ -23,7 +23,7 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 
 ## A13 Drive sync
 - [x] `sync = DriveSync.create(context, store = <SnapshotStore adapter over A3 CloudSnapshotCoordinator>, localChanges = DriveSync.localChanges(playbackState, bookmarks, listeningStats, transcriptState, downloads), activityProvider = { resumed ComponentActivity })` in `Application.onCreate`; `sync.start()` once on an app scope. — store is `CoordinatorSnapshotStore`; local changes are the coordinator's plus download history.
-- [x] Settings Sync row calls `requestAuthorization()`; decide whether `disconnect()` joins the `SyncController` contract. — `disconnect()` joined the contract (default signs out); A11 calls `requestAuthorization()`, not yet `disconnect()`.
+- [x] Settings Sync row calls `requestAuthorization()`; decide whether `disconnect()` joins the `SyncController` contract. — `disconnect()` joined the contract (default signs out); Settings calls `requestAuthorization()` to sign in and `disconnect()` for Stop Syncing.
 - [x] Add catalog alias `androidx-activity` and replace the string coordinate in `sync/build.gradle.kts`.
 - [x] R8 keep rules for kotlinx serialization (`CloudSnapshot`) and Play services in release. — libraries ship consumer rules; only a `-dontwarn` for review-ktx was needed. Release ran on the emulator; Drive itself is untested (no OAuth client).
 - [x] `PRIVACY.md`: add an Android paragraph on Drive app-data sync.
@@ -65,7 +65,7 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 - [x] Add `CatalogRepository.transcriptPageURL(discourseID)` and pass `pageURL` (Open on oshoworld.com).
 - [x] Add `TranscriptTiming.matchedParagraphs` so the Timing note shows "<m> of <n> paragraphs". — emulator shows "Synced from speech: 89 of 93 paragraphs".
 - [x] Select Text hint: drop "or drag them into another app" (no drag-out on Android).
-- [x] Promote `ReplayFifteenIcon` and glass toolbar buttons to `:core:ui` (also needed by the player). — A9 still has its own copy in `PlayerGlyphs.kt`.
+- [x] Promote `ReplayFifteenIcon` and glass toolbar buttons to `:core:ui` (also needed by the player). — one `SkipIntervalIcon`/`ReplayFifteenIcon` in `TransportIcons.kt`; the player copy is gone.
 - [ ] Emulator: keep-screen-on, share chooser, clipboard.
 
 ## A4 Playback
@@ -86,23 +86,23 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 - [x] Release: App Bundle with ABI splits (debug APK is 75 MB). ABIs are arm64-v8a + x86_64 only. — `bundleRelease` builds a 39 MB AAB that Play splits per ABI; the R8 universal APK is 52 MB.
 
 ## A8 Home, Library, Series
-- [ ] `SeriesScreen(onBack = navigator::pop, onOpenTranscript = navigator::showTranscript, onAddBookmark = …)`; `HomeScreen(onOpenSupport = tip-jar sheet, isPlayerPresented = navigator.isPlayerPresented)`. — `onBack` and `onOpenTranscript` wired; `onOpenSupport` and `onAddBookmark` wait for A11's `SupportDevelopmentSheet` and A9's add-bookmark sheet.
+- [x] `SeriesScreen(onBack = navigator::pop, onOpenTranscript = navigator::showTranscript, onAddBookmark = …)`; `HomeScreen(onOpenSupport = tip-jar sheet, isPlayerPresented = navigator.isPlayerPresented)`. — Add Bookmark opens `:feature:player`'s public `AddBookmarkSheet` over the window (iOS `windowBookmarkBinding`); the Home card and Settings open one shell-level `SupportDevelopmentSheet` through `AppNavigator.showSupport`. Emulator: series menu → Add Bookmark saved and listed in Bookmarks.
 - [x] Rows start playback and show the mini-player only (iOS); the full player no longer opens on a row tap. — `AppShellTest` checks it.
 - [x] Fix `AppShellTest` (duplicate series names on Home, row label "Discourse 1", player not auto-opened) and re-record `app_shell_*.png`.
 - [x] Promote shared chrome to `:core:ui`: `LargeTitlePage` (duplicated in home + library), `CappedFontScale`, `GlassIconButton`, `InlineTopBar`, `OshoMenu`, `ActionSheet`, `DownloadRing`. — home, library, series and transcript use the `:core:ui` copies.
 - [ ] Emulator: thumbnail and menu shadows, support-card exposure timing.
 
 ## A11 Downloads, Bookmarks, Stats, Settings, Support
-- [ ] `BookmarksScreen(onBack)`, `ListeningStatsScreen(onBack, onOpenHistory = push ListeningHistoryRoute)`, `entry<ListeningHistoryRoute>`, `DownloadsScreen(onAddBookmark)`, `SettingsScreen(versionName = BuildConfig.VERSION_NAME)`; Home support card opens `SupportDevelopmentSheet`.
-- [ ] Pass `onClearDeclinedRequest` once `SupportStore.clearDeclinedRequest()` exists.
-- [ ] Add `SupportProduct.priceMicros` for true price ordering.
-- [ ] Feature modules need `activity-compose` on the compile classpath for `BackHandler` (feature convention plugin).
-- [ ] Promote grouped list, card rows, action sheet, menu, segmented control and switch from `:feature:downloads/settings` `ui/` into `:core:ui`; remove the copies.
-- [ ] Emulator: `ModalBottomSheet` status-bar inset on the tip jar, blur, haptics.
+- [x] `BookmarksScreen(onBack)`, `ListeningStatsScreen(onBack, onOpenHistory = push ListeningHistoryRoute)`, `entry<ListeningHistoryRoute>`, `DownloadsScreen(onAddBookmark)`, `SettingsScreen(versionName = BuildConfig.VERSION_NAME)`; Home support card opens `SupportDevelopmentSheet`. — `AppShellTest` covers the series bookmark, Stats → History → back, and Settings → Support. Settings "Stop Syncing" calls `sync.disconnect()`.
+- [x] Pass `onClearDeclinedRequest` once `SupportStore.clearDeclinedRequest()` exists.
+- [x] Add `SupportProduct.priceMicros` for true price ordering. — nullable, default null; billing passes Play's micros. Rows sort by it when every product has one, else by the US ladder.
+- [x] Feature modules need `activity-compose` on the compile classpath for `BackHandler` (feature convention plugin). — also on `:core:ui` for the shared sheets; in-place History in Stats handles system back.
+- [x] Promote grouped list, card rows, action sheet, menu, segmented control and switch from `:feature:downloads/settings` `ui/` into `:core:ui`; remove the copies. — `GroupedList.kt`, `ListControls.kt`, `ActionSheet.kt`, `OshoMenu`, `IosControls.kt`; only Settings' `ToggleRow`, `AccentSwatch` and `IosAlert` stay local.
+- [ ] Emulator: `ModalBottomSheet` status-bar inset on the tip jar, blur, haptics. — inset checked: the sheet stops 10 dp below the status bar like the in-window sheets. Blur and haptics not checked.
 
 ## A9 Player, mini-player, DeNoise
-- [ ] `PlayerScreen(onDismiss, onOpenTranscript, onOpenSeries)`, `MiniPlayer(onOpenPlayer, onHeightChanged)`, `DenoiseScreen(onBack = navigator::pop)` from Settings.
-- [ ] `AppShell.ModalLayer`: drop the full-screen background behind the player (it draws its own and follows the finger).
-- [ ] Keep `DenoiseState` and `PlayerState.audioProcessingStatus` in step (UI reads `DenoiseState`); boost via `DenoiseController.setBoost`.
-- [ ] Check the playback error line wording (`PlayerState.error`).
-- [ ] Promote `IosSlider`, `IosSwitch`, `SegmentedControl`, `SheetHost`, `AnchoredPopover`, glass buttons, grouped sections, `SkipIntervalIcon`/`ReplayFifteenIcon` into `:core:ui` and remove module copies (with A11's and A8's).
+- [x] `PlayerScreen(onDismiss, onOpenTranscript, onOpenSeries)`, `MiniPlayer(onOpenPlayer, onHeightChanged)`, `DenoiseScreen(onBack = navigator::pop)` from Settings. — emulator: mini-player opens the player, a drag past a quarter dismisses it; speed, sleep, queue, Add Bookmark and DeNoise from the player and from Settings.
+- [x] `AppShell.ModalLayer`: drop the full-screen background behind the player (it draws its own and follows the finger). — a black @ 40 % scrim fades in behind it instead.
+- [x] Keep `DenoiseState` and `PlayerState.audioProcessingStatus` in step (UI reads `DenoiseState`); boost via `DenoiseController.setBoost`. — both come from `DenoiseEngine.status`; the debug `state` command prints `inStep`, true while playing, paused, off and re-enabled.
+- [x] Check the playback error line wording (`PlayerState.error`). — the engine uses the iOS `setupFailed(.playback)` detail verbatim.
+- [x] Promote `IosSlider`, `IosSwitch`, `SegmentedControl`, `SheetHost`, `AnchoredPopover`, glass buttons, grouped sections, `SkipIntervalIcon`/`ReplayFifteenIcon` into `:core:ui` and remove module copies (with A11's and A8's). — the player's `InlineTopBar` is `SheetToolbar`; `PortraitArtwork`, `PlayingBars` and `ShrinkToFitText` stay in the player.

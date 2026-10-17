@@ -76,7 +76,8 @@ internal class SettingsViewModel(
 
     fun syncNow() = launch { sync.syncNow() }
 
-    fun signOut() = launch { sync.signOut() }
+    /** "Stop Syncing" also withdraws the Drive grant, so the account no longer lists the app. */
+    fun stopSyncing() = launch { sync.disconnect() }
 
     private fun launch(block: suspend () -> Unit) = viewModelScope.launch { block() }
 }

@@ -39,6 +39,19 @@ class TipJarUiStateTest {
     }
 
     @Test
+    fun storefrontPricesOrderTheRowsWhenEveryProductHasOne() {
+        // A storefront where the ladder differs from the US one: the yearly 5 costs more than Big tip.
+        val tips = IosProducts.tips.mapIndexed { i, p -> p.copy(priceMicros = listOf(3L, 5L, 10L, 25L, 50L)[i] * 1_000_000) }
+        val annual = IosProducts.annual.map { p ->
+            p.copy(priceMicros = mapOf("annual5" to 12L, "annual10" to 5L, "annual15" to 15L).entries.first { p.id.endsWith(it.key) }.value * 1_000_000)
+        }
+        val names = TipJarUiState.orderedProducts(tips, annual).map { it.first.name }
+        assertThat(names).containsExactly(
+            "Small tip", "Generous tip", "Generous yearly support", "Big tip", "Small yearly support", "Extra yearly support", "Grand tip", "Patron tip",
+        ).inOrder()
+    }
+
+    @Test
     fun yearlyRowsNeedACurrentStatusAndNoPlan() {
         val unchecked = loaded.copy(annual = loaded.annual.copy(statusIsCurrent = false))
         assertThat(unchecked.rows.filter { it.isAnnual }.none { it.enabled }).isTrue()

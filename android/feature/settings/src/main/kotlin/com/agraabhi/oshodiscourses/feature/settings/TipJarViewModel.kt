@@ -79,17 +79,24 @@ internal data class TipJarUiState(
 
     companion object {
         /**
-         * The US price ladder (TipJar.storekit). The contract carries only formatted prices, and
-         * Play keeps regional prices in the same order, so rank by product id.
+         * The US price ladder (TipJar.storekit), used when a product has no price in micros.
+         * Play keeps regional prices in the same order as the US ones.
          */
         private val PRICE_ORDER = listOf(
             "tip.small", "tip.medium", "support.annual5", "tip.large", "support.annual10", "support.annual15", "tip.grand", "tip.patron",
         ).map { "com.agraabhi.oshodiscourses.$it" }
 
+        /** iOS sorts by price with tips first at an equal price; unknown products go last. */
         fun orderedProducts(tips: List<SupportProduct>, annual: List<SupportProduct>): List<Pair<SupportProduct, Boolean>> {
             val all = tips.map { it to false } + annual.map { it to true }
+            val byPrice = all.all { (p, _) -> p.priceMicros != null }
+            val rank: (SupportProduct) -> Long = if (byPrice) {
+                { it.priceMicros ?: Long.MAX_VALUE }
+            } else {
+                { p -> PRICE_ORDER.indexOf(p.id).let { if (it < 0) Long.MAX_VALUE else it.toLong() } }
+            }
             return all.sortedWith(
-                compareBy<Pair<SupportProduct, Boolean>> { (p, _) -> PRICE_ORDER.indexOf(p.id).let { if (it < 0) Int.MAX_VALUE else it } }
+                compareBy<Pair<SupportProduct, Boolean>> { (p, _) -> rank(p) }
                     .thenBy { (_, isAnnual) -> isAnnual }
                     .thenBy { (p, _) -> p.id },
             )

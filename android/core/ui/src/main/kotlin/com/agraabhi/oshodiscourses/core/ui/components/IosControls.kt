@@ -1,4 +1,4 @@
-package com.agraabhi.oshodiscourses.feature.player.components
+package com.agraabhi.oshodiscourses.core.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,7 +70,7 @@ private val TrackHeight = 4.dp
  * because Material's thumb and track gap read as Android; a press anywhere starts a scrub.
  */
 @Composable
-internal fun IosSlider(
+fun IosSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -148,7 +149,7 @@ internal fun IosSlider(
 
 /** iOS Toggle: white full-size thumb, accent track when on, no icon or outline (ui-style.md §8). */
 @Composable
-internal fun IosSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun IosSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val colors = Osho.colors
     Switch(
         checked = checked,
@@ -173,7 +174,7 @@ internal fun IosSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, 
  * SegmentedButton is outlined and reads very differently.
  */
 @Composable
-internal fun SegmentedControl(
+fun SegmentedControl(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
@@ -232,13 +233,14 @@ internal fun SegmentedControl(
  * label, accent value with an up-down chevron, and a menu of options.
  */
 @Composable
-internal fun MenuPickerRow(
+fun MenuPickerRow(
     label: String,
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 11.dp),
 ) {
     val colors = Osho.colors
     var expanded by remember { mutableStateOf(false) }
@@ -248,7 +250,7 @@ internal fun MenuPickerRow(
                 .fillMaxWidth()
                 .alpha(if (enabled) 1f else 0.4f)
                 .clickable(enabled = enabled, role = Role.DropdownList) { expanded = true }
-                .padding(horizontal = 16.dp, vertical = 11.dp),
+                .padding(contentPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -281,4 +283,30 @@ internal fun MenuPickerRow(
 }
 
 /** Disabled iOS controls dim to about a third. */
-internal const val DisabledAlpha = 0.35f
+const val DisabledAlpha = 0.35f
+
+/** iOS switches to stacked layouts and menu pickers at accessibility text sizes (ui-style.md §0). */
+@Composable
+fun isAccessibilityTextSize(): Boolean = LocalDensity.current.fontScale >= 1.6f
+
+/**
+ * A segmented picker over values. At accessibility text sizes it becomes a [MenuPickerRow]
+ * titled [menuTitle], as SwiftUI does; the caller's row supplies the padding.
+ */
+@Composable
+fun <T> SegmentedControl(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    menuTitle: String,
+    modifier: Modifier = Modifier,
+) {
+    val labels = options.map(label)
+    val index = options.indexOf(selected)
+    if (isAccessibilityTextSize()) {
+        MenuPickerRow(menuTitle, labels, index, onSelect = { onSelect(options[it]) }, modifier = modifier, contentPadding = PaddingValues(0.dp))
+    } else {
+        SegmentedControl(labels, index, onSelect = { onSelect(options[it]) }, modifier = modifier)
+    }
+}

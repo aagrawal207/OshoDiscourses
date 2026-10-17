@@ -201,4 +201,5 @@ internal fun StoreProduct.toSupportProduct(): SupportProduct = SupportProduct(
     name = name,
     description = description,
     displayPrice = displayPrice,
+    priceMicros = priceMicros,
 )

@@ -6,6 +6,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -23,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -79,7 +83,7 @@ fun SettingsScreen(
             onShuffle = { vm.setShuffle(it) },
             onSignIn = { vm.signIn() },
             onSyncNow = { vm.syncNow() },
-            onSignOut = { vm.signOut() },
+            onSignOut = { vm.stopSyncing() },
             onOpenSupport = onOpenSupport ?: { showSupport = true },
             onRate = { context.openUrl(services.reviewPrompter.writeReviewURL) },
             onSourceCode = { context.openUrl(SOURCE_CODE_URL) },
@@ -99,27 +103,35 @@ fun SupportDevelopmentSheet(onDismiss: () -> Unit, onClearDeclinedRequest: (() -
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val hide: () -> Unit = { scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() } }
+    // A large iOS sheet stops just below the status bar, so the page under it shows as a sliver.
+    val topGap = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp
     ProvideElevatedSurfaces {
         ModalBottomSheet(
             onDismissRequest = onDismiss,
+            modifier = Modifier.padding(top = topGap),
             sheetState = sheetState,
             dragHandle = null,
             containerColor = Osho.colors.systemGroupedBackground,
             scrimColor = Color.Black.copy(alpha = 0.4f),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            // The page pads for the status bar itself, as it does full screen.
             contentWindowInsets = { WindowInsets(0) },
         ) {
             CompositionLocalProvider(LocalTabBarClearance provides 0.dp, LocalMiniPlayerClearance provides 0.dp) {
-                SupportDevelopmentPage(onDone = hide, onClearDeclinedRequest = onClearDeclinedRequest)
+                // 8 dp keeps the Done capsule as far from the sheet edge as the player sheets' toolbars.
+                SupportDevelopmentPage(onDone = hide, onClearDeclinedRequest = onClearDeclinedRequest, topInset = 8.dp)
             }
         }
     }
 }
 
-/** The sheet's content without the sheet, for a full-screen destination or tests. */
+/** The sheet's content without the sheet, for a full-screen destination or tests; [topInset] defaults to the status bar. */
 @Composable
-fun SupportDevelopmentPage(onDone: () -> Unit, modifier: Modifier = Modifier, onClearDeclinedRequest: (() -> Unit)? = null) {
+fun SupportDevelopmentPage(
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClearDeclinedRequest: (() -> Unit)? = null,
+    topInset: Dp? = null,
+) {
     val services = LocalAppServices.current
     val context = LocalContext.current
     val vm = viewModel(key = "supportDevelopment") { TipJarViewModel(services.support, services.engagement) }
@@ -146,6 +158,7 @@ fun SupportDevelopmentPage(onDone: () -> Unit, modifier: Modifier = Modifier, on
             onDismissMessages = { vm.dismissMessages() },
             onClearDeclinedRequest = onClearDeclinedRequest,
         ),
+        topInset = topInset,
     )
 }
 
