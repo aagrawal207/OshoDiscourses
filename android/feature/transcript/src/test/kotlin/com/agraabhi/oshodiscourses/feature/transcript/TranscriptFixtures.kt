@@ -4,10 +4,10 @@ import com.agraabhi.oshodiscourses.core.domain.transcript.TimingSource
 import com.agraabhi.oshodiscourses.core.domain.transcript.Transcript
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptDiscourseState
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptRepository
+import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptSyncModel
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptTiming
 import com.agraabhi.oshodiscourses.core.testing.FakeTranscriptRepository
 import com.agraabhi.oshodiscourses.core.testing.SampleCatalog
-import com.agraabhi.oshodiscourses.feature.transcript.text.TranscriptSyncModel
 import kotlinx.coroutines.awaitCancellation
 
 /** Made-up neutral text for reader tests and screenshots. */

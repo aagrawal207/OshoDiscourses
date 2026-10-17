@@ -1,5 +1,6 @@
 package com.agraabhi.oshodiscourses
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,18 +12,20 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
 import com.agraabhi.oshodiscourses.core.ui.theme.OshoTheme
 import com.agraabhi.oshodiscourses.core.ui.theme.isDark
+import com.agraabhi.oshodiscourses.downloads.Downloads
 import com.agraabhi.oshodiscourses.navigation.AppShell
 
 class MainActivity : ComponentActivity() {
+    private val container: AppContainer get() = (application as OshoApplication).container
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        val container = (application as OshoApplication).container
+        applyDebugArguments(intent)
+        val container = container
 
         setContent {
             val settings by container.settings.settings.collectAsStateWithLifecycle()
@@ -47,8 +50,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // The daily accent can roll over while the app sits in the background.
-        val container = (application as OshoApplication).container
-        lifecycleScope.launch { container.settings.refreshShuffledTheme() }
+        // A user-initiated transfer job can only be scheduled while the app is visible.
+        container.downloadEngine.resumePendingTransfers()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyDebugArguments(intent)
+    }
+
+    /** iOS `-debugDownloadNetwork`; the engine ignores it outside debuggable builds. */
+    private fun applyDebugArguments(intent: Intent) {
+        if (intent.hasExtra(Downloads.DEBUG_NETWORK_EXTRA)) {
+            container.downloadEngine.applyDebugNetworkArgument(intent.getStringExtra(Downloads.DEBUG_NETWORK_EXTRA))
+        }
     }
 }

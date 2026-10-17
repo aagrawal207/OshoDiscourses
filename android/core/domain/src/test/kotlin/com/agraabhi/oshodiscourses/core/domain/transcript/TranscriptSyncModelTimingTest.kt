@@ -1,12 +1,9 @@
-package com.agraabhi.oshodiscourses.transcript
+package com.agraabhi.oshodiscourses.core.domain.transcript
 
-import com.agraabhi.oshodiscourses.core.domain.transcript.TimingSource
-import com.agraabhi.oshodiscourses.core.domain.transcript.Transcript
-import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptAnchor
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
-class TranscriptSyncModelTest {
+class TranscriptSyncModelTimingTest {
     private fun paragraphs(vararg lengths: Int) = lengths.mapIndexed { i, n -> Transcript.Paragraph(i, "a".repeat(n), isEmphasis = false) }
 
     private fun anchor(paragraph: Int, time: Double, fraction: Double? = null) = TranscriptAnchor(paragraph, time, createdAt = 0L, fraction = fraction)

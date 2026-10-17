@@ -1,8 +1,5 @@
-package com.agraabhi.oshodiscourses.feature.transcript.text
+package com.agraabhi.oshodiscourses.core.domain.transcript
 
-import com.agraabhi.oshodiscourses.core.domain.transcript.TimingSource
-import com.agraabhi.oshodiscourses.core.domain.transcript.Transcript
-import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptAnchor
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import kotlin.math.abs
@@ -137,5 +134,13 @@ class TranscriptSyncModelTest {
         val aligned = TranscriptSyncModel.build(paragraphs(100, 100), 200.0, emptyList(), listOf(0.0, 150.0))
         assertThat(aligned.source).isEqualTo(TimingSource.SHIPPED_ALIGNMENT)
         assertThat(aligned.startTime(1)).isEqualTo(150.0)
+    }
+
+    @Test
+    fun matchedParagraphsCountsOnlyAlignedStarts() {
+        assertThat(TranscriptSyncModel.build(paragraphs(100, 100), 200.0, emptyList()).matchedParagraphs).isNull()
+        val partial = TranscriptSyncModel.build(paragraphs(100, 100, 100), 300.0, emptyList(), listOf(0.0, null, 210.0))
+        assertThat(partial.matchedParagraphs).isEqualTo(2)
+        assertThat(partial.with(emptyList()).matchedParagraphs).isEqualTo(2)
     }
 }

@@ -3,7 +3,6 @@ package com.agraabhi.oshodiscourses.feature.series
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,11 +45,9 @@ import androidx.compose.material.icons.rounded.ArrowCircleDown
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.SyncProblem
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -65,9 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -95,6 +90,12 @@ import com.agraabhi.oshodiscourses.core.domain.downloads.WaitingReason
 import com.agraabhi.oshodiscourses.core.model.Language
 import com.agraabhi.oshodiscourses.core.model.SeriesInfo
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
+import com.agraabhi.oshodiscourses.core.ui.components.ActionSheet
+import com.agraabhi.oshodiscourses.core.ui.components.DownloadRing
+import com.agraabhi.oshodiscourses.core.ui.components.GlassIconButton
+import com.agraabhi.oshodiscourses.core.ui.components.InlineTopBar
+import com.agraabhi.oshodiscourses.core.ui.components.MenuAction
+import com.agraabhi.oshodiscourses.core.ui.components.OshoMenu
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.tabContentPadding
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
@@ -563,39 +564,6 @@ private fun IconAction(icon: ImageVector, label: String, tint: Color, size: Dp, 
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size))
-    }
-}
-
-/** iOS `CircularProgressView`: a 28 dp ring with a stop square, or a spinner while queued. */
-@Composable
-internal fun DownloadRing(progress: Float, queued: Boolean, modifier: Modifier = Modifier) {
-    val colors = Osho.colors
-    val track = colors.label.copy(alpha = 0.15f)
-    val accent = colors.accent
-    Box(modifier.size(28.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(28.dp)) {
-            val stroke = 2.5.dp.toPx()
-            val inset = stroke / 2
-            val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-            val topLeft = Offset(inset, inset)
-            drawArc(track, 0f, 360f, useCenter = false, topLeft = topLeft, size = arcSize, style = Stroke(stroke))
-            if (!queued) {
-                drawArc(
-                    accent,
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress.coerceIn(0f, 1f),
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(stroke, cap = StrokeCap.Round),
-                )
-            }
-        }
-        if (queued) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = colors.secondaryLabel, strokeWidth = 2.dp)
-        } else {
-            Icon(Icons.Rounded.Stop, contentDescription = null, tint = accent, modifier = Modifier.size(14.dp))
-        }
     }
 }
 

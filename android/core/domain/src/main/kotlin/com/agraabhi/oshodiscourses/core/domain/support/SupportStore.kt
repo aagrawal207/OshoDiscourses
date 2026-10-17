@@ -29,6 +29,12 @@ interface SupportStore {
 
     suspend fun dismissAnnualMessage()
 
+    /**
+     * Forgets a yearly purchase the listener declined or abandoned, so Settings can offer it again
+     * (iOS `AnnualSupportService.clearDeclinedRequest`). Stores without that memory do nothing.
+     */
+    suspend fun clearDeclinedRequest() {}
+
     companion object {
         /** In display order. Names and prices come from Play; these are the US base prices. */
         val TIP_PRODUCTS: List<SupportProductInfo> = listOf(

@@ -26,7 +26,8 @@ import okhttp3.OkHttpClient
 object DriveSync {
     /**
      * [activityProvider] returns the resumed `ComponentActivity` that shows Google's consent screen.
-     * [localChanges] emits after every local edit to synced data; see [localChanges].
+     * [localChanges] emits after every local edit to synced data; see [localChanges]. [codec]
+     * writes the Drive file; pass the iOS wire format so both platforms read one shape.
      */
     fun create(
         context: Context,
@@ -35,6 +36,7 @@ object DriveSync {
         activityProvider: () -> Activity?,
         httpClient: OkHttpClient = OkHttpClient(),
         scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        codec: SnapshotCodec = SnapshotJson,
     ): DriveSyncController = DriveSyncController(
         store = store,
         api = OkHttpDriveApi(httpClient),
@@ -45,6 +47,7 @@ object DriveSync {
         localChanges = localChanges,
         appVisibility = processVisibility(),
         clock = System::currentTimeMillis,
+        codec = codec,
     )
 
     /**

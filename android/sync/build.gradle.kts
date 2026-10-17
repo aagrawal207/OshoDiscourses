@@ -10,8 +10,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
-    // The catalog only has activity-compose; consent needs the plain ActivityResultRegistry.
-    implementation("androidx.activity:activity:${libs.versions.androidxActivity.get()}")
+    // Consent needs the plain ActivityResultRegistry, not Compose.
+    implementation(libs.androidx.activity)
 
     testImplementation(projects.core.testing)
     testImplementation(libs.okhttp.mockwebserver)

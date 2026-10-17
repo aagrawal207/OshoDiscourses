@@ -1,4 +1,4 @@
-package com.agraabhi.oshodiscourses.transcript
+package com.agraabhi.oshodiscourses.core.model
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test

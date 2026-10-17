@@ -22,14 +22,17 @@ class BundledCatalogRepository(
 ) : CatalogRepository {
     private val core: Core by lazy { Core.load(opener) }
     private val archive: ArchiveCatalog by lazy { ArchiveCatalog.load(opener) }
-    private val transcriptCounts: TranscriptIndex by lazy { TranscriptIndex.load(opener) }
+    private val transcripts: TranscriptCatalog by lazy { TranscriptCatalog.load(opener) }
 
     /** Parses everything now so later lookups never block; blocking, so never call it on the main thread. */
     fun warmUp() {
         core
         archive
-        transcriptCounts
+        transcripts
     }
+
+    /** The one parsed transcript catalog; `:transcript` reads its entries for fetching. */
+    val transcriptCatalog: TranscriptCatalog get() = transcripts
 
     val oshoworld: OshoworldCatalog get() = core.oshoworld
 
@@ -76,9 +79,11 @@ class BundledCatalogRepository(
 
     override fun archiveAudioURL(discourse: CatalogDiscourse): String? = archive.audioURL(discourse)
 
-    override fun hasTranscript(discourseID: String): Boolean = discourseID in transcriptCounts.ids
+    override fun hasTranscript(discourseID: String): Boolean = transcripts.hasTranscript(discourseID)
 
-    override fun transcriptCount(seriesID: String): Int = transcriptCounts.countsBySeries[seriesID] ?: 0
+    override fun transcriptCount(seriesID: String): Int = transcripts.transcriptCount(seriesID)
+
+    override fun transcriptPageURL(discourseID: String): String? = transcripts.entry(discourseID)?.let { TranscriptCatalog.pageURL(it) }
 
     private class Core(
         val allSeries: List<SeriesInfo>,
@@ -148,20 +153,6 @@ class BundledCatalogRepository(
         }
     }
 
-    /** Only which discourses have a transcript; the transcript module reads the entries themselves. */
-    private class TranscriptIndex(val ids: Set<String>) {
-        // Discourse numbers never contain a hyphen, so the series id is everything before the last one.
-        val countsBySeries: Map<String, Int> = ids.groupingBy { it.substringBeforeLast('-') }.eachCount()
-
-        companion object {
-            fun load(opener: ResourceOpener): TranscriptIndex {
-                val text = opener.readText(TRANSCRIPT_RESOURCE) ?: return TranscriptIndex(emptySet())
-                val keys = runCatching { json.decodeFromString<Map<String, Present>>(text).keys }.getOrDefault(emptySet())
-                return TranscriptIndex(keys)
-            }
-        }
-    }
-
     @Serializable
     private class CatalogFile(
         val series: List<SeriesInfo>,
@@ -177,13 +168,9 @@ class BundledCatalogRepository(
         val themes: List<String>,
     )
 
-    /** Decodes a JSON object while skipping every field. */
-    @Serializable
-    private class Present
-
     companion object {
         const val CATALOG_RESOURCE = "catalog/catalog.json"
-        const val TRANSCRIPT_RESOURCE = "TranscriptCatalog.json"
+        const val TRANSCRIPT_RESOURCE = TranscriptCatalog.RESOURCE
 
         private val json = Json { ignoreUnknownKeys = true }
     }

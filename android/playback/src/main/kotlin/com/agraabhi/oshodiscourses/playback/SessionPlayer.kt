@@ -2,7 +2,9 @@ package com.agraabhi.oshodiscourses.playback
 
 import android.os.Bundle
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -52,6 +54,22 @@ object PlaybackSessionCommands {
 internal class SessionPlayer(player: Player, private val engine: PlaybackEngine) : ForwardingPlayer(player) {
     // The engine prepares on play; letting the session prepare would start a load the engine did not plan.
     override fun prepare() = Unit
+
+    // Playlist changes from controllers (resumption, assistants) must become engine queues too.
+    override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) =
+        engine.setMediaItemsFromSession(mediaItems.map { it.mediaId }, startIndex, startPositionMs)
+
+    override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) =
+        engine.setMediaItemsFromSession(mediaItems.map { it.mediaId }, 0, C.TIME_UNSET)
+
+    override fun setMediaItems(mediaItems: MutableList<MediaItem>) = setMediaItems(mediaItems, true)
+
+    override fun setMediaItem(mediaItem: MediaItem) = engine.setMediaItemsFromSession(listOf(mediaItem.mediaId), 0, C.TIME_UNSET)
+
+    override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) =
+        engine.setMediaItemsFromSession(listOf(mediaItem.mediaId), 0, startPositionMs)
+
+    override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) = setMediaItem(mediaItem)
 
     override fun play() = engine.setPlayingNow(true)
 

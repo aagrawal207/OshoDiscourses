@@ -3,8 +3,7 @@ plugins {
 }
 
 android {
-    // The committed DeepFilterNet libraries and scripts/build-deepfilter.sh use this NDK.
-    ndkVersion = "29.0.14206865"
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         // DeepFilterNet ships prebuilt for these ABIs only; see scripts/build-deepfilter.sh.

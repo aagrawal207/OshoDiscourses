@@ -1,7 +1,9 @@
 package com.agraabhi.oshodiscourses.transcript
 
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptException
+import com.agraabhi.oshodiscourses.core.model.TranscriptCatalog
 import com.google.common.truth.Truth.assertThat
+import kotlin.test.assertFailsWith
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -9,7 +11,6 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import kotlin.test.assertFailsWith
 
 class TranscriptFetcherTest {
     private val server = MockWebServer()

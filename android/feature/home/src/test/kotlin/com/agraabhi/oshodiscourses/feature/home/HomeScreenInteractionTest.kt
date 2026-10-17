@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.agraabhi.oshodiscourses.core.testing.FakeAppServices
+import com.agraabhi.oshodiscourses.core.ui.components.LARGE_TITLE_LIST_TAG
 import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
@@ -13,6 +14,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.agraabhi.oshodiscourses.core.domain.progress.PlaybackProgress
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -106,6 +108,63 @@ class SessionControlsTest {
         } finally {
             session.release()
         }
+    }
+
+    @Test
+    fun playbackResumptionRestoresTheLastTalkAndKeepsTheEngineQueue() = test {
+        val f = EngineFixture(
+            backgroundScope,
+            context,
+            downloaded = setOf(BIRD[0], BIRD[1]),
+            progress = PlaybackProgress(positions = mapOf(BIRD[1] to 120.0), recentlyPlayed = listOf(BIRD[1])),
+        )
+        val session = MediaSession.Builder(context, f.engine.sessionPlayer).setId("test-${System.nanoTime()}").build()
+        try {
+            val controller = MediaSession.ControllerInfo.createTestOnlyControllerInfo(
+                "com.example.bluetooth", 0, 0, 0, 0, false, Bundle.EMPTY, false,
+            )
+            val resumed = PlaybackSessionCallback(f.engine).onPlaybackResumption(session, controller, true).get()
+            assertThat(resumed.mediaItems.map { it.mediaId }).containsExactly(BIRD[0], BIRD[1]).inOrder()
+            assertThat(resumed.startIndex).isEqualTo(1)
+            assertThat(resumed.startPositionMs).isEqualTo(120_000)
+            assertThat(f.state.currentTrackId).isEqualTo(BIRD[1])
+
+            // Media3 then sets those items and plays; the engine keeps its queue and restores the position.
+            f.engine.sessionPlayer.setMediaItems(resumed.mediaItems, resumed.startIndex, resumed.startPositionMs)
+            f.engine.sessionPlayer.play()
+            f.runUntil { f.state.isPlaying }
+            assertThat(f.state.currentTrackId).isEqualTo(BIRD[1])
+            assertThat(f.state.currentTime).isWithin(0.5).of(120.0)
+        } finally {
+            session.release()
+        }
+    }
+
+    @Test
+    fun playbackResumptionFailsWithNothingDownloaded() = test {
+        val f = EngineFixture(backgroundScope, context, downloaded = emptySet(), progress = PlaybackProgress(recentlyPlayed = listOf(BIRD[0])))
+        val session = MediaSession.Builder(context, f.engine.sessionPlayer).setId("test-${System.nanoTime()}").build()
+        try {
+            val controller = MediaSession.ControllerInfo.createTestOnlyControllerInfo(
+                "com.example.bluetooth", 0, 0, 0, 0, false, Bundle.EMPTY, false,
+            )
+            val result = PlaybackSessionCallback(f.engine).onPlaybackResumption(session, controller, true)
+            assertThat(runCatching { result.get() }.isFailure).isTrue()
+            assertThat(f.state.hasTrack).isFalse()
+        } finally {
+            session.release()
+        }
+    }
+
+    @Test
+    fun controllerPlaylistsBecomeEngineQueuesOfDownloadedTalks() = test {
+        val f = EngineFixture(backgroundScope, context, downloaded = setOf(BIRD[0], BIRD[2]))
+        val items = BIRD.take(3).map { MediaItem.Builder().setMediaId(it).build() }
+        f.engine.sessionPlayer.setMediaItems(items, 2, 30_000)
+        assertThat(f.state.queue.map { it.id }).containsExactly(BIRD[0], BIRD[2]).inOrder()
+        assertThat(f.state.currentTrackId).isEqualTo(BIRD[2])
+        assertThat(f.state.isPlaying).isFalse()
+        assertThat(f.state.currentTime).isEqualTo(30.0)
     }
 
     @Test

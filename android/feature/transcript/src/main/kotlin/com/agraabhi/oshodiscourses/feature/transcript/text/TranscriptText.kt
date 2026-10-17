@@ -1,5 +1,7 @@
 package com.agraabhi.oshodiscourses.feature.transcript.text
 
+import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptSyncModel
+
 /** A half-open UTF-16 range `[start, end)` into a paragraph's text. */
 data class TextSpan(val start: Int, val end: Int) {
     val isEmpty: Boolean get() = end <= start
@@ -7,19 +9,8 @@ data class TextSpan(val start: Int, val end: Int) {
 
 fun String.slice(span: TextSpan): String = substring(span.start, span.end)
 
-/** Whitespace-free length in code points, the unit every text weight in the reader uses. */
-fun textWeight(text: CharSequence, start: Int = 0, end: Int = text.length): Int {
-    var count = 0
-    var i = start
-    while (i < end) {
-        val cp = Character.codePointAt(text, i)
-        if (!isWhitespaceCodePoint(cp)) count++
-        i += Character.charCount(cp)
-    }
-    return count
-}
-
-private fun isWhitespaceCodePoint(cp: Int): Boolean = Character.isWhitespace(cp) || Character.isSpaceChar(cp)
+/** Whitespace-free length in code points; shared with the timing model so sentence and paragraph weights agree. */
+fun textWeight(text: CharSequence, start: Int = 0, end: Int = text.length): Int = TranscriptSyncModel.textWeight(text, start, end)
 
 /**
  * Splits a paragraph into sentences so the reader can mark the one being spoken

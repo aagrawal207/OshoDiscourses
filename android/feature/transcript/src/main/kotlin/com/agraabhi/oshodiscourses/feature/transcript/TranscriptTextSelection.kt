@@ -37,11 +37,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.agraabhi.oshodiscourses.core.ui.components.CappedFontScale
+import com.agraabhi.oshodiscourses.core.ui.components.toolbarGlass
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import kotlinx.coroutines.delay
 
-/** Kept verbatim from iOS; Android has no drag-out, so the coordinator may drop the last clause. */
-internal const val SELECT_TEXT_HINT = "Touch and hold to select words, then copy, share or drag them into another app."
+/** iOS copy without its drag-out clause, which Android text selection does not offer. */
+internal const val SELECT_TEXT_HINT = "Touch and hold to select words, then copy or share them."
 
 /** Passages in a selectable text view so the reader can pick exact words with the system handles. */
 @Composable

@@ -1,4 +1,4 @@
-package com.agraabhi.oshodiscourses.feature.home
+package com.agraabhi.oshodiscourses.core.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -33,20 +33,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.tabContentPadding
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 
-internal const val LARGE_TITLE_LIST_TAG = "largeTitleList"
+/** Test tag of the page's list, for scrolling it in UI tests. */
+const val LARGE_TITLE_LIST_TAG = "largeTitleList"
 
 /** iOS large-title page: the title scrolls away and a centred inline title fades in (ui-style.md §3.3). */
 @Composable
-internal fun LargeTitlePage(
+fun LargeTitlePage(
     title: String,
     background: Color,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
-    bottomPadding: androidx.compose.ui.unit.Dp = 16.dp,
+    bottomPadding: Dp = 16.dp,
     content: LazyListScope.() -> Unit,
 ) {
     val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
@@ -94,7 +96,7 @@ private fun LargeTitle(title: String) {
 
 /** iOS bars and large titles cap Dynamic Type at xxxLarge (about 1.35x) so they keep one line. */
 @Composable
-internal fun CappedFontScale(max: Float = 1.35f, content: @Composable () -> Unit) {
+fun CappedFontScale(max: Float = 1.35f, content: @Composable () -> Unit) {
     val density = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(max)), content = content)
 }

@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -38,6 +39,9 @@ class PlaybackService : MediaSessionService() {
             .setMediaButtonPreferences(PlaybackSessionCommands.mediaButtons())
         launchIntent()?.let(builder::setSessionActivity)
         session = builder.build()
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_stat_lotus) },
+        )
         Log.i(TAG, "outcome=session_created")
     }
 
@@ -71,6 +75,28 @@ internal class PlaybackSessionCallback(private val engine: PlaybackEngine) : Med
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
             .setAvailableSessionCommands(commands)
             .build()
+    }
+
+    /**
+     * A play request with nothing loaded, typically a Bluetooth or headset key after process death:
+     * load the last downloaded talk the way launch does, and hand Media3 the engine's own queue.
+     */
+    override fun onPlaybackResumption(
+        mediaSession: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        isForPlayback: Boolean,
+    ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+        val restored = engine.resumptionItems()
+        Log.i(TAG, "outcome=resumption restored=${restored != null} forPlayback=$isForPlayback")
+        return if (restored != null) {
+            Futures.immediateFuture(restored)
+        } else {
+            Futures.immediateFailedFuture(UnsupportedOperationException("No downloaded discourse to resume"))
+        }
+    }
+
+    private companion object {
+        const val TAG = "PlaybackService"
     }
 
     override fun onCustomCommand(

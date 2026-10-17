@@ -121,6 +121,9 @@ interface TranscriptTiming {
     val duration: Double
     val source: TimingSource
 
+    /** Paragraphs with an aligned start, for "Synced from speech: m of n"; null for the estimate. */
+    val matchedParagraphs: Int? get() = null
+
     fun startTime(paragraph: Int): Double
 
     fun paragraphAt(time: Double): Int

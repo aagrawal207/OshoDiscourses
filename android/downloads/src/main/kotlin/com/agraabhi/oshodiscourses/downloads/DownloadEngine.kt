@@ -12,6 +12,7 @@ import com.agraabhi.oshodiscourses.core.domain.settings.SettingsRepository
 import com.agraabhi.oshodiscourses.core.domain.transcript.TranscriptRepository
 import com.agraabhi.oshodiscourses.core.model.CatalogDiscourse
 import com.agraabhi.oshodiscourses.core.model.CatalogRepository
+import com.agraabhi.oshodiscourses.core.model.URLEncoding
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -399,7 +400,8 @@ class DownloadEngine(
     private fun sources(discourse: CatalogDiscourse): List<Pair<DownloadSource, HttpUrl>> {
         val urls = buildMap {
             catalog.archiveAudioURL(discourse)?.toHttpUrlOrNull()?.let { put(DownloadSource.ARCHIVE, it) }
-            discourse.audioURL.toHttpUrlOrNull()?.let { put(DownloadSource.OSHOWORLD, it) }
+            // Foundation's query-allowed encoding, so the request bytes match iOS; OkHttp's own differs.
+            URLEncoding.requestURL(discourse.audioURL)?.toHttpUrlOrNull()?.let { put(DownloadSource.OSHOWORLD, it) }
         }
         val speeds = synchronized(lock) { sourceSpeeds }
         return DownloadSourcePolicy.order(urls.keys, speeds, isNearOshoworld()).mapNotNull { s -> urls[s]?.let { s to it } }
@@ -441,7 +443,7 @@ class DownloadEngine(
         }
         recordCommitted(id, relative, destination.length())
         scope.launch {
-            runCatching { transcripts.prefetch(id) }.onFailure { Log.w(TAG, "transcript prefetch failed", it) }
+            runCatching { transcripts.prefetch(id, allowCellular()) }.onFailure { Log.w(TAG, "transcript prefetch failed", it) }
         }
     }
 

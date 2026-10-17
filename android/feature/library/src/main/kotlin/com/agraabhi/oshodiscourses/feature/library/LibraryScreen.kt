@@ -60,6 +60,7 @@ import com.agraabhi.oshodiscourses.core.model.Language
 import com.agraabhi.oshodiscourses.core.model.SeriesInfo
 import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
 import com.agraabhi.oshodiscourses.core.ui.components.FilterChipStyle
+import com.agraabhi.oshodiscourses.core.ui.components.LargeTitlePage
 import com.agraabhi.oshodiscourses.core.ui.components.OshoFilterChip
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho

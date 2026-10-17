@@ -70,7 +70,8 @@ private val MiniPlayerScrollExtra = 12.dp
  */
 @Composable
 fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
-    val player by LocalAppServices.current.player.state.collectAsStateWithLifecycle()
+    val services = LocalAppServices.current
+    val player by services.player.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
     var tabBarHeight by remember { mutableStateOf(0.dp) }
     var miniPlayerHeight by remember { mutableStateOf(64.dp) }
@@ -139,7 +140,9 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
 
         val transcriptID = navigator.transcriptDiscourseID
         ModalLayer(visible = transcriptID != null, onBack = navigator::closeTranscript) {
-            transcriptID?.let { TranscriptScreen(discourseID = it, onDismiss = navigator::closeTranscript) }
+            transcriptID?.let {
+                TranscriptScreen(discourseID = it, onDismiss = navigator::closeTranscript, pageURL = services.catalog.transcriptPageURL(it))
+            }
         }
 
         LaunchOverlay()
@@ -147,7 +150,9 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
 }
 
 private fun tabEntryProvider(navigator: AppNavigator): (NavKey) -> NavEntry<NavKey> = entryProvider {
-    entry<HomeRoute> { HomeScreen(onOpenSeries = { navigator.push(SeriesRoute(it)) }) }
+    entry<HomeRoute> {
+        HomeScreen(onOpenSeries = { navigator.push(SeriesRoute(it)) }, isPlayerPresented = navigator.isPlayerPresented)
+    }
     entry<LibraryRoute> { LibraryScreen(onOpenSeries = { navigator.push(SeriesRoute(it)) }) }
     entry<DownloadsRoute> {
         DownloadsScreen(
@@ -162,7 +167,14 @@ private fun tabEntryProvider(navigator: AppNavigator): (NavKey) -> NavEntry<NavK
             onOpenListeningStats = { navigator.push(ListeningStatsRoute) },
         )
     }
-    entry<SeriesRoute> { route -> SeriesScreen(seriesID = route.seriesID, onOpenPlayer = navigator::showPlayer) }
+    entry<SeriesRoute> { route ->
+        SeriesScreen(
+            seriesID = route.seriesID,
+            onOpenPlayer = navigator::showPlayer,
+            onBack = { navigator.pop() },
+            onOpenTranscript = navigator::showTranscript,
+        )
+    }
     entry<BookmarksRoute> { BookmarksScreen() }
     entry<ListeningStatsRoute> { ListeningStatsScreen() }
     entry<DenoiseRoute> { DenoiseScreen() }
