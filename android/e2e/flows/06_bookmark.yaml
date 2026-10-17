@@ -1,0 +1,46 @@
+appId: com.agraabhi.oshodiscourses
+name: 06 Add bookmark, find it in Bookmarks and play it
+---
+- launchApp
+- runFlow: ../subflows/open_player.yaml
+- tapOn: "Add bookmark"
+- assertVisible: "Category"
+- tapOn: "Profound"
+- tapOn: "What caught your attention\\?"
+- inputText: "Checked by Maestro"
+- hideKeyboard
+- tapOn: "Save"
+- assertNotVisible: "Category"
+- back
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: downloads
+- tapOn: "Bookmarks"
+- assertVisible: "Checked by Maestro"
+- assertVisible: "New Alchemy To Turn You On - #19"
+- takeScreenshot: 06_bookmarks
+- tapOn:
+    text: "Play"
+    childOf:
+      containsDescendants:
+        - text: "Checked by Maestro"
+- tapOn: "Discourse 19, New Alchemy To Turn You On"
+- assertVisible: "Pause"
+- tapOn: "Pause"
+- back
+# A full swipe deletes; it starts on the trailing button so it travels past half the row.
+- repeat:
+    while:
+      visible: "Checked by Maestro"
+    times: 5
+    commands:
+      - swipe:
+          from:
+            text: "Play"
+            childOf:
+              containsDescendants:
+                - text: "Checked by Maestro"
+          direction: LEFT
+      - waitForAnimationToEnd
+- assertNotVisible: "Checked by Maestro"

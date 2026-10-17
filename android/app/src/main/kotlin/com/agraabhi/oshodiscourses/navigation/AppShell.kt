@@ -20,11 +20,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,6 +81,7 @@ private val MiniPlayerScrollExtra = 12.dp
  * The phone tab shell (iOS `ContentView`, ui-style.md §5, §8). Pages draw edge to edge under
  * the glass tab bar so it can blur them; each tab keeps its own back stack.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
     val services = LocalAppServices.current
@@ -109,7 +113,8 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
 
     val miniPlayerClearance = if (player.hasTrack) miniPlayerHeight + MiniPlayerGap + MiniPlayerScrollExtra else 0.dp
 
-    Box(Modifier.fillMaxSize().background(Osho.colors.systemBackground)) {
+    // Test tags become resource ids so UI Automator and Maestro can select them.
+    Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.background(Osho.colors.systemBackground)) {
         CompositionLocalProvider(
             LocalTabBarClearance provides tabBarHeight,
             LocalMiniPlayerClearance provides miniPlayerClearance,

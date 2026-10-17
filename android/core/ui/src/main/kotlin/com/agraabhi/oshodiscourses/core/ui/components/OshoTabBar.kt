@@ -26,12 +26,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 
 @Immutable
 data class OshoTabItem(val title: String, val icon: ImageVector)
+
+/** UI tests and Maestro select a tab by this tag; page titles repeat the tab labels. */
+fun tabTestTag(title: String): String = "tab.${title.lowercase()}"
 
 /** Height of the capsule itself, without the navigation-bar inset below it. */
 val OshoTabBarHeight = 62.dp
@@ -48,20 +52,23 @@ fun OshoTabBar(
     modifier: Modifier = Modifier,
 ) {
     val colors = Osho.colors
-    Box(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(OshoTabBarHeight)
-                .shadow(12.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
-                .glass(CircleShape)
-                .border(0.5.dp, colors.glassBorder, CircleShape)
-                .padding(4.dp)
-                .selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items.forEachIndexed { index, item ->
-                TabItem(item, selected = index == selectedIndex, onClick = { onSelect(index) }, modifier = Modifier.weight(1f))
+    // UITabBar labels keep their size at every Dynamic Type setting; scaled, "Downloads" clips.
+    CappedFontScale(max = 1f) {
+        Box(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(OshoTabBarHeight)
+                    .shadow(12.dp, CircleShape, ambientColor = colors.glassShadow, spotColor = colors.glassShadow)
+                    .glass(CircleShape)
+                    .border(0.5.dp, colors.glassBorder, CircleShape)
+                    .padding(4.dp)
+                    .selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                items.forEachIndexed { index, item ->
+                    TabItem(item, selected = index == selectedIndex, onClick = { onSelect(index) }, modifier = Modifier.weight(1f))
+                }
             }
         }
     }
@@ -75,6 +82,7 @@ private fun TabItem(item: OshoTabItem, selected: Boolean, onClick: () -> Unit, m
         modifier = modifier
             .fillMaxHeight()
             .background(if (selected) colors.tabSelectionPill else Color.Transparent, CircleShape)
+            .testTag(tabTestTag(item.title))
             .selectable(
                 selected = selected,
                 onClick = onClick,

@@ -1,0 +1,21 @@
+# Library search to the test series. New Alchemy #19 is a 13-minute English talk with a transcript.
+appId: com.agraabhi.oshodiscourses
+---
+- runFlow:
+    file: tab_root.yaml
+    env:
+      TAB: library
+- runFlow:
+    when:
+      visible: "Clear text"
+    commands:
+      - tapOn: "Clear text"
+- tapOn: "Search by name or topic"
+- inputText: "New Alchemy"
+- hideKeyboard
+- tapOn: "New Alchemy To Turn You On"
+- assertVisible: "Download All"
+- scrollUntilVisible:
+    element: "Discourse 19(, completed)?, transcript available"
+    direction: DOWN
+    centerElement: true
