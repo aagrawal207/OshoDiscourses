@@ -210,10 +210,10 @@ struct SettingsView: View {
 
     private static let developerApps: [DeveloperApp] = [
         DeveloperApp(
-            name: "Bruce",
-            subtitle: "Workout tracker",
-            iconAsset: "BruceIcon",
-            storeURL: URL(string: "https://apps.apple.com/app/bruce-workout-tracker/id6770409619")!
+            name: "Howzat!",
+            subtitle: "Cricket arcade",
+            iconAsset: "HowzatIcon",
+            storeURL: URL(string: "https://apps.apple.com/us/app/howzat-cricket-arcade/id6813109031")!
         ),
         DeveloperApp(
             name: "Drop",
@@ -298,9 +298,9 @@ struct SettingsView: View {
             Text("About")
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Acknowledgements: All discourses are copyright OSHO International Foundation. Audio is served from oshoworld.com.")
+                Text("Acknowledgements: Audio and transcripts come from oshoworld.com and an Internet Archive mirror. Rights in the discourses, transcripts and the Osho name belong to their owners.")
                 Text("Noise reduction uses RNNoise (Xiph.Org, BSD 3-Clause) and DeepFilterNet by Hendrik Schröter (MIT/Apache-2.0).")
-                Text("This app is an independent player for publicly available audio content hosted at oshoworld.com. Not affiliated with or endorsed by the Osho International Foundation.")
+                Text("Osho Talks is an independent player for publicly available recordings. It is not affiliated with or endorsed by Osho International Foundation, Osho World Foundation or any other Osho organisation.")
                 Text("Your listening progress, bookmarks, and stats sync between your devices through your own iCloud. Everything else stays on your phone. There are no accounts, no servers, and no tracking of any kind.")
             }
             .padding(.top, 8)
