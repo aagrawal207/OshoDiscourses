@@ -502,6 +502,111 @@ class PlaybackEngineTest {
 
     // endregion
 
+    // region Deleted downloads
+
+    @Test
+    fun deletingQueuedTalksRemovesThemAndTheCurrentOneKeepsPlaying() = test {
+        val f = fixture()
+        f.startPlaying(BIRD[1])
+        f.downloads.delete(BIRD[0])
+        assertThat(f.state.queue.map { it.id }).containsExactly(BIRD[1], BIRD[2]).inOrder()
+        assertThat(f.state.currentIndex).isEqualTo(0)
+        assertThat(f.state.hasPrevious).isFalse()
+        assertThat(f.player.mediaItemCount).isEqualTo(2)
+        assertThat(f.player.currentMediaItemIndex).isEqualTo(0)
+        assertThat(f.player.currentMediaItem?.mediaId).isEqualTo(BIRD[1])
+
+        f.downloads.delete(BIRD[2])
+        assertThat(f.state.queue.map { it.id }).containsExactly(BIRD[1])
+        assertThat(f.state.hasNext).isFalse()
+        assertThat(f.player.mediaItemCount).isEqualTo(1)
+        assertThat(f.state.isPlaying).isTrue()
+        f.playUntil(5.0)
+        assertThat(f.state.currentTrackId).isEqualTo(BIRD[1])
+    }
+
+    @Test
+    fun deletingTheLoadedTalkStopsAndKeepsItsProgress() = test {
+        val f = fixture()
+        f.startPlaying(BIRD[0])
+        f.playUntil(12.0)
+        f.downloads.delete(BIRD[0])
+        assertThat(f.state.hasTrack).isFalse()
+        assertThat(f.state.isPlaying).isFalse()
+        assertThat(f.state.queue).isEmpty()
+        assertThat(f.player.mediaItemCount).isEqualTo(0)
+        assertThat(f.progress.getPosition(BIRD[0])).isAtLeast(12.0)
+        assertThat(f.progress.isCompleted(BIRD[0])).isFalse()
+    }
+
+    @Test
+    fun deletingEveryDownloadEmptiesThePlayer() = test {
+        val f = fixture()
+        f.startPlaying(BIRD[1])
+        f.downloads.deleteAll()
+        assertThat(f.state.hasTrack).isFalse()
+        assertThat(f.state.queue).isEmpty()
+        assertThat(f.player.mediaItemCount).isEqualTo(0)
+    }
+
+    @Test
+    fun aPrunedQueueAdvancesToTheNextRemainingTalk() = test {
+        val f = fixture(durations = mapOf(BIRD[0] to 60.0))
+        f.startPlaying(BIRD[0])
+        f.downloads.delete(BIRD[1])
+        f.engine.skipForward(120.0)
+        assertThat(f.state.currentTrackId).isEqualTo(BIRD[2])
+        f.runUntil { f.state.isPlaying }
+        assertThat(f.player.currentMediaItem?.mediaId).isEqualTo(BIRD[2])
+    }
+
+    @Test
+    fun deletingAnEarlierTalkWhileLoadingStillStartsTheRequestedOne() = test {
+        val f = fixture()
+        f.engine.play(BIRD[2])
+        f.downloads.delete(BIRD[0])
+        f.runUntil { f.state.isPlaying }
+        assertThat(f.state.currentTrackId).isEqualTo(BIRD[2])
+        assertThat(f.state.currentIndex).isEqualTo(1)
+        assertThat(f.player.currentMediaItem?.mediaId).isEqualTo(BIRD[2])
+    }
+
+    @Test
+    fun aRestoredPausedQueueIsPrunedAndStillResumes() = test {
+        val f = fixture(progress = PlaybackProgress(positions = mapOf(BIRD[1] to 30.0), recentlyPlayed = listOf(BIRD[1])))
+        assertThat(f.engine.restoreLastSession()).isTrue()
+        f.downloads.delete(BIRD[0])
+        assertThat(f.state.queue.map { it.id }).containsExactly(BIRD[1], BIRD[2]).inOrder()
+        assertThat(f.state.currentIndex).isEqualTo(0)
+        f.engine.resume()
+        f.runUntil { f.state.isPlaying }
+        assertThat(f.state.currentTrackId).isEqualTo(BIRD[1])
+        assertThat(f.state.currentTime).isWithin(0.5).of(30.0)
+    }
+
+    @Test
+    fun smartDeleteAlsoDropsTheFinishedTalkFromTheQueue() = test {
+        val f = fixture(durations = mapOf(BIRD[0] to 60.0), settings = UserSettings(smartDelete = true))
+        f.startPlaying(BIRD[0])
+        f.engine.skipForward(120.0)
+        assertThat(f.state.currentTrackId).isEqualTo(BIRD[1])
+        assertThat(f.state.queue.map { it.id }).containsExactly(BIRD[1], BIRD[2]).inOrder()
+        assertThat(f.state.currentIndex).isEqualTo(0)
+        f.runUntil { f.state.isPlaying }
+        assertThat(f.player.currentMediaItem?.mediaId).isEqualTo(BIRD[1])
+    }
+
+    @Test
+    fun aNewDownloadDoesNotChangeTheQueue() = test {
+        val f = fixture(downloaded = setOf(BIRD[0]))
+        f.startPlaying(BIRD[0])
+        f.downloads.finish(BIRD[1])
+        assertThat(f.state.queue.map { it.id }).containsExactly(BIRD[0])
+        assertThat(f.state.isPlaying).isTrue()
+    }
+
+    // endregion
+
     // region System events
 
     @Test
