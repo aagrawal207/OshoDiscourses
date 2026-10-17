@@ -117,16 +117,16 @@ an activity provider (`() -> Activity?`) that `:app` supplies. Shared catalog JS
 | ID | Task | Depends on | Status | Branch | Worker session |
 | --- | --- | --- | --- | --- | --- |
 | A1 | Foundation: Gradle project, all modules, contracts, fakes, theme, tab shell, CI | - | done | `android` | `ses_eb7f71242ffeKuRXnTQtm3h4nJ` |
-| A2 | Catalog data, URL builder, download source policy | A1 | in progress | `android-catalog` | `ses_eb7862a5bffecxK6KSQCCk9B6f` |
-| A3 | Persistence repositories and merge rules | A1 | in progress | `android-data` | `ses_eb785fd26ffeydj7GqHHKLIL79` |
-| A4 | Playback engine and sleep timer | A1 | in progress | `android-playback` | `ses_eb785c4e6ffeZqgYfIOYrjiXtH` |
-| A5 | Downloads engine | A1 | in progress | `android-downloads` | `ses_eb785916cffegG7kYnblM2BUZk` |
-| A6 | DeNoise DSP and native bridges | A1 | in progress | `android-denoise` | `ses_eb78558e3ffe8eQZjlQ7T4kSYL` |
-| A7 | Transcript data | A1 | in progress | `android-transcript-data` | `ses_eb7852ee0ffeRPENK2ORSS8csv` |
-| A8 | Home, Library, Series screens | A1 | in progress | `android-browse-ui` | `ses_eb784fc41ffeA2D3ODBMeaKWCn` |
+| A2 | Catalog data, URL builder, download source policy | A1 | done | `android-catalog` | `ses_eb7862a5bffecxK6KSQCCk9B6f` |
+| A3 | Persistence repositories and merge rules | A1 | done | `android-data` | `ses_eb785fd26ffeydj7GqHHKLIL79` |
+| A4 | Playback engine and sleep timer | A1 | done | `android-playback` | `ses_eb785c4e6ffeZqgYfIOYrjiXtH` |
+| A5 | Downloads engine | A1 | done | `android-downloads` | `ses_eb785916cffegG7kYnblM2BUZk` |
+| A6 | DeNoise DSP and native bridges | A1 | done | `android-denoise` | `ses_eb78558e3ffe8eQZjlQ7T4kSYL` |
+| A7 | Transcript data | A1 | done | `android-transcript-data` | `ses_eb7852ee0ffeRPENK2ORSS8csv` |
+| A8 | Home, Library, Series screens | A1 | done | `android-browse-ui` | `ses_eb784fc41ffeA2D3ODBMeaKWCn` |
 | A9 | Player, mini-player, DeNoise screen | A1 | in progress | `android-player-ui` | `ses_eb784cd1cffeePupQHBsMqbTho` |
-| A10 | Transcript reader UI | A1 | in progress | `android-transcript-ui` | `ses_eb784a019ffetrjlyth3xd08Ws` |
+| A10 | Transcript reader UI | A1 | done | `android-transcript-ui` | `ses_eb784a019ffetrjlyth3xd08Ws` |
 | A11 | Downloads, Bookmarks, Stats, Settings screens | A1 | in progress | `android-library-settings-ui` | `ses_eb78470b3ffeWiO51Bhx0s6orz` |
-| A12 | Billing, review and engagement | A1 | in progress | `android-billing` | `ses_eb7844d1affeoINsLcrNaq7ah6` |
-| A13 | Google Drive sync | A1, A3 | in progress | `android-sync` | `ses_eb7841d5fffePuPbTFWkzbT7Cm` |
-| A14 | Integration, emulator E2E, screenshot parity, polish | all | todo | | |
+| A12 | Billing, review and engagement | A1 | done | `android-billing` | `ses_eb7844d1affeoINsLcrNaq7ah6` |
+| A13 | Google Drive sync | A1, A3 | done | `android-sync` | `ses_eb7841d5fffePuPbTFWkzbT7Cm` |
+| A14 | Integration, emulator E2E, screenshot parity, polish | all | in progress | `android-integration` | `ses_eb75e9441ffem9kpidg5uoEjsX` |

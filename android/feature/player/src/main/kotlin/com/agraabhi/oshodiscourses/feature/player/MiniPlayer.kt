@@ -2,6 +2,7 @@ package com.agraabhi.oshodiscourses.feature.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,77 +17,134 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.agraabhi.oshodiscourses.core.ui.LocalAppServices
-import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.components.glass
 import com.agraabhi.oshodiscourses.core.ui.theme.Osho
-import kotlinx.coroutines.launch
+import com.agraabhi.oshodiscourses.feature.player.components.PortraitArtwork
 
 /**
- * The floating bar above the tab bar (iOS `MiniPlayerView`, ui-style.md §6.5). The host shows
- * it only while a discourse is loaded and measures it to size `LocalMiniPlayerClearance`.
+ * The floating bar above the tab bar (iOS `MiniPlayerView`, ui-style.md §6.5). The host shows it
+ * only while a discourse is loaded and turns [onHeightChanged] into `LocalMiniPlayerClearance`.
  */
 @Composable
 fun MiniPlayer(
     onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier,
+    onHeightChanged: (Dp) -> Unit = {},
 ) {
-    val player = LocalAppServices.current.player
-    val state by player.state.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    val viewModel = playerViewModel()
+    val ui by viewModel.state.collectAsStateWithLifecycle()
+    MiniPlayerContent(
+        ui = ui,
+        onOpenPlayer = onOpenPlayer,
+        onTogglePlayPause = viewModel::togglePlayPause,
+        modifier = modifier,
+        onHeightChanged = onHeightChanged,
+    )
+}
+
+@Composable
+internal fun MiniPlayerContent(
+    ui: PlayerUiState,
+    onOpenPlayer: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    modifier: Modifier = Modifier,
+    onHeightChanged: (Dp) -> Unit = {},
+) {
+    val colors = Osho.colors
+    val density = LocalDensity.current
+    val player = ui.player
     val shape = RoundedCornerShape(14.dp)
-    val progress = if (state.duration > 0) (state.currentTime / state.duration).toFloat().coerceIn(0f, 1f) else 0f
-    Column(
-        modifier = modifier
-            .padding(horizontal = 8.dp)
-            .widthIn(max = 640.dp)
-            .fillMaxWidth()
-            .shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
-            .glass(shape)
-            .clickable(onClick = onOpenPlayer),
-    ) {
-        Box(Modifier.fillMaxWidth().height(2.5.dp).background(Osho.colors.label.copy(alpha = 0.08f))) {
-            Box(Modifier.fillMaxWidth(progress).height(2.5.dp).background(Osho.colors.accent))
-        }
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    val discourseLine = PlayerFormatting.discourseLine(player.currentTitle, player.currentSeries)
+    val seriesLine = PlayerFormatting.seriesLine(player.currentTitle, player.currentSeries)
+    val playPauseLabel = if (player.isPlaying) "Pause" else "Play"
+
+    Box(modifier.fillMaxWidth().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxWidth()
+                .onSizeChanged { onHeightChanged(with(density) { it.height.toDp() }) }
+                .shadow(8.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                .glass(shape)
+                .clickable(onClick = onOpenPlayer)
+                .clearAndSetSemantics {
+                    contentDescription = listOfNotNull(discourseLine, seriesLine).joinToString(", ")
+                    stateDescription = if (player.isPlaying) "Playing" else "Paused"
+                    role = Role.Button
+                    onClick(label = "open the full player") { onOpenPlayer(); true }
+                    customActions = listOf(CustomAccessibilityAction(playPauseLabel) { onTogglePlayPause(); true })
+                },
         ) {
-            SeriesThumbnail(state.currentSeries, 44.dp)
-            Column(Modifier.weight(1f)) {
-                val number = state.currentTitle.substringAfterLast('#', "").takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
-                Text(
-                    if (number != null) "Discourse $number" else state.currentSeries.ifEmpty { state.currentTitle },
-                    style = Osho.typography.subheadline,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Osho.colors.label,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (number != null) {
-                    Text(state.currentSeries, style = Osho.typography.caption, color = Osho.colors.secondaryLabel, maxLines = 1)
-                }
+            Box(Modifier.fillMaxWidth().height(2.5.dp).background(colors.label.copy(alpha = 0.08f))) {
+                Box(Modifier.fillMaxWidth(ui.progress).height(2.5.dp).background(colors.accent))
             }
-            IconButton(onClick = { scope.launch { player.togglePlayPause() } }, modifier = Modifier.size(44.dp)) {
-                Icon(
-                    if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = if (state.isPlaying) "Pause" else "Play",
-                    tint = Osho.colors.accent,
-                )
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PortraitArtwork(size = 44.dp, cornerRadius = 6.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        discourseLine ?: seriesLine,
+                        style = Osho.typography.subheadline,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (discourseLine != null) {
+                        Text(
+                            seriesLine,
+                            style = Osho.typography.caption,
+                            color = colors.secondaryLabel,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(bounded = false, radius = 22.dp),
+                            role = Role.Button,
+                            onClick = onTogglePlayPause,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = playPauseLabel,
+                        tint = colors.accent,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
         }
     }
