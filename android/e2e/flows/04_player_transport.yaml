@@ -1,0 +1,89 @@
+appId: com.agraabhi.oshodiscourses
+name: 04 Row plays into mini-player and full player; transport and speed persist
+---
+- launchApp
+- runFlow: ../subflows/ensure_downloaded.yaml
+- tapOn: "Discourse 19(, completed)?, transcript available"
+- assertVisible:
+    text: "Pause"
+    childOf:
+      containsChild:
+        text: "Discourse 19(, completed)?, transcript available"
+- assertVisible: "Discourse 19, New Alchemy To Turn You On"
+- tapOn: "Discourse 19, New Alchemy To Turn You On"
+- assertVisible: "Playback position"
+- assertVisible: "Pause"
+- tapOn: "Pause"
+- assertVisible: "Play"
+- tapOn: "Play"
+- assertVisible: "Pause"
+- tapOn: "Pause"
+- assertVisible: "Play"
+
+# Paused, so the clock moves only by the skips.
+# Scoped below the seek bar: leftOf alone also matches the status-bar clock.
+- copyTextFrom:
+    text: "\\d+:\\d{2}"
+    below: "Playback position"
+    leftOf: "Time remaining"
+- runScript:
+    file: ../scripts/elapsed.js
+    env:
+      KEY: start
+- runScript:
+    file: ../scripts/expect_clock.js
+    env:
+      BASE: ${output.start}
+      DELTA: 30
+      KEY: forward
+- tapOn: "Skip forward 30 seconds"
+- assertVisible:
+    text: ${output.forward}
+    below: "Playback position"
+    leftOf: "Time remaining"
+- copyTextFrom:
+    text: "\\d+:\\d{2}"
+    below: "Playback position"
+    leftOf: "Time remaining"
+- runScript:
+    file: ../scripts/elapsed.js
+    env:
+      KEY: afterForward
+- runScript:
+    file: ../scripts/expect_clock.js
+    env:
+      BASE: ${output.afterForward}
+      DELTA: -15
+      KEY: back
+- tapOn: "Skip back 15 seconds"
+- assertVisible:
+    text: ${output.back}
+    below: "Playback position"
+    leftOf: "Time remaining"
+
+- tapOn: "Playback speed"
+- tapOn: "1.25 times"
+- assertVisible:
+    checked: true
+    containsChild:
+      text: "1.25 times"
+- back
+- takeScreenshot: 04_player_speed
+
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Discourse 19, New Alchemy To Turn You On"
+    timeout: 15000
+- tapOn: "Discourse 19, New Alchemy To Turn You On"
+- tapOn: "Playback speed"
+- assertVisible:
+    checked: true
+    containsChild:
+      text: "1.25 times"
+- tapOn: "1 times"
+- assertVisible:
+    checked: true
+    containsChild:
+      text: "1 times"
+- back

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 11 and lower (android:fullBackupContent). Audio is re-downloadable, so backing it up
+    would bloat the user's Google Drive; a restored queue would start downloads unasked.
+-->
+<full-backup-content>
+    <exclude domain="file" path="Osho Discourses/" />
+    <exclude domain="file" path=".download_queue.json" />
+</full-backup-content>

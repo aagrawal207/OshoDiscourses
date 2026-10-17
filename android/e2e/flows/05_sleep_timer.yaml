@@ -1,0 +1,17 @@
+appId: com.agraabhi.oshodiscourses
+name: 05 Sleep timer set and cancel
+---
+- launchApp
+- runFlow: ../subflows/open_player.yaml
+- tapOn: "Sleep timer"
+- assertVisible: "End of discourse"
+- assertNotVisible: "Cancel"
+- tapOn: "15 min"
+- tapOn: "Sleep timer"
+- assertVisible: "Cancel"
+- takeScreenshot: 05_sleep_menu_active
+- tapOn: "Cancel"
+- tapOn: "Sleep timer"
+- assertVisible: "15 min"
+- assertNotVisible: "Cancel"
+- back

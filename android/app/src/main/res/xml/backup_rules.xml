@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 11 and lower (android:fullBackupContent). Progress, bookmarks, stats, transcript state
+    and settings (filesDir JSON and DataStore) are backed up. Audio is re-downloadable and a restored
+    queue would start downloads unasked; transcripts and partial files live in noBackupFilesDir.
+    Keep in step with :downloads downloads_backup_rules.xml.
+-->
+<full-backup-content>
+    <exclude domain="file" path="Osho Discourses/" />
+    <exclude domain="file" path=".download_queue.json" />
+</full-backup-content>

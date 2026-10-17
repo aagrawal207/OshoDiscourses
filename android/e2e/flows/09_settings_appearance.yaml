@@ -1,0 +1,42 @@
+appId: com.agraabhi.oshodiscourses
+name: 09 Settings appearance dark and accent change
+---
+- launchApp
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: settings
+- scrollUntilVisible:
+    element: "Shuffle Color Daily"
+    direction: DOWN
+- tapOn: "Dark"
+- assertVisible:
+    selected: true
+    containsChild:
+      text: "Dark"
+- tapOn: "Teal"
+- assertVisible:
+    text: "Teal"
+    checked: true
+- takeScreenshot: 09_settings_dark_teal
+- stopApp
+- launchApp
+- runFlow:
+    file: ../subflows/tab_root.yaml
+    env:
+      TAB: settings
+- scrollUntilVisible:
+    element: "Shuffle Color Daily"
+    direction: DOWN
+- assertVisible:
+    selected: true
+    containsChild:
+      text: "Dark"
+- assertVisible:
+    text: "Teal"
+    checked: true
+- tapOn: "Light"
+- tapOn: "Purple"
+- assertVisible:
+    text: "Purple"
+    checked: true

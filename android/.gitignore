@@ -1,0 +1,20 @@
+# Gradle and build outputs
+.gradle/
+.kotlin/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local configuration
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Roborazzi comparison outputs (recorded references live in src/test/screenshots)
+**/*_compare.png
+**/*_actual.png
