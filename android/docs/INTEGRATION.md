@@ -71,7 +71,7 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 ## A4 Playback
 - [x] Main thread: `sleepTimer = SleepTimerService(mainScope)`; `player = PlaybackEngine.create(context, catalog, downloads, bookmarks, settings, playbackState, listeningStats, sleepTimer, denoisePipeline, reviewPrompter)`; `sleepTimer.onExpire = { player.setPlaying(false) }`.
 - [x] `OshoApplication` implements `PlaybackEngineProvider`.
-- [x] `player.restoreLastSession()` after progress and downloads load.
+- [x] ~~`player.restoreLastSession()` at launch~~ removed in A17b: iOS does not load the last talk at launch. Media-button resumption still uses `resumptionItems()`.
 - [x] Smart Download lead is 20 s, as the iOS code (CLAUDE.md's "10 min" is stale). — `PlaybackRules.SMART_DOWNLOAD_LEAD_SECONDS`; root CLAUDE.md still says 10 min.
 - [x] A6 pipeline applies boost gain from `settings.volumeBoost`. — `DenoiseEngine.Choices`.
 - [x] Add `onPlaybackResumption` + media button receiver (Bluetooth play after process death). — verified: after `kill -9`, a media play key started the service, restored the last talk and played from its saved position.
@@ -109,3 +109,4 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 
 ## Testing
 - Test layers, commands, Maestro flows and real-phone-only checks: `android/docs/testing.md`.
+- Debug seeding for parity runs (`seed`, `seed_bookmarks`, `appearance`): see `android/docs/parity.md`.
