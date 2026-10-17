@@ -9,12 +9,12 @@ enum NarrationPreparationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .busy: "Another narration is being prepared or removed. Please try again shortly."
+        case .busy: "Another translation is being made or removed. Please try again shortly."
         case .invalidSelection: "Choose a different target language and a voice for that language. The source must be English or Hindi."
-        case .emptyTranscript: "This transcript has no usable text for narration."
+        case .emptyTranscript: "This transcript has no text to translate."
         case .invalidTranslation: "Translation did not return text for every passage. Please try again."
         case .invalidAudio: "The generated audio could not be verified. Saved passages can be reused when you retry."
-        case .storage: "Narration could not be saved. Check available storage and try again."
+        case .storage: "The translation couldn't be saved. Check available storage and try again."
         }
     }
 }
@@ -96,6 +96,9 @@ actor NarrationCache {
     struct Snapshot: Sendable {
         let document: NarrationDocument
         fileprivate let files: [String: FileStamp]
+
+        /// False once a finished rendition has dropped its passage files and plays only from the joined file.
+        var hasPassageAudio: Bool { files.keys.contains { $0.hasPrefix("segment-") } || !document.isComplete }
     }
 
     fileprivate struct FileStamp: Equatable, Sendable {
@@ -336,6 +339,39 @@ actor NarrationCache {
         try removeIfPresent(entryURL(id))
     }
 
+    /// The joined file holds every passage, so a finished rendition keeps only it and the passage texts.
+    /// Returns nil when there is nothing to remove or the saved entry no longer matches `snapshot`.
+    func removePassageAudio(of snapshot: Snapshot) throws -> Snapshot? {
+        let id = snapshot.document.id
+        guard Self.isID(id), snapshot.document.isComplete, snapshot.hasPassageAudio,
+              !sessions.values.contains(where: { $0.plan.document.id == id }),
+              var manifest = try? decode(id: id), manifest.document == snapshot.document, manifest.artifacts.count > 1,
+              let joined = manifest.artifacts[Self.finalFileName] else { return nil }
+        let stamp = try verify(
+            entryURL(id).appendingPathComponent(Self.finalFileName), artifact: joined, duration: manifest.document.duration, job: nil
+        )
+        manifest.artifacts = [Self.finalFileName: joined]
+        try write(manifest)
+        try removeUnreferencedAudio(manifest)
+        let manifestStamp = try FileStamp.read(entryURL(id).appendingPathComponent(Self.manifestFileName))
+        return Snapshot(document: manifest.document, files: [Self.finalFileName: stamp, Self.manifestFileName: manifestStamp])
+    }
+
+    /// Space each saved rendition takes on disk, including passages still being prepared.
+    func sizes() -> [String: Int64] {
+        guard let ids = try? entryIDs() else { return [:] }
+        var sizes: [String: Int64] = [:]
+        for id in ids where Self.isDirectory(entryURL(id)) {
+            let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+            let files = (try? FileManager.default.contentsOfDirectory(at: entryURL(id), includingPropertiesForKeys: keys)) ?? []
+            sizes[id] = files.reduce(Int64(0)) { total, url in
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                return total + Int64(values?.totalFileAllocatedSize ?? values?.fileAllocatedSize ?? 0)
+            }
+        }
+        return sizes
+    }
+
     func ids(for discourseID: String) throws -> [String] {
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
         return try entryIDs().filter { id in
@@ -352,13 +388,12 @@ actor NarrationCache {
         let document = snapshot.document
         guard document.isComplete, Self.isID(document.id),
               document.audioFileName == Self.finalFileName,
-              snapshot.files.count == document.expectedSegmentCount + 2,
+              let stamp = snapshot.files[Self.finalFileName],
               Self.isDirectory(entryURL(document.id)) else { return nil }
-        for (name, stamp) in snapshot.files {
-            guard let current = try? FileStamp.read(entryURL(document.id).appendingPathComponent(name)),
-                  stamp == current else { return nil }
-        }
-        return entryURL(document.id).appendingPathComponent(Self.finalFileName)
+        // Only the joined file plays; passage files may be removed once it exists.
+        let url = entryURL(document.id).appendingPathComponent(Self.finalFileName)
+        guard let current = try? FileStamp.read(url), stamp == current else { return nil }
+        return url
     }
 
     /// Committed passages are immutable once their checkpoint is installed, so they can play while later ones render.
@@ -399,6 +434,9 @@ actor NarrationCache {
         repaired.document.duration = 0
         var files: [String: FileStamp] = [:]
         let counts = Dictionary(grouping: document.segments, by: \.index).mapValues(\.count)
+        let joinedArtifact = document.audioFileName == Self.finalFileName ? original.artifacts[Self.finalFileName] : nil
+        // Passages whose files were removed after joining; they stay only while the joined file verifies.
+        var joinedOnly: [NarrationSegment] = []
         var previousParagraph = -1
         for segment in document.segments.sorted(by: { $0.index < $1.index }) {
             try check(job)
@@ -407,8 +445,15 @@ actor NarrationCache {
                   segment.sourceParagraphIndex >= 0,
                   segment.audioFileName == Self.segmentFileName(segment.index),
                   !segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   let artifact = original.artifacts[segment.audioFileName],
-                   plan == nil || plan?.chunks[segment.index].sourceParagraphIndex == segment.sourceParagraphIndex else { continue }
+                  plan == nil || plan?.chunks[segment.index].sourceParagraphIndex == segment.sourceParagraphIndex else { continue }
+            guard let artifact = original.artifacts[segment.audioFileName] else {
+                if joinedArtifact != nil, segment.duration.isFinite, segment.duration > 0 {
+                    joinedOnly.append(segment)
+                    repaired.document.segments.append(segment)
+                    previousParagraph = segment.sourceParagraphIndex
+                }
+                continue
+            }
             // A damaged AAC file does not invalidate the already translated passage.
             pending[segment.index] = segment.text
             do {
@@ -424,10 +469,8 @@ actor NarrationCache {
                 Self.log.notice("stage=cache outcome=invalidSegment")
             }
         }
-        repaired.pendingTranslations = pending.isEmpty ? nil : pending
         if repaired.document.segments.count == document.expectedSegmentCount,
-           document.audioFileName == Self.finalFileName,
-           let artifact = original.artifacts[Self.finalFileName],
+           let artifact = joinedArtifact,
            abs(document.duration - repaired.document.segments.reduce(0) { $0 + $1.duration }) <= Self.assemblyTolerance(document.expectedSegmentCount) {
             do {
                 files[Self.finalFileName] = try verify(
@@ -442,6 +485,13 @@ actor NarrationCache {
                 Self.log.notice("stage=cache outcome=invalidAssembly")
             }
         }
+        if repaired.document.audioFileName == nil, !joinedOnly.isEmpty {
+            // Without a usable joined file, their saved text renders the audio again without translating.
+            let removed = Set(joinedOnly.map(\.index))
+            repaired.document.segments.removeAll { removed.contains($0.index) }
+            for segment in joinedOnly { pending[segment.index] = segment.text }
+        }
+        repaired.pendingTranslations = pending.isEmpty ? nil : pending
         if repaired.document != original.document || repaired.artifacts.keys != original.artifacts.keys
             || repaired.pendingTranslations != original.pendingTranslations || original.pendingNeedsRepair {
             try check(job)
@@ -452,6 +502,9 @@ actor NarrationCache {
             }
             try removeUnreferencedAudio(repaired)
             Self.log.notice("stage=cache outcome=repaired")
+        } else if repaired.document.isComplete, !joinedOnly.isEmpty {
+            // Passage files can outlive a removal interrupted after its manifest was written.
+            try removeUnreferencedAudio(repaired)
         }
         if repaired.document.isComplete {
             files[Self.manifestFileName] = try FileStamp.read(entryURL(id).appendingPathComponent(Self.manifestFileName))

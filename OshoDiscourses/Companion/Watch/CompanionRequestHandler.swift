@@ -20,6 +20,12 @@ protocol WatchPlaybackSurface: AnyObject {
     func setRate(_ rate: Float)
     func playDiscourse(_ discourseID: String) throws(PlaybackLauncher.Failure)
     func playBookmark(_ bookmarkID: String) throws(PlaybackLauncher.Failure)
+    /// A translation plays only from iPhone, so the Watch says so instead of "nothing playing".
+    var isPlayingTranslation: Bool { get }
+}
+
+extension WatchPlaybackSurface {
+    var isPlayingTranslation: Bool { false }
 }
 
 @MainActor
@@ -36,6 +42,7 @@ final class WatchRuntimePlayback: WatchPlaybackSurface {
         return id
     }
     var hasNext: Bool { currentDiscourseID != nil && player.hasNext }
+    var isPlayingTranslation: Bool { player.isPlayingNarration }
     var accentName: String? { UserSettings.shared.effectiveAccentTheme.rawValue }
     func nowPlaying() -> CompanionNowPlaying? {
         guard var nowPlaying = runtime.library.nowPlaying() else { return nil }
@@ -189,7 +196,9 @@ final class CompanionRequestHandler {
             break
         }
 
-        guard let current = surface.currentDiscourseID else { throw .nothingLoaded }
+        guard let current = surface.currentDiscourseID else {
+            throw surface.isPlayingTranslation ? .translationPlaying : .nothingLoaded
+        }
         guard !AudioPlayerService.isNarrationTrackID(current) else { throw .nothingLoaded }
         guard let expected = request.expectedDiscourseID, expected == current else { throw .staleDiscourse }
         switch request.action {
@@ -268,6 +277,7 @@ final class CompanionRequestHandler {
 
     enum Failure: Error, Equatable {
         case nothingLoaded
+        case translationPlaying
         case staleDiscourse
         case noNext
         case invalidRate
@@ -278,6 +288,7 @@ final class CompanionRequestHandler {
         var message: String {
             switch self {
             case .nothingLoaded: return "Nothing is playing on iPhone. Choose a discourse first."
+            case .translationPlaying: return "iPhone is playing a translation. Control it on iPhone."
             case .staleDiscourse: return "iPhone is playing a different discourse now. Check Now Playing and try again."
             case .noNext: return "This is the last downloaded discourse in the series."
             case .invalidRate: return "That speed isn't available."
@@ -290,6 +301,7 @@ final class CompanionRequestHandler {
         var logLabel: String {
             switch self {
             case .nothingLoaded: return "nothingLoaded"
+            case .translationPlaying: return "translationPlaying"
             case .staleDiscourse: return "staleDiscourse"
             case .noNext: return "noNext"
             case .invalidRate: return "invalidRate"

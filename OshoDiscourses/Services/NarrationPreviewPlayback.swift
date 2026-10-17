@@ -7,22 +7,27 @@ import os
 @Observable
 @MainActor
 final class NarrationPreviewPlayback {
-    static let shared = NarrationPreviewPlayback(narrations: .shared)
+    static let shared: NarrationPreviewPlayback = NarrationPreviewPlayback(narrations: .shared)
 
     /// Playback reached the last finished passage; it continues when preparation saves the next one,
     /// including after preparation is paused and resumed.
-    private var caughtUp: (documentID: String, passages: Int, position: TimeInterval)?
+    private var caughtUp: (documentID: String, passages: Int, position: TimeInterval, generation: UInt64, intent: UInt64)?
     private(set) var isLoading = false
+    /// The rendition whose finished passages are being joined into a timeline right now.
+    private(set) var loadingDocumentID: String?
     private(set) var failureMessage: String?
 
     @ObservationIgnored private let narrations: NarrationService
     @ObservationIgnored private weak var player: AudioPlayerService?
     @ObservationIgnored private var loading: Task<Void, Never>?
     @ObservationIgnored private var generation: UInt64 = 0
+    @ObservationIgnored private let makeTimeline: @MainActor ([URL]) async throws -> AVMutableComposition
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "NarrationPreview")
 
-    init(narrations: NarrationService) {
+    init(narrations: NarrationService,
+         makeTimeline: @escaping @MainActor ([URL]) async throws -> AVMutableComposition = { try await NarrationPreviewPlayback.timeline(joining: $0) }) {
         self.narrations = narrations
+        self.makeTimeline = makeTimeline
     }
 
     /// Only shown while preparation is running; a paused preparation is not something to wait for.
@@ -38,12 +43,15 @@ final class NarrationPreviewPlayback {
         failureMessage = nil
         generation &+= 1
         loading?.cancel()
+        loadingDocumentID = nil
         if let document = narrations.documents.first(where: { $0.id == documentID }), document.isComplete,
            let url = narrations.audioURL(for: document) {
             isLoading = false
             if let position { narrations.savePosition(documentID: documentID, position: position) }
             player.playNarration(document, url: url)
             Self.log.info("outcome=complete_narration")
+            // Switching from finished passages to the joined file frees their files.
+            Task { await narrations.removeSpentPassageAudio() }
             return
         }
         guard let prefix = narrations.playablePrefix(of: documentID), let first = prefix.segmentURLs.first else {
@@ -53,12 +61,18 @@ final class NarrationPreviewPlayback {
             return
         }
         let started = generation
+        let playbackGeneration = player.playbackGeneration
+        let playbackIntent = player.playbackIntentGeneration
         isLoading = true
+        loadingDocumentID = documentID
         loading = Task {
+            defer { if started == generation { loadingDocumentID = nil } }
             do {
-                let asset = try await Self.timeline(joining: prefix.segmentURLs)
+                let asset = try await makeTimeline(prefix.segmentURLs)
                 guard started == generation, !Task.isCancelled else { return }
                 isLoading = false
+                guard player.playbackGeneration == playbackGeneration,
+                      player.playbackIntentGeneration == playbackIntent else { return }
                 player.playNarrationPreview(prefix.document, firstSegmentURL: first, asset: asset, resumeAt: position)
                 Self.log.info("outcome=preview_started passages=\(prefix.document.segments.count, privacy: .public)")
             } catch {
@@ -75,6 +89,12 @@ final class NarrationPreviewPlayback {
         generation &+= 1
         loading?.cancel()
         isLoading = false
+        loadingDocumentID = nil
+    }
+
+    /// Before a rendition is deleted, so no timeline is built from passage files about to disappear.
+    func stopLoading(documentID: String) {
+        if loadingDocumentID == documentID || caughtUp?.documentID == documentID { stopWaiting() }
     }
 
     private func attach(_ player: AudioPlayerService) {
@@ -95,10 +115,11 @@ final class NarrationPreviewPlayback {
             narrations.savePosition(documentID: document.id, position: 0)
             SleepTimerService.shared.discourseDidFinish()
             Self.log.info("outcome=finished")
+            Task { await narrations.removeSpentPassageAudio() }
         } else if latest?.isComplete == true || available > document.segments.count {
             play(documentID: document.id, player: player, resumeAt: document.duration)
         } else {
-            caughtUp = (document.id, document.segments.count, document.duration)
+            caughtUp = (document.id, document.segments.count, document.duration, player.playbackGeneration, player.playbackIntentGeneration)
             Self.log.info("outcome=caught_up preparing=\(self.narrations.preparingDocumentID == document.id, privacy: .public)")
         }
     }
@@ -110,6 +131,8 @@ final class NarrationPreviewPlayback {
             guard let caughtUp, caughtUp.documentID == document.id,
                   (narrations.playablePrefix(of: document.id)?.document.segments.count ?? 0) > caughtUp.passages else { return }
             guard let player, player.currentNarration?.id == document.id, !player.isPlaying,
+                  player.playbackGeneration == caughtUp.generation,
+                  player.playbackIntentGeneration == caughtUp.intent,
                   abs(player.currentTime - caughtUp.position) < 1 else {
                 // The listener moved on, so a newly saved passage must not start playback.
                 self.caughtUp = nil

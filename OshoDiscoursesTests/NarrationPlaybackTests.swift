@@ -87,7 +87,6 @@ struct NarrationPlaybackTests {
         #expect(!service.hasNext && !service.hasPrevious)
         #expect(!service.hasPreviousPosition)
         let originalSnapshot = state.exportCloudSnapshot()
-        let savesBeforeNarration = cloudSaves
         try await waitUntil("narration starts") { service.isPlaying && native.currentItem?.status == .readyToPlay }
 
         let info = service.makeNowPlayingInfo()
@@ -95,13 +94,13 @@ struct NarrationPlaybackTests {
             ?? fixture.first.selection.targetLanguage
         #expect(info[MPMediaItemPropertyTitle] as? String == fixture.source.displayTitle)
         #expect(info[MPMediaItemPropertyAlbumTitle] as? String == fixture.source.seriesName)
-        #expect(info[MPMediaItemPropertyArtist] as? String == "Osho · \(language) synthesized narration")
+        #expect(info[MPMediaItemPropertyArtist] as? String == "Osho · \(language) translation")
 
         service.seek(to: 8)
         #expect(fixture.narrations.position(for: fixture.first.id) == 8)
         state.saveCurrentPosition()
+        // Listening time may sync, but a translation's position never enters the synced snapshot.
         #expect(state.exportCloudSnapshot() == originalSnapshot)
-        #expect(cloudSaves == savesBeforeNarration)
         #expect(state.getPosition(discourseId: "narration:" + fixture.first.id) == 0)
         let narrationPosition = service.currentTime
 
@@ -330,7 +329,7 @@ struct NarrationPlaybackTests {
         #expect(state.exportCloudSnapshot() == original)
     }
 
-    @Test func tenSecondAutosaveRoutesNarrationWithoutCloudOrListeningStats() async throws {
+    @Test func tenSecondAutosaveCountsNarrationListeningButKeepsItsPositionOnTheDevice() async throws {
         let fixture = try await NarrationPlaybackFixture()
         defer { fixture.remove() }
         var deltas: [TimeInterval] = []
@@ -346,14 +345,18 @@ struct NarrationPlaybackTests {
         defer { service.stop() }
         fixture.attach(state, to: service)
         service.playNarration(fixture.first, url: fixture.firstURL)
-        try await waitUntil("the real autosave task checkpoints narration", timeout: .seconds(25)) {
-            fixture.narrations.position(for: fixture.first.id) >= 5
+        // Listening time is the gap between two autosave ticks, so it needs a second tick.
+        try await waitUntil("the real autosave task counts narration listening", timeout: .seconds(35)) {
+            fixture.narrations.position(for: fixture.first.id) >= 5 && !deltas.isEmpty
         }
         #expect(service.currentTime >= fixture.narrations.position(for: fixture.first.id))
         #expect(state.exportCloudSnapshot() == original)
-        #expect(deltas.isEmpty)
-        #expect(statsSaves == 0)
-        #expect(cloudSaves == 0)
+        #expect(state.getPosition(discourseId: fixture.source.id) == 0)
+        // Time spent listening to a translation counts toward stats, which sync like any listening.
+        #expect(!deltas.isEmpty)
+        #expect(deltas.allSatisfy { $0 > 0 && $0 <= 15 })
+        #expect(statsSaves > 0)
+        #expect(cloudSaves > 0)
     }
 
     @Test(arguments: [true, false])

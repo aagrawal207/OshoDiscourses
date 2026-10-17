@@ -6,6 +6,27 @@ import Testing
 @Suite(.timeLimit(.minutes(2)))
 @MainActor
 struct NarrationServiceTests {
+    @Test func progressIsDeliveredWithoutAVisibleViewAfterAudioIsPublished() async throws {
+        try await withService { service, _, _ in
+            var counts: [Int] = []
+            var finished = false
+            let document = try await service.prepare(
+                transcript: transcript(["One passage.", "Another passage.", "The final passage."]),
+                selection: selection(), translate: translated, renderer: NarrationTestRenderer(),
+                onProgress: { document in
+                    counts.append(document.segments.count)
+                    finished = document.isComplete
+                    #expect(service.documents.contains { $0.id == document.id })
+                    if !document.segments.isEmpty { #expect(service.playablePrefix(of: document.id) != nil) }
+                }
+            )
+            #expect(counts.first == 0)
+            #expect(counts.last == document.expectedSegmentCount)
+            #expect(counts == counts.sorted())
+            #expect(finished)
+        }
+    }
+
     @Test func identicalTextReusesReadyAudioWithoutTranslationOrVoiceAssets() async throws {
         try await withService { service, directory, defaults in
             let original = transcript(["A complete paragraph to translate."])
@@ -183,7 +204,8 @@ struct NarrationServiceTests {
             #expect(checkpoint.segments.map(\.index) == [0])
             #expect(!checkpoint.isComplete)
             #expect(service.audioURL(for: checkpoint) == nil)
-            #expect(abs(service.progress - 1.0 / 5.0) < 0.000_001)
+            // One passage spoken and three translated, which count half; the final fifth is joining.
+            #expect(abs(service.progress - (1 + 3 * 0.5) / 5.0) < 0.000_001)
             service.cancel()
             #expect(renderer.cancelCalls == 1)
             #expect(!service.isPreparing)
@@ -361,7 +383,7 @@ struct NarrationServiceTests {
     }
 
     @Test(arguments: DamagedFile.allCases)
-    func missingOrDamagedFinalAudioIsReassembledWithoutLanguageAssets(kind: DamagedFile) async throws {
+    func missingOrDamagedJoinedAudioIsRebuiltFromSavedTextWithoutTranslating(kind: DamagedFile) async throws {
         try await withService { service, directory, defaults in
             let source = transcript(["First paragraph.", "Second paragraph."])
             let complete = try await service.prepare(transcript: source, selection: selection(), translate: translated, renderer: NarrationTestRenderer())
@@ -371,15 +393,16 @@ struct NarrationServiceTests {
             #expect(service.documents.first?.isComplete == false)
             let reloaded = NarrationService(directory: directory, defaults: defaults)
             await reloaded.load()
-            #expect(reloaded.documents.first?.segments == complete.segments)
+            // Passage files were removed after joining, so only their text remains to rebuild from.
+            #expect(reloaded.documents.first?.segments.isEmpty == true)
             #expect(reloaded.documents.first?.isComplete == false)
             let renderer = NarrationTestRenderer()
-            renderer.beforeRender = { _, _ in throw NarrationTestError.unexpectedWork }
             let repaired = try await reloaded.prepare(transcript: source, selection: selection(), translate: { _ in
                 throw NarrationTestError.unexpectedWork
             }, renderer: renderer)
             #expect(repaired.isComplete)
-            #expect(renderer.rendered.isEmpty)
+            #expect(renderer.rendered == complete.segments.map(\.text))
+            #expect(repaired.segments.map(\.text) == complete.segments.map(\.text))
             #expect(renderer.assemblyCalls == 1)
             #expect(reloaded.audioURL(for: repaired) != nil)
         }
@@ -388,10 +411,15 @@ struct NarrationServiceTests {
     @Test func aDamagedMiddlePassagePreservesLaterCheckpointsAndAssemblyOrder() async throws {
         try await withService { service, directory, defaults in
             let source = transcript(["First.", "Middle.", "Last."])
-            let complete = try await service.prepare(transcript: source, selection: selection(), translate: translated, renderer: NarrationTestRenderer())
+            let unjoined = NarrationTestRenderer()
+            unjoined.beforeAssembly = { _, _ in throw NarrationTestError.interrupted }
+            await #expect(throws: NarrationTestError.interrupted) {
+                try await service.prepare(transcript: source, selection: selection(), translate: translated, renderer: unjoined)
+            }
+            let complete = try #require(service.documents.first)
+            #expect(complete.segments.count == 3)
             let folder = directory.appendingPathComponent(complete.id)
             try damage(folder.appendingPathComponent(complete.segments[1].audioFileName), kind: .sameSizeCorruption)
-            #expect(service.audioURL(for: complete) == nil)
             let reloaded = NarrationService(directory: directory, defaults: defaults)
             await reloaded.load()
             #expect(reloaded.documents.first?.segments.map(\.index) == [0, 2])
@@ -408,6 +436,100 @@ struct NarrationServiceTests {
             #expect(repaired.segments[2] == complete.segments[2])
             #expect(renderer.assemblyInputs.map(\.lastPathComponent) == ["segment-0.m4a", "segment-1.m4a", "segment-2.m4a"])
             #expect(repaired.isComplete)
+        }
+    }
+
+    @Test func aFinishedRenditionKeepsOnlyItsJoinedAudioAndPassageText() async throws {
+        try await withService { service, directory, defaults in
+            let source = transcript(["First.", "Second.", "Third."])
+            let complete = try await service.prepare(transcript: source, selection: selection(), translate: translated, renderer: NarrationTestRenderer())
+            let folder = directory.appendingPathComponent(complete.id)
+            #expect(try audioFiles(in: folder) == ["narration.m4a"])
+            #expect(service.audioURL(for: complete) != nil)
+            #expect(service.playablePrefix(of: complete.id) == nil)
+
+            let reloaded = NarrationService(directory: directory, defaults: defaults)
+            await reloaded.load()
+            #expect(reloaded.documents == [complete])
+            #expect(reloaded.audioURL(for: complete) != nil)
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { _, _ in throw NarrationTestError.unexpectedWork }
+            renderer.beforeAssembly = { _, _ in throw NarrationTestError.unexpectedWork }
+            let cached = try await reloaded.prepare(transcript: source, selection: selection(), translate: { _ in
+                throw NarrationTestError.unexpectedWork
+            }, renderer: renderer)
+            #expect(cached == complete)
+        }
+    }
+
+    @Test func passagesThatArePlayingAreKeptUntilTheyAreReleased() async throws {
+        var inUse = true
+        try await withService(passageAudioInUse: { _ in inUse }) { service, directory, _ in
+            let complete = try await service.prepare(
+                transcript: transcript(["First.", "Second."]), selection: selection(), translate: translated, renderer: NarrationTestRenderer()
+            )
+            let folder = directory.appendingPathComponent(complete.id)
+            #expect(try audioFiles(in: folder) == ["narration.m4a", "segment-0.m4a", "segment-1.m4a"])
+            #expect(service.playablePrefix(of: complete.id)?.segmentURLs.count == 2)
+
+            inUse = false
+            await service.removeSpentPassageAudio()
+            #expect(try audioFiles(in: folder) == ["narration.m4a"])
+            #expect(service.audioURL(for: complete) != nil)
+        }
+    }
+
+    @Test func passageFilesLeftByAnInterruptedRemovalAreClearedOnLoad() async throws {
+        try await withService { service, directory, defaults in
+            let complete = try await service.prepare(
+                transcript: transcript(["First.", "Second."]), selection: selection(), translate: translated, renderer: NarrationTestRenderer()
+            )
+            let folder = directory.appendingPathComponent(complete.id)
+            try FileManager.default.copyItem(at: folder.appendingPathComponent("narration.m4a"), to: folder.appendingPathComponent("segment-1.m4a"))
+            let reloaded = NarrationService(directory: directory, defaults: defaults)
+            await reloaded.load()
+            #expect(try audioFiles(in: folder) == ["narration.m4a"])
+            #expect(reloaded.documents.first?.isComplete == true)
+        }
+    }
+
+    @Test func recentPlaysPersistMoveWithListeningAndAreForgottenWithTheirRendition() async throws {
+        try await withService { service, directory, defaults in
+            let complete = try await service.prepare(
+                transcript: transcript(["First.", "Second."]), selection: selection(), translate: translated, renderer: NarrationTestRenderer()
+            )
+            let earlier = Date(timeIntervalSince1970: 1_000)
+            service.recordPlay(documentID: complete.id, at: earlier)
+            service.savePosition(documentID: complete.id, position: 0.2)
+            #expect(try #require(service.recentPlays[complete.id]) > earlier, "listening didn't move it up")
+
+            let reloaded = NarrationService(directory: directory, defaults: defaults)
+            #expect(reloaded.recentPlays[complete.id] == service.recentPlays[complete.id])
+            reloaded.dismissFromRecent(documentID: complete.id)
+            #expect(NarrationService(directory: directory, defaults: defaults).recentPlays.isEmpty)
+
+            service.recordPlay(documentID: complete.id)
+            try await service.remove(complete.id)
+            #expect(service.recentPlays.isEmpty)
+        }
+    }
+
+    @Test func storageSizesCoverFinishedAndPartlyPreparedRenditions() async throws {
+        try await withService { service, directory, _ in
+            let complete = try await service.prepare(
+                transcript: transcript(["First."]), selection: selection(), translate: translated, renderer: NarrationTestRenderer()
+            )
+            let unjoined = NarrationTestRenderer()
+            unjoined.beforeAssembly = { _, _ in throw NarrationTestError.interrupted }
+            await #expect(throws: NarrationTestError.interrupted) {
+                try await service.prepare(
+                    transcript: transcript(["Other."], id: "other-discourse"), selection: selection(), translate: translated, renderer: unjoined
+                )
+            }
+            let partial = try #require(service.documents.first { !$0.isComplete })
+            let sizes = await service.storageSizes()
+            #expect(Set(sizes.keys) == [complete.id, partial.id])
+            #expect(sizes.values.allSatisfy { $0 > 0 })
         }
     }
 
@@ -435,7 +557,6 @@ struct NarrationServiceTests {
             }
             manifest["document"] = document
             try JSONSerialization.data(withJSONObject: manifest).write(to: manifestURL, options: .atomic)
-            #expect(service.audioURL(for: complete) == nil)
             let reloaded = NarrationService(directory: directory, defaults: defaults)
             await reloaded.load()
             #expect(reloaded.documents.allSatisfy { !$0.isComplete && reloaded.audioURL(for: $0) == nil })
@@ -628,7 +749,6 @@ struct NarrationServiceTests {
             let document = try await service.prepare(transcript: transcript(["A paragraph."]), selection: selection(), translate: translated, renderer: NarrationTestRenderer())
             let folder = directory.appendingPathComponent(document.id)
             let files = [directory, folder, folder.appendingPathComponent("manifest.json"), try #require(service.audioURL(for: document))]
-                + document.segments.map { folder.appendingPathComponent($0.audioFileName) }
             for url in files {
                 #expect(try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
             }
@@ -960,8 +1080,6 @@ struct NarrationServiceTests {
             let partial = try #require(service.documents.first)
             #expect(partial.segments.map(\.index) == [0])
             let folder = directory.appendingPathComponent(partial.id)
-            let firstAudio = folder.appendingPathComponent("segment-0.m4a")
-            let originalBytes = try Data(contentsOf: firstAudio)
             let manifestURL = folder.appendingPathComponent("manifest.json")
             var manifest = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
             var pending = try #require(manifest["pendingTranslations"] as? [String: Any])
@@ -978,14 +1096,15 @@ struct NarrationServiceTests {
             await reloaded.load()
             #expect(reloaded.documents.first?.segments == partial.segments)
             var inputs: [String] = []
+            let resumed = NarrationTestRenderer()
             let ready = try await reloaded.prepare(transcript: source, selection: selection(), translate: { input in
                 inputs += input
                 return ["Fresh second."]
-            }, renderer: NarrationTestRenderer())
+            }, renderer: resumed)
             #expect(inputs == ["Second."])
             #expect(ready.segments.map(\.text) == ["Translated: First.", "Fresh second.", "Translated: Third."])
             #expect(ready.segments[0] == partial.segments[0])
-            #expect(try Data(contentsOf: firstAudio) == originalBytes)
+            #expect(resumed.rendered == ["Fresh second.", "Translated: Third."])
             #expect(ready.id == partial.id)
             #expect(ready.isComplete)
         }
@@ -1259,6 +1378,8 @@ struct NarrationServiceTests {
             #expect(activity.updates.contains { $0.subtitle == "19 of 20 passages · Less than a minute left" })
             #expect(activity.updates.last?.subtitle == "Finishing the audio…")
             #expect(zip(activity.updates, activity.updates.dropFirst()).allSatisfy { $0.fraction <= $1.fraction })
+            // A translated batch is reported before any of its audio, so iOS sees progress during translation.
+            #expect(activity.updates.contains { $0.subtitle == "0 of 20 passages" && $0.fraction > 0 })
             #expect(activity.ends == [true])
             #expect(!service.continuesInBackground)
             #expect(service.estimatedSecondsRemaining == nil)
@@ -1306,10 +1427,34 @@ struct NarrationServiceTests {
             #expect(activity.ends == [false])
             #expect(!service.continuesInBackground)
             #expect(!service.isPreparing)
+            #expect(service.backgroundStatus == .paused(.expired))
             #expect(service.statusMessage == "Preparation was stopped in the background. Completed passages are saved.")
             let saved = try #require(service.documents.first)
             #expect(saved.segments.map(\.index) == [0])
             try expectNoStaging(in: directory)
+        }
+    }
+
+    /// Playing audio keeps the app running after the grace time, so translation goes on; back on screen it is renewed.
+    @Test func expiredGraceTimeWithAudioPlayingKeepsPreparingAndRenewsOnReturn() async throws {
+        let activity = NarrationTestBackgroundActivity()
+        try await withService(backgroundActivity: activity, audioKeepsAppRunning: { true }) { service, _, _ in
+            let source = transcript((0..<3).map { "Paragraph \($0)." })
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { call, _ in
+                guard call == 2 else { return }
+                activity.expire()
+                #expect(service.isPreparing)
+                #expect(service.backgroundStatus == .paused(.expired))
+                service.renewBackgroundTimeIfNeeded()
+                #expect(activity.titles.count == 2)
+                #expect(service.continuesInBackground)
+                service.renewBackgroundTimeIfNeeded()
+                #expect(activity.titles.count == 2)
+            }
+            let document = try await service.prepare(transcript: source, selection: selection(), translate: translated, renderer: renderer)
+            #expect(document.isComplete)
+            #expect(renderer.cancelCalls == 0)
         }
     }
 
@@ -1326,6 +1471,149 @@ struct NarrationServiceTests {
             #expect(activity.titles.count == 1)
             #expect(activity.ends.isEmpty)
             #expect(activity.updates.isEmpty)
+        }
+    }
+
+    @Test func backgroundEntryPreservesOnlyAnAttachedGrant() async throws {
+        let activity = NarrationTestAsynchronousBackgroundActivity()
+        try await withService(backgroundActivity: activity) { service, _, _ in
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { _, _ in
+                #expect(service.backgroundStatus == .requesting)
+                #expect(!service.continuesInBackground)
+                activity.statuses.last?(.running)
+                #expect(service.continuesInBackground)
+                service.pauseIfBackgroundTimeNotGranted()
+                #expect(service.isPreparing)
+                #expect(renderer.cancelCalls == 0)
+            }
+            let document = try await service.prepare(
+                transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: renderer
+            )
+            #expect(document.isComplete)
+            #expect(activity.ends == [true])
+            #expect(service.backgroundStatus == .idle)
+        }
+    }
+
+    @Test func backgroundEntryWithAudioPlayingKeepsPreparingWithoutAGrant() async throws {
+        let activity = NarrationTestAsynchronousBackgroundActivity()
+        try await withService(backgroundActivity: activity) { service, _, _ in
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { _, _ in
+                #expect(!service.continuesInBackground)
+                service.pauseIfBackgroundTimeNotGranted(audioKeepsAppRunning: true)
+                #expect(service.isPreparing)
+                #expect(renderer.cancelCalls == 0)
+            }
+            let document = try await service.prepare(
+                transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: renderer
+            )
+            #expect(document.isComplete)
+        }
+    }
+
+    @Test func backgroundEntryWhileRequestingPausesAndIgnoresLateGrant() async throws {
+        let activity = NarrationTestAsynchronousBackgroundActivity()
+        try await withService(backgroundActivity: activity) { service, _, _ in
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { _, _ in
+                service.pauseIfBackgroundTimeNotGranted()
+                #expect(service.backgroundStatus == .paused(.notGranted))
+                activity.statuses.last?(.running)
+                activity.expirations.last?()
+                #expect(service.backgroundStatus == .paused(.notGranted))
+            }
+            let task = Task {
+                try await service.prepare(transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: renderer)
+            }
+            await expectCancelled(task)
+            #expect(renderer.cancelCalls == 1)
+            #expect(activity.ends == [false])
+            #expect(!service.isPreparing)
+            #expect(service.statusMessage.contains("hadn't been granted"))
+        }
+    }
+
+    @Test func delayedOldStatusAndExpirationCannotChangeReplacementPreparation() async throws {
+        let activity = NarrationTestAsynchronousBackgroundActivity()
+        try await withService(backgroundActivity: activity) { service, _, _ in
+            let first = NarrationTestRenderer()
+            first.beforeRender = { _, _ in service.cancel() }
+            let task = Task {
+                try await service.prepare(transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: first)
+            }
+            await expectCancelled(task)
+            let oldStatus = try #require(activity.statuses.first)
+            let oldExpiration = try #require(activity.expirations.first)
+            let second = NarrationTestRenderer()
+            second.beforeRender = { _, _ in
+                activity.statuses.last?(.running)
+                oldStatus(.unavailable(.submissionFailed))
+                oldExpiration()
+                #expect(service.isPreparing)
+                #expect(service.continuesInBackground)
+                #expect(second.cancelCalls == 0)
+            }
+            let ready = try await service.prepare(
+                transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: second
+            )
+            #expect(ready.isComplete)
+            #expect(activity.ends == [false, true])
+        }
+    }
+
+    @Test func rejectedSubmissionRemainsVisibleWhileForegroundPreparationContinues() async throws {
+        let activity = NarrationTestAsynchronousBackgroundActivity()
+        try await withService(backgroundActivity: activity) { service, _, _ in
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { _, _ in
+                activity.statuses.last?(.unavailable(.immediateRunIneligible))
+                #expect(service.backgroundStatus == .unavailable(.immediateRunIneligible))
+                #expect(service.backgroundStatusMessage.contains("current system conditions"))
+                #expect(service.isPreparing)
+                #expect(!service.continuesInBackground)
+            }
+            let ready = try await service.prepare(
+                transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: renderer
+            )
+            #expect(ready.isComplete)
+        }
+    }
+
+    @Test func lowPowerIsVisibleButDoesNotOverrideAnActualGrant() async throws {
+        let activity = NarrationTestAsynchronousBackgroundActivity()
+        var lowPower = false
+        try await withService(backgroundActivity: activity, lowPowerMode: { lowPower }) { service, _, _ in
+            let renderer = NarrationTestRenderer()
+            renderer.beforeRender = { _, _ in
+                activity.statuses.last?(.running)
+                lowPower = true
+                service.pauseIfBackgroundTimeNotGranted()
+                #expect(service.isLowPowerModeEnabled)
+                #expect(service.backgroundStatusMessage.contains("Low Power Mode is on"))
+                service.pauseIfBackgroundTimeNotGranted()
+                #expect(service.isPreparing)
+                lowPower = false
+                service.pauseIfBackgroundTimeNotGranted()
+                #expect(!service.isLowPowerModeEnabled)
+                #expect(!service.backgroundStatusMessage.contains("Low Power Mode"))
+                #expect(service.continuesInBackground)
+            }
+            _ = try await service.prepare(
+                transcript: transcript(["Source."]), selection: selection(), translate: translated, renderer: renderer
+            )
+        }
+    }
+
+    @Test func backgroundEntryReleasesForegroundOnlyPreflightReservation() async throws {
+        try await withService { service, _, _ in
+            let owner = UUID()
+            #expect(service.reservePreparation(owner: owner))
+            service.pauseIfBackgroundTimeNotGranted()
+            #expect(service.preparationOwner == nil)
+            #expect(service.backgroundStatus == .paused(.notGranted))
+            #expect(!service.isPreparing)
         }
     }
 
@@ -1353,7 +1641,8 @@ struct NarrationServiceTests {
             #expect(service.totalPassages == 3)
             // Progress follows source length: the long second passage counts for more than the first.
             let lengths = source.paragraphs.map { Double($0.text.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count) }
-            #expect(abs(service.progress - (lengths[0] + lengths[1]) / lengths.reduce(0, +) * 3 / 4) < 0.000_001)
+            // The translated third passage counts half until it is spoken.
+            #expect(abs(service.progress - (lengths[0] + lengths[1] + lengths[2] / 2) / lengths.reduce(0, +) * 3 / 4) < 0.000_001)
             let prefix = try #require(service.playablePrefix(of: preparing.id))
             #expect(prefix.document.segments.map(\.index) == [0, 1])
             #expect(!prefix.document.isComplete)
@@ -1450,6 +1739,10 @@ struct NarrationServiceTests {
         }
     }
 
+    private func audioFiles(in folder: URL) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: folder.path).filter { $0.hasSuffix(".m4a") }.sorted()
+    }
+
     private func expectNoStaging(in directory: URL) throws {
         let staging = directory.appendingPathComponent(".staging")
         #expect(try FileManager.default.contentsOfDirectory(atPath: staging.path).isEmpty)
@@ -1459,13 +1752,18 @@ struct NarrationServiceTests {
         retrySleep: @escaping @MainActor (Duration) async throws -> Void = { _ in try Task.checkCancellation() },
         now: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         backgroundActivity: (any NarrationBackgroundActivity)? = nil,
+        lowPowerMode: @escaping @MainActor () -> Bool = { false },
+        audioKeepsAppRunning: @escaping @MainActor () -> Bool = { false },
+        passageAudioInUse: @escaping @MainActor (String) -> Bool = { _ in false },
         _ body: @MainActor (NarrationService, URL, UserDefaults) async throws -> Void
     ) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("NarrationServiceTests-\(UUID().uuidString)", isDirectory: true)
         let suite = "NarrationServiceTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         let service = NarrationService(
-            directory: directory, defaults: defaults, retrySleep: retrySleep, now: now, backgroundActivity: backgroundActivity
+            directory: directory, defaults: defaults, retrySleep: retrySleep, now: now,
+            backgroundActivity: backgroundActivity, lowPowerMode: lowPowerMode, audioKeepsAppRunning: audioKeepsAppRunning,
+            passageAudioInUse: passageAudioInUse
         )
         defer {
             service.cancel()
@@ -1540,6 +1838,24 @@ private final class NarrationTestBackgroundActivity: NarrationBackgroundActivity
 }
 
 @MainActor
+private final class NarrationTestAsynchronousBackgroundActivity: NarrationBackgroundActivity {
+    var statuses: [@MainActor (NarrationBackgroundStatus) -> Void] = []
+    var expirations: [@MainActor () -> Void] = []
+    var ends: [Bool] = []
+
+    func begin(title: String, subtitle: String, onExpire: @escaping @MainActor () -> Void) -> Bool { false }
+    func begin(title: String, subtitle: String,
+               onStatusChange: @escaping @MainActor (NarrationBackgroundStatus) -> Void,
+               onExpire: @escaping @MainActor () -> Void) {
+        statuses.append(onStatusChange)
+        expirations.append(onExpire)
+        onStatusChange(.requesting)
+    }
+    func update(fraction: Double, subtitle: String) {}
+    func end(success: Bool) { ends.append(success) }
+}
+
+@MainActor
 private final class NarrationTestGate {
     private var opened = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -1558,7 +1874,7 @@ private final class NarrationTestGate {
 }
 
 @MainActor
-private final class NarrationTestRenderer: NarrationSpeechRendering {
+final class NarrationTestRenderer: NarrationSpeechRendering {
     var rendered: [String] = []
     var assemblyInputs: [URL] = []
     var assemblyCalls = 0

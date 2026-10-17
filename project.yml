@@ -150,10 +150,6 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.education
         UIBackgroundModes: [audio]
-        # Translated narration keeps preparing after the app leaves the screen (iOS 26
-        # continued processing); each run submits a unique suffix.
-        BGTaskSchedulerPermittedIdentifiers:
-          - $(PRODUCT_BUNDLE_IDENTIFIER).narration.*
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         # Transcript speech sync (iOS 26, for discourses without shipped timing)

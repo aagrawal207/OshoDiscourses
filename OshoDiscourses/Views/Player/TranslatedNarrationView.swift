@@ -11,8 +11,10 @@ struct TranslatedNarrationView: View {
     @Environment(DownloadService.self) private var downloads
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.narrationPreparationHostID) private var hostID
     private let narrations = NarrationService.shared
     private let transcripts = TranscriptService.shared
+    private let preparation = NarrationPreparationController.shared
 
     @State private var cacheLoaded = false
     @State private var cacheReloadGeneration = 0
@@ -30,18 +32,14 @@ struct TranslatedNarrationView: View {
     @State private var availabilityError: String?
     @State private var availabilityTask: Task<Void, Never>?
     @State private var availabilityRequestID: UUID?
-    @State private var startupTask: Task<Void, Never>?
-    @State private var lifetime: NarrationTranslationLifetime?
-    @State private var preparationOwner: UUID?
-    @State private var translationJob: NarrationTranslationJob?
-    @State private var stage = NarrationPreparationStage.checkingSupport
     @State private var errorMessage: String?
-    @State private var statusMessage: String?
-    @State private var retrySelection: NarrationSelection?
     @State private var deletingIDs = Set<String>()
     @State private var isVisible = false
-    @State private var confirmingClose = false
     @State private var presentationOwner = UUID()
+    @State private var showSpeed = false
+    @State private var showSleepTimer = false
+    @State private var pendingDeletion: NarrationDocument?
+    @State private var showOptions = false
 
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "NarrationTranslation")
 
@@ -67,7 +65,27 @@ struct TranslatedNarrationView: View {
         return NarrationSelection(sourceLanguage: sourceLanguage, targetLanguage: target.id, voice: voice, pace: pace)
     }
     private var serviceBusy: Bool { narrations.isPreparing || narrations.preparationOwner != nil }
-    private var isBusy: Bool { lifetime != nil || serviceBusy || !deletingIDs.isEmpty }
+    private var lifetime: NarrationTranslationLifetime? { preparation.discourseID == discourseID ? preparation.lifetime : nil }
+    private var stage: NarrationPreparationStage { preparation.stage }
+    private var currentSelectionDocument: NarrationDocument? {
+        if let featuredVariant { return featuredVariant }
+        guard let selection else { return nil }
+        return variants.first { TranslatedListening.isSameVersion($0.selection, selection) }
+    }
+    /// Preparation of the version on screen, as opposed to another voice or discourse.
+    private var isPreparingShownVersion: Bool {
+        guard lifetime != nil, let running = preparation.selection else { return false }
+        if let document = currentSelectionDocument { return TranslatedListening.isSameVersion(document.selection, running) }
+        return selection.map { TranslatedListening.isSameVersion($0, running) } ?? false
+    }
+    /// Something else is being prepared; listening to this version will pause it.
+    private var isPreparingOtherVersion: Bool { (preparation.isRunning || serviceBusy) && !isPreparingShownVersion }
+    /// What preparing the rest of the shown version would use, if its voice is still installed.
+    private var shownVersionSelection: NarrationSelection? {
+        guard let document = currentSelectionDocument else { return selection }
+        let installed = languages.contains { $0.voices.contains { $0.id == document.selection.voice.id } }
+        return installed ? document.selection : nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -75,7 +93,8 @@ struct TranslatedNarrationView: View {
                 if let readingDocument {
                     TranslatedNarrationReader(
                         document: readingDocument, canReturnToOriginal: originalAudioURL != nil && entry != nil,
-                        play: { play(readingDocument) }, returnToOriginal: returnToOriginal
+                        play: { play(readingDocument) }, playFrom: { play(readingDocument, from: $0) },
+                        returnToOriginal: returnToOriginal
                     )
                     .id(readingDocument.id)
                     .environment(player)
@@ -83,7 +102,7 @@ struct TranslatedNarrationView: View {
                     preparationList
                 }
             }
-            .navigationTitle("Translated Narration")
+            .navigationTitle("Listen in Translation")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let failure = player.narrationPlaybackFailure {
@@ -91,13 +110,13 @@ struct TranslatedNarrationView: View {
                         readingDocument = nil
                         cacheReloadGeneration += 1
                     }
-                    .disabled(isBusy)
+                    .disabled(!deletingIDs.isEmpty)
                 }
             }
             .toolbar {
                 if readingDocument != nil {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Narrations", systemImage: "chevron.left") { readingDocument = nil }
+                        Button("Listening", systemImage: "chevron.left") { readingDocument = nil }
                             .accessibilityIdentifier("narration.showVariants")
                     }
                 }
@@ -109,31 +128,11 @@ struct TranslatedNarrationView: View {
             }
         }
         .tint(UserSettings.shared.effectiveAccentTheme.color)
-        // Swiping the sheet away would silently pause translation; Done asks first.
-        .interactiveDismissDisabled(lifetime != nil)
-        .confirmationDialog(
-            "Pause translation?", isPresented: $confirmingClose, titleVisibility: .visible
-        ) {
-            Button("Pause and Close") { pauseAndClose() }
-            Button("Keep Translating", role: .cancel) {}
-        } message: {
-            Text(narrations.continuesInBackground
-                 ? "Translation stops if you close this screen. You can lock your phone or switch apps instead. Finished passages are kept."
-                 : "Translation stops if you close this screen. Finished passages are kept.")
-        }
+        .presentationDragIndicator(.visible)
         .background {
             EscapeKeyHandler(action: close)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
-            if let translationJob {
-                NarrationTranslationTaskHost(
-                    job: translationJob,
-                    updateStage: { if lifetime?.id == translationJob.id { stage = $0 } },
-                    complete: { finish($0, lifetime: translationJob.lifetime) },
-                    stop: { cancelPreparation(matching: translationJob.id) }
-                )
-                .id(translationJob.id)
-            }
         }
         .task(id: "\(discourseID):\(cacheReloadGeneration)") { await loadCachedNarrations() }
         .onAppear {
@@ -145,7 +144,7 @@ struct TranslatedNarrationView: View {
         }
         .onDisappear {
             isVisible = false
-            cancelPreparation()
+            NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
             availabilityTask?.cancel()
             availabilityRequestID = nil
             loadingLanguages = false
@@ -153,8 +152,7 @@ struct TranslatedNarrationView: View {
             EngagementService.shared.unregisterNarrationPresentation(owner: presentationOwner)
         }
         .onChange(of: scenePhase) { _, phase in
-            // With system background time, locking the phone or switching apps keeps preparing.
-            if phase == .background, !narrations.continuesInBackground { cancelPreparation() }
+            if phase != .active { NarrationVoicePreview.shared.stop(ownerID: presentationOwner) }
             if phase == .active {
                 refreshCachedAudio()
                 originalAudioURL = downloads.localFileURL(for: discourseID)
@@ -163,24 +161,20 @@ struct TranslatedNarrationView: View {
             updateIdleTimer()
         }
         .onChange(of: narrations.documents) { _, _ in refreshCachedAudio() }
-        .onChange(of: narrations.preparationOwner) { _, owner in
-            guard let preparationOwner, owner != preparationOwner, lifetime != nil else { return }
-            // Successful preparation releases its lease before returning the document.
-            // Other lease loss must retire a session even if a native call has not returned.
-            if translationJob == nil || narrations.progress < 1 { cancelPreparation() }
-        }
         .onChange(of: serviceBusy) { _, busy in
             if !busy, readingDocument == nil, languages.isEmpty, !loadingLanguages { refreshLanguages() }
         }
         .onChange(of: downloads.downloadedIDs) { _, _ in
             originalAudioURL = downloads.localFileURL(for: discourseID)
         }
-        .onChange(of: player.isPlaying) { _, _ in updateIdleTimer() }
+        .onChange(of: player.isPlaying) { _, playing in
+            if playing { NarrationVoicePreview.shared.stop(ownerID: presentationOwner) }
+            updateIdleTimer()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVSpeechSynthesizer.availableVoicesDidChangeNotification)) { _ in
-            if readingDocument == nil, !isBusy { refreshLanguages() }
+            if readingDocument == nil { refreshLanguages() }
         }
         .onChange(of: player.currentNarration) { _, document in
-            if let document, document.discourseID == discourseID { readingDocument = document }
             updateIdleTimer()
         }
         .onChange(of: readingDocument) { _, document in
@@ -192,57 +186,35 @@ struct TranslatedNarrationView: View {
     private var preparationList: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(entry?.discourse.displayTitle ?? "Saved Discourse").font(.headline)
-                    if let sourceLanguage {
-                        Text("From the \(NarrationLanguageSupport.displayName(for: sourceLanguage)) transcript")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                HStack(spacing: 16) {
+                    if let entry {
+                        SeriesThumbnailView(name: entry.series.name, size: 60, seriesID: entry.series.id)
+                            .accessibilityHidden(true)
                     }
-                    Text("A synthetic voice reads the translation, not Osho. Wording and pronunciation may be inaccurate.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                        .accessibilityIdentifier("narration.explanation")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry?.discourse.displayTitle ?? "Saved Discourse").font(.headline)
+                        if let sourceLanguage {
+                            Text("Original in \(NarrationLanguageSupport.displayName(for: sourceLanguage))")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .padding(.vertical, 4)
-            }
-            if lifetime != nil {
-                preparationProgress
-            } else if serviceBusy {
-                Section {
-                    Label("Another narration is being prepared. Please wait.", systemImage: "hourglass")
-                        .font(.footnote)
-                        .accessibilityIdentifier("narration.busy")
+                if sourceLanguage != nil, transcripts.availability(for: discourseID) != .unavailable {
+                    Button("Refresh languages and voices", systemImage: "arrow.clockwise", action: refreshLanguages)
+                        .font(.footnote).disabled(loadingLanguages)
+                        .accessibilityIdentifier("narration.refreshLanguages")
                 }
-            }
-            if let errorMessage {
-                Section {
-                    Label("Preparation Failed", systemImage: "exclamationmark.triangle").font(.headline)
-                    Text(errorMessage).font(.footnote).textSelection(.enabled)
-                        .accessibilityIdentifier("narration.preparationError")
-                    if let retrySelection {
-                        selectionLabel(retrySelection)
-                        Button("Try Again") { beginPreparation(retrySelection) }
-                            .disabled(isBusy).accessibilityIdentifier("narration.retry")
-                    }
+                if cacheLoaded, !showsOptions, let shown = shownSelection {
+                    versionSummary(shown)
                 }
-            } else if let statusMessage {
-                Section {
-                    Text(statusMessage).font(.footnote)
-                    if let retrySelection {
-                        selectionLabel(retrySelection)
-                        Button("Resume preparation", systemImage: "play.fill") { beginPreparation(retrySelection) }
-                            .disabled(isBusy).accessibilityIdentifier("narration.resumePreparation")
-                    }
-                }
-            }
-            if let featuredVariant {
-                Section("Saved narration") { savedNarrationRow(featuredVariant) }
             }
             if !cacheLoaded {
-                Section { ProgressView("Loading saved narrations…") }
-            } else if lifetime == nil, !serviceBusy {
+                Section { ProgressView("Loading…") }
+            } else {
                 if sourceLanguage == nil {
                     Section {
-                        Text("This discourse is no longer in the catalog. Its saved narration cannot be opened in the player.")
+                        Text("This discourse is no longer in the catalog. Its saved translation can't be opened in the player.")
                             .accessibilityIdentifier("narration.missingDiscourse")
                     }
                 } else if transcripts.availability(for: discourseID) == .unavailable {
@@ -251,82 +223,340 @@ struct TranslatedNarrationView: View {
                             .accessibilityIdentifier("narration.noTranscript")
                         Text("This discourse needs a source transcript before it can be translated.").font(.footnote)
                     }
-                } else {
+                } else if showsOptions {
                     languageControls
                 }
             }
-            if variants.contains(where: { $0.id != featuredVariantID }) {
+            if cacheLoaded, sourceLanguage != nil, transcripts.availability(for: discourseID) != .unavailable,
+               currentSelectionDocument != nil || selection != nil {
+                listenCard
+            }
+            if isPreparingOtherVersion {
                 Section {
-                    ForEach(variants.filter { $0.id != featuredVariantID }) { savedNarrationRow($0) }
-                } header: {
-                    Text("Saved on this device")
-                } footer: {
-                    Text("Saved audio plays offline. Resume keeps the same language and voice.")
+                    Label(otherPreparationDescription, systemImage: "hourglass")
+                        .font(.footnote).accessibilityIdentifier("narration.busy")
+                    if preparation.isRunning {
+                        Button("Pause it", systemImage: "pause.circle") { preparation.pause() }
+                            .font(.footnote).accessibilityIdentifier("narration.pauseOther")
+                    }
+                }
+            }
+            if let failure = errorMessage ?? (preparation.discourseID == discourseID ? preparation.errorMessage : nil) {
+                Section {
+                    Label(failure, systemImage: "exclamationmark.triangle")
+                        .font(.footnote).textSelection(.enabled).accessibilityIdentifier("narration.preparationError")
+                }
+            }
+            if !variants.isEmpty {
+                Section {
+                    DisclosureGroup {
+                        ForEach(variants) { savedNarrationRow($0) }
+                    } label: {
+                        Text("Saved translations (\(variants.count))").accessibilityIdentifier("narration.savedVersions")
+                    }
                 }
             }
             if let cacheError {
                 Section {
                     Text(cacheError).font(.footnote).foregroundStyle(.orange)
-                    Button("Reload saved narrations") { cacheReloadGeneration += 1 }.disabled(isBusy)
+                    Button("Reload saved translations") { cacheReloadGeneration += 1 }.disabled(serviceBusy)
                 }
             }
-            if player.currentNarration?.discourseID == discourseID { originalAudioSection }
+            Section {
+                Text("A system voice reads the translation, not Osho. Wording and pronunciation may be inaccurate.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("narration.explanation")
+            }
         }
         .listStyle(.insetGrouped)
         .contentMargins(.bottom, 24, for: .scrollContent)
         .accessibilityIdentifier("narration.preparation")
-    }
-
-    private func savedNarrationRow(_ document: NarrationDocument) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SavedNarrationLabel(document: document, isPlayable: playableIDs.contains(document.id))
-            ViewThatFits(in: .horizontal) {
-                HStack { savedNarrationActions(document) }
-                VStack(alignment: .leading) { savedNarrationActions(document) }
-            }
-            .buttonStyle(.borderless)
-            .disabled(!deletingIDs.isEmpty)
-            if document.isComplete, player.narrationPlaybackFailure != nil {
-                Button("Rebuild This Narration", systemImage: "arrow.triangle.2.circlepath") {
-                    delete(document, prepareAgain: true)
-                }
-                .buttonStyle(.borderless)
-                .disabled(isBusy || entry == nil)
-                .accessibilityIdentifier("narration.rebuild.\(document.id)")
-            }
+        .confirmationDialog(
+            "Delete this translation?", isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }),
+            titleVisibility: .visible, presenting: pendingDeletion
+        ) { document in
+            Button("Delete", role: .destructive) { delete(document) }
+                .accessibilityIdentifier("narration.confirmDelete")
+        } message: { document in
+            Text("\(NarrationLanguageSupport.displayName(for: document.selection.targetLanguage)) · \(document.selection.voice.narrationDisplayName). It would need to be prepared again to listen.")
         }
-        .padding(.vertical, 4)
     }
 
     @ViewBuilder
-    private func savedNarrationActions(_ document: NarrationDocument) -> some View {
-        if playableIDs.contains(document.id) {
-            Button(player.currentNarration == document && player.isPlaying ? "Read Along" : "Play", systemImage: "play.fill") {
-                play(document)
+    private var transport: some View {
+        VStack(spacing: 4) {
+            Slider(value: Binding(get: { player.currentTime }, set: { player.seek(to: $0) }),
+                   in: 0...max(1, player.duration))
+                .accessibilityLabel("Playback position")
+            HStack {
+                Button { player.skipBackward() } label: { Image(systemName: "gobackward.15").frame(width: 44, height: 44) }
+                    .accessibilityLabel("Skip back 15 seconds").accessibilityIdentifier("narration.skipBack")
+                Spacer()
+                Text(Duration.seconds(player.currentTime), format: .time(pattern: .minuteSecond)).monospacedDigit()
+                    .accessibilityIdentifier("narration.elapsed")
+                Text("/").foregroundStyle(.tertiary).accessibilityHidden(true)
+                Text(Duration.seconds(max(player.duration, 0)), format: .time(pattern: .minuteSecond))
+                    .monospacedDigit().foregroundStyle(.secondary)
+                Spacer()
+                Button { player.skipForward() } label: { Image(systemName: "goforward.30").frame(width: 44, height: 44) }
+                    .accessibilityLabel("Skip forward 30 seconds").accessibilityIdentifier("narration.skipForward")
             }
-            .frame(minHeight: 44)
-            .disabled(entry == nil)
-            .accessibilityIdentifier("narration.play.\(document.id)")
-        } else {
-            if !document.isComplete, narrations.preparingDocumentID != document.id,
-               narrations.playablePrefix(of: document.id) != nil {
-                Button(listenLabel(for: document), systemImage: "headphones") { play(document) }
-                    .frame(minHeight: 44)
-                    .disabled(entry == nil)
-                    .accessibilityIdentifier("narration.listen.\(document.id)")
-            }
-            Button(document.isComplete ? "Rebuild" : "Resume", systemImage: "arrow.clockwise") {
-                featuredVariantID = document.id
-                beginPreparation(document.selection)
-            }
-            .frame(minHeight: 44)
-            .disabled(isBusy || entry == nil || transcripts.availability(for: discourseID) == .unavailable)
-            .accessibilityIdentifier("narration.resume.\(document.id)")
         }
-        Button("Delete", systemImage: "trash", role: .destructive) { delete(document) }
-            .frame(minHeight: 44)
-            .disabled(isBusy)
+        .buttonStyle(.borderless)
+        HStack {
+            Button { showSpeed = true } label: {
+                compactLabel("Speed \(PlaybackSpeed.label(player.playbackRate))", systemImage: "speedometer", singleLine: true)
+                    .frame(minHeight: 44)
+            }
+            .popover(isPresented: $showSpeed) { PlaybackSpeedControl().environment(player) }
+            .accessibilityLabel("Playback speed")
+            .accessibilityValue(PlaybackSpeed.accessibilityLabel(player.playbackRate))
+            .accessibilityIdentifier("narration.speed")
+            Spacer()
+            Button { showSleepTimer = true } label: {
+                compactLabel(SleepTimerService.shared.isActive ? SleepTimerService.shared.statusLabel : "Sleep timer",
+                             systemImage: SleepTimerService.shared.isActive ? "moon.fill" : "moon", singleLine: true)
+                    .frame(minHeight: 44)
+            }
+            .popover(isPresented: $showSleepTimer) { SleepTimerControl { showSleepTimer = false } }
+            .accessibilityLabel("Sleep timer")
+            .accessibilityValue(SleepTimerService.shared.isActive ? SleepTimerService.shared.statusLabel : "Off")
+            .accessibilityIdentifier("narration.sleepTimer")
+        }
+        .buttonStyle(.borderless)
+        .font(.subheadline)
+    }
+
+    /// Language, voice and pace fold into one line once there is a version to play or translate.
+    private var showsOptions: Bool { showOptions || (currentSelectionDocument == nil && !isPreparingShownVersion) }
+    private var canHideOptions: Bool { currentSelectionDocument != nil || isPreparingShownVersion }
+    private var shownSelection: NarrationSelection? { currentSelectionDocument?.selection ?? selection }
+    private var hasReadyAudio: Bool {
+        guard let document = currentSelectionDocument, !document.segments.isEmpty else { return false }
+        return !document.isComplete || playableIDs.contains(document.id)
+    }
+    private var isLoadedHere: Bool {
+        currentSelectionDocument.map { player.currentNarration?.id == $0.id } ?? false
+    }
+
+    private func versionSummary(_ shown: NarrationSelection) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(NarrationLanguageSupport.displayName(for: shown.targetLanguage)).font(.subheadline.weight(.semibold))
+                Text("\(shown.voice.narrationDisplayName) · \(shown.pace.label)").font(.footnote).foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("narration.versionSummary")
+            Spacer(minLength: 8)
+            Button("Change") {
+                NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
+                showOptions = true
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            .accessibilityLabel("Change language, voice or pace")
+            .accessibilityIdentifier("narration.changeOptions")
+        }
+    }
+
+    /// Two actions, each doing only what it says: Play what is ready, and translate the rest.
+    private var listenCard: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(statusTitle).font(.subheadline.weight(.semibold))
+                    .accessibilityIdentifier("narration.listenStatus")
+                if let fraction = readyFraction, fraction < 1 {
+                    ProgressView(value: fraction).accessibilityHidden(true)
+                }
+                if let statusDetail {
+                    Text(statusDetail).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("narration.statusDetail")
+                }
+            }
+            .padding(.vertical, 2)
+            if hasReadyAudio {
+                Button(action: togglePlay) {
+                    compactLabel(playLabel, systemImage: isSelectionPlaying ? "pause.fill" : "play.fill")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!deletingIDs.isEmpty)
+                .accessibilityIdentifier("narration.play")
+            }
+            if let translateLabel {
+                Label(Self.backgroundLimit, systemImage: "info.circle")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("narration.backgroundLimit")
+                if hasReadyAudio {
+                    translateButton(translateLabel).buttonStyle(.bordered)
+                } else {
+                    translateButton(translateLabel).buttonStyle(.borderedProminent)
+                }
+            }
+            if isLoadedHere { transport }
+            if hasReadyAudio, let document = currentSelectionDocument {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { secondaryActions(document); Spacer(minLength: 0) }
+                    VStack(alignment: .leading, spacing: 8) { secondaryActions(document) }
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+            }
+        } footer: {
+            if translateLabel != nil {
+                Label(Self.heatWarning, systemImage: "thermometer.medium")
+                    .accessibilityIdentifier("narration.heatWarning")
+            }
+        }
+    }
+
+    private func translateButton(_ label: (title: String, icon: String)) -> some View {
+        Button(action: translateShownVersion) {
+            compactLabel(label.title, systemImage: label.icon)
+                .font(hasReadyAudio ? .subheadline : .headline).frame(maxWidth: .infinity, minHeight: hasReadyAudio ? 32 : 44)
+        }
+        .disabled(!canTranslate)
+        .accessibilityIdentifier("narration.translate")
+    }
+
+    @ViewBuilder
+    private func secondaryActions(_ document: NarrationDocument) -> some View {
+        Button { readingDocument = document } label: { compactLabel("Read along", systemImage: "text.alignleft", singleLine: true) }
+            .accessibilityIdentifier("narration.readAlong")
+        if originalAudioURL != nil {
+            Button(action: returnToOriginal) { compactLabel("Osho's recording", systemImage: "waveform", singleLine: true) }
+                .accessibilityLabel("Switch to Osho's recording")
+                .accessibilityIdentifier("narration.returnToOriginal")
+        }
+    }
+
+    /// List rows give a Label a wide icon column; these keep the icon beside the title.
+    /// One line lets ViewThatFits stack the small buttons instead of wrapping them.
+    private func compactLabel(_ title: String, systemImage: String, singleLine: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage).accessibilityHidden(true)
+            Text(title).lineLimit(singleLine ? 1 : nil).multilineTextAlignment(.center)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var playLabel: String {
+        if isSelectionPlaying { return "Pause" }
+        if isLoadedHere, player.narrationPlaybackFailure == nil { return "Resume" }
+        return "Play"
+    }
+
+    private var translateLabel: (title: String, icon: String)? {
+        if isPreparingShownVersion { return ("Pause translating", "pause.circle") }
+        guard let document = currentSelectionDocument, !document.segments.isEmpty else {
+            guard let target = shownSelection?.targetLanguage else { return nil }
+            return ("Translate into \(NarrationLanguageSupport.displayName(for: target))", "globe")
+        }
+        if document.isComplete { return playableIDs.contains(document.id) ? nil : ("Translate again", "arrow.clockwise") }
+        return ("Continue translating", "globe")
+    }
+
+    private var canTranslate: Bool {
+        guard deletingIDs.isEmpty else { return false }
+        return isPreparingShownVersion || shownVersionSelection != nil
+    }
+
+    private var readyFraction: Double? {
+        guard let document = currentSelectionDocument, document.expectedSegmentCount > 0 else { return nil }
+        return Double(document.segments.count) / Double(document.expectedSegmentCount)
+    }
+
+    private var statusTitle: String {
+        guard let document = currentSelectionDocument, !document.segments.isEmpty else {
+            return isPreparingShownVersion ? "Translating…" : "Not prepared yet"
+        }
+        if document.isComplete { return playableIDs.contains(document.id) ? "Saved · plays offline" : "Saved audio is missing" }
+        return NarrationTimeFormatting.passages(document.segments.count, of: document.expectedSegmentCount) + " ready"
+    }
+
+    private var statusDetail: String? {
+        if isPreparingShownVersion {
+            guard stage == .creatingAudio, narrations.preparingDiscourseID == discourseID else { return stage.label }
+            let remaining = narrations.estimatedSecondsRemaining.map(NarrationTimeFormatting.remaining) ?? "Estimating time…"
+            return hasReadyAudio ? "Translating the rest · \(remaining)" : "Translating · \(remaining)"
+        }
+        guard let document = currentSelectionDocument, !document.segments.isEmpty else {
+            return "You can play as soon as the first passage is ready. The audio stays on this device."
+        }
+        if document.isComplete {
+            return playableIDs.contains(document.id) ? nil : "Translate again to listen."
+        }
+        if shownVersionSelection == nil, !languages.isEmpty {
+            return "\(document.selection.voice.narrationDisplayName) isn't on this device any more, so the rest can't be translated. Choose another voice."
+        }
+        guard let stop = preparation.stopExplanation(discourseID: discourseID, selection: document.selection) else { return "Paused" }
+        let time = stop.at.formatted(date: Calendar.current.isDateInToday(stop.at) ? .omitted : .abbreviated, time: .shortened)
+        return "\(stop.reason.explanation) at \(time)."
+    }
+
+    static let heatWarning = "Translating uses a lot of processing power. Your phone may get warm, and the battery may drain faster."
+
+    /// iOS gives about 30 seconds after the app leaves the screen; playing audio keeps it running.
+    static let backgroundLimit = "iOS stops translating soon after you leave the app or lock the phone. If you play the translation, it keeps translating in the background. When you come back, it continues from where it stopped."
+
+    private func togglePlay() {
+        NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
+        errorMessage = nil
+        guard let document = currentSelectionDocument, !document.segments.isEmpty else { return }
+        if player.currentNarration?.id == document.id, player.isPlaying {
+            player.togglePlayPause()
+            return
+        }
+        play(document)
+    }
+
+    private func translateShownVersion() {
+        NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
+        errorMessage = nil
+        if isPreparingShownVersion {
+            cancelPreparation()
+            return
+        }
+        if let document = currentSelectionDocument, document.isComplete, !playableIDs.contains(document.id) {
+            delete(document, prepareAgain: true)
+            return
+        }
+        guard let target = shownVersionSelection else { return }
+        ensurePreparing(target, autoPlay: false)
+    }
+
+    private var otherPreparationDescription: String {
+        let other = preparation.discourseID.flatMap { Catalog.discourseLookup[$0]?.discourse.displayTitle }
+        let what = preparation.discourseID == discourseID ? "Another voice of this discourse" : (other ?? "Another discourse")
+        return "\(what) is being translated." + (translateLabel != nil && !isPreparingShownVersion
+            ? " Translating this one pauses it." : "")
+    }
+
+    private func savedNarrationRow(_ document: NarrationDocument) -> some View {
+        let shown = currentSelectionDocument?.id == document.id
+        return HStack(spacing: 12) {
+            Button {
+                selectSaved(document)
+            } label: {
+                HStack {
+                    SavedNarrationLabel(document: document, isPlayable: playableIDs.contains(document.id))
+                    Spacer()
+                    Image(systemName: "checkmark").foregroundStyle(.tint).opacity(shown ? 1 : 0)
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(shown ? .isSelected : [])
+            .accessibilityHint("Shows this version above, ready to listen")
+            .accessibilityIdentifier("narration.choose.\(document.id)")
+            Button(role: .destructive) { pendingDeletion = document } label: {
+                Image(systemName: "trash").frame(width: 44, height: 44)
+            }
+            .buttonStyle(.borderless)
+            .disabled(!deletingIDs.isEmpty)
+            .accessibilityLabel("Delete")
             .accessibilityIdentifier("narration.delete.\(document.id)")
+        }
     }
 
     private var languageControls: some View {
@@ -345,133 +575,123 @@ struct TranslatedNarrationView: View {
                     Text("Apple Translation doesn't offer a translation from this source language on this device.")
                         .font(.footnote)
                 } else {
-                    Text("Check the available languages and voices to prepare a narration.").font(.footnote)
+                    Text("Check the available languages and voices to translate this discourse.").font(.footnote)
                 }
             } else {
                 Picker("Language", selection: Binding(
                     get: { selectedLanguageID },
                     set: { id in
+                        featuredVariantID = nil
                         selectedLanguageID = id
-                        selectedVoiceID = languages.first { $0.id == id }?.voices.first?.id ?? ""
+                        let voices = languages.first { $0.id == id }?.voices ?? []
+                        selectedVoiceID = NarrationVoicePreferences.preferredVoiceID(for: id, voices: voices) ?? voices.first?.id ?? ""
+                        if let series = entry?.series { TranslatedListening.setTargetLanguage(id, for: series) }
                     }
                 )) {
                     Text("Choose a language").tag("")
                     ForEach(languages) { Text($0.displayName).tag($0.id) }
                 }
                 .accessibilityIdentifier("narration.targetLanguage")
-                .disabled(isBusy)
                 if let language = selectedLanguage {
                     if language.voices.isEmpty {
-                        Text("No voice for \(language.displayName) is available. Add a system voice in accessibility settings, then check again.")
+                        Text("No voice for \(language.displayName) is on this iPhone yet. Download one in Apple's **Settings** app under **Accessibility › Read & Speak › Voices**, then come back.")
                             .font(.footnote).accessibilityIdentifier("narration.noVoice")
                     } else {
-                        Picker("Voice", selection: $selectedVoiceID) {
-                            Text("Choose a voice").tag("")
-                            ForEach(language.voices) { voice in
-                                Text("\(voice.narrationDisplayName) · \(NarrationLanguageSupport.displayName(for: voice.language))")
-                                    .tag(voice.id)
-                            }
+                        NavigationLink {
+                            NarrationVoicePicker(voices: language.voices, selectedVoiceID: voiceChoice,
+                                                 sampleText: previewSample(for: language.id), pace: pace)
+                                .environment(player)
+                        } label: {
+                            LabeledContent("Voice", value: currentSelectionDocument?.selection.voice.narrationDisplayName
+                                           ?? language.voices.first { $0.id == selectedVoiceID }?.narrationDisplayName ?? "Choose a voice")
                         }
                         .accessibilityIdentifier("narration.voice")
-                        .disabled(isBusy)
+                        if let voice = language.voices.first(where: { $0.id == selectedVoiceID }) {
+                            let preview = NarrationVoicePreview.shared
+                            let previewing = preview.ownerID == presentationOwner && preview.activeVoiceID == voice.id
+                            Button {
+                                if previewing {
+                                    preview.stop(ownerID: presentationOwner)
+                                } else {
+                                    preview.play(voice: voice, sampleText: previewSample(for: voice.language),
+                                                 pace: pace, ownerID: presentationOwner) {
+                                        player.setPlaying(false)
+                                    }
+                                }
+                            } label: {
+                                Label(previewing ? "Stop preview" : "Preview voice", systemImage: previewing ? "stop.circle" : "play.circle")
+                                    .frame(minHeight: 44)
+                            }
+                            .accessibilityIdentifier("narration.previewVoice")
+                            if let failure = preview.failure, failure.ownerID == presentationOwner {
+                                Text(failure.message).font(.footnote).foregroundStyle(.orange)
+                                    .accessibilityIdentifier("narration.previewError")
+                            }
+                        }
                     }
-                    Picker("Pace", selection: $pace) {
+                    Picker("Pace", selection: Binding(get: { pace }, set: {
+                        featuredVariantID = nil
+                        pace = $0
+                        UserDefaults.standard.set($0.rawValue, forKey: NarrationPace.preferenceKey)
+                    })) {
                         ForEach(NarrationPace.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
                     .accessibilityIdentifier("narration.pace")
-                    .disabled(isBusy)
-                    .onChange(of: pace) { _, value in UserDefaults.standard.set(value.rawValue, forKey: NarrationPace.preferenceKey) }
-                    Text(pace == .osho
-                         ? "Pauses like the original recording, so each paragraph takes about as long as Osho's."
-                         : "Reads without the original's pauses. Shorter, but less like Osho.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Text(language.support.status == .installed
-                         ? "The translation language is ready on this device."
-                         : "Apple may ask to download the translation language.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    if language.support.status != .installed {
+                        Text("Apple may ask to download this language before listening.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-                Button("Prepare narration", systemImage: "waveform") {
-                    if let selection { beginPreparation(selection) }
-                }
-                .disabled(selection == nil || isBusy)
-                .accessibilityIdentifier("narration.prepare")
                 if let availabilityError { Text(availabilityError).font(.footnote).foregroundStyle(.orange) }
             }
-            Button("Check again", systemImage: "arrow.clockwise", action: refreshLanguages)
-                .disabled(loadingLanguages || isBusy)
-                .accessibilityIdentifier("narration.refreshLanguages")
+            if !loadingLanguages { moreLanguagesAndVoices }
         } header: {
-            Text("Language and voice")
-        } footer: {
-            Text(Self.preparationFooter)
-                .accessibilityIdentifier("narration.preparationFooter")
-        }
-    }
-
-    private static var preparationFooter: String {
-        #if os(iOS) && !targetEnvironment(macCatalyst)
-        if #available(iOS 26.0, *) {
-            return "You can listen while it translates. Locking your phone or switching apps keeps it going, with progress on the Lock Screen. Closing this screen pauses it."
-        }
-        #endif
-        return "You can listen while it translates. Leaving this screen or the app pauses it and keeps finished passages."
-    }
-
-    private var preparationProgress: some View {
-        Section("Preparing") {
-            if let retrySelection { selectionLabel(retrySelection) }
-            if stage == .creatingAudio, narrations.preparingDiscourseID == discourseID {
-                ProgressView(value: narrations.progress.isFinite ? min(1, max(0, narrations.progress)) : 0)
-                Text(narrations.statusMessage).font(.subheadline)
-                if narrations.totalPassages > 0 {
-                    HStack {
-                        Text(NarrationTimeFormatting.passages(narrations.completedPassages, of: narrations.totalPassages))
-                        Spacer()
-                        Text(narrations.estimatedSecondsRemaining.map(NarrationTimeFormatting.remaining) ?? "Estimating time…")
-                    }
-                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("narration.estimate")
+            if canHideOptions {
+                HStack {
+                    Text("Language and voice")
+                    Spacer()
+                    Button("Hide") { showOptions = false }
+                        .font(.subheadline).textCase(nil)
+                        .accessibilityLabel("Hide language and voice")
+                        .accessibilityIdentifier("narration.hideOptions")
                 }
-                if let preparing = preparingDocument, narrations.playablePrefix(of: preparing.id) != nil {
-                    Button(listenLabel(for: preparing), systemImage: "headphones") { play(preparing) }
-                        .frame(minHeight: 44)
-                        .disabled(entry == nil)
-                        .accessibilityIdentifier("narration.listenWhilePreparing")
-                }
-            } else {
-                ProgressView(stage.label)
-            }
-            Button("Pause and save", systemImage: "pause.circle") { cancelPreparation() }
-                .accessibilityIdentifier("narration.cancel")
-        }
-        .accessibilityIdentifier("narration.progress")
-    }
-
-    private var preparingDocument: NarrationDocument? {
-        guard let id = narrations.preparingDocumentID else { return nil }
-        return variants.first { $0.id == id }
-    }
-
-    private func listenLabel(for document: NarrationDocument) -> String {
-        player.currentNarration?.id == document.id ? "Read Along" : "Listen to Finished Part"
-    }
-
-    private func selectionLabel(_ selection: NarrationSelection) -> some View {
-        Text("\(NarrationLanguageSupport.displayName(for: selection.targetLanguage)) · \(selection.voice.narrationDisplayName) · \(selection.pace.label)")
-            .font(.subheadline).foregroundStyle(.secondary)
-    }
-
-    private var originalAudioSection: some View {
-        Section {
-            Button("Return to Original", systemImage: "arrow.uturn.backward", action: returnToOriginal)
-                .disabled(originalAudioURL == nil || entry == nil || isBusy)
-                .accessibilityIdentifier("narration.returnToOriginal")
-            if originalAudioURL == nil {
-                Text("Download the original audio from the series page to return to Osho's recording.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Neither list is the app's own: languages come from Apple Translation and voices from iOS.
+    private var moreLanguagesAndVoices: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("**More voices:** voices come from iOS, so you download them in Apple's **Settings** app, not in Osho Talks. Open **Settings › Accessibility › Read & Speak › Voices**, choose a language and download a voice. Enhanced and Premium voices sound more natural. Then come back and tap Refresh languages and voices.")
+                Text("**More languages:** this list shows every language Apple Translation offers from \(sourceLanguage.map(NarrationLanguageSupport.displayName(for:)) ?? "this talk's language"). Apple adds languages in iOS updates. To download a language before you translate, open Apple's **Settings** app, then **Apps › Translate › Languages**.")
+            }
+            .font(.footnote).foregroundStyle(.secondary)
+            .padding(.vertical, 4)
+        } label: {
+            Label("Get more languages and voices", systemImage: "questionmark.circle").font(.subheadline)
+        }
+        .accessibilityIdentifier("narration.moreLanguagesAndVoices")
+    }
+
+    /// A saved passage in the voice's own language, so the preview sounds like listening will.
+    private func previewSample(for language: String) -> String? {
+        let script = NarrationLanguageSupport.languageAndScript(for: language)
+        return variants.first { NarrationLanguageSupport.languageAndScript(for: $0.selection.targetLanguage) == script }?
+            .segments.first?.text
+    }
+
+    private var voiceChoice: Binding<String> {
+        Binding(get: { selectedVoiceID }, set: {
+            NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
+            featuredVariantID = nil
+            selectedVoiceID = $0
+            NarrationVoicePreferences.setPreferredVoiceID($0, for: selectedLanguageID)
+        })
+    }
+
+    private var isSelectionPlaying: Bool {
+        currentSelectionDocument?.id == player.currentNarration?.id && player.currentNarration != nil && player.isPlaying
     }
 
     private func loadCachedNarrations() async {
@@ -482,11 +702,28 @@ struct TranslatedNarrationView: View {
         cacheLoaded = true
         cacheError = narrations.errorMessage
         if firstLoad {
-            if let featuredVariant, playableIDs.contains(featuredVariant.id) {
-                readingDocument = featuredVariant
-            } else if featuredVariantID == nil, let document = player.currentNarration,
-                      document.discourseID == discourseID, NarrationCachePresentation.audioURL(for: document) != nil {
-                readingDocument = document
+            if featuredVariant == nil {
+                // Open on what can already be heard: the playing version, the one being prepared, or the best saved one.
+                let playing = player.currentNarration.flatMap { $0.discourseID == discourseID ? $0.id : nil }
+                // Preflight and language consent run before the prepared document exists.
+                let preparingSelection = preparation.isRunning && preparation.discourseID == discourseID ? preparation.selection : nil
+                let preparing = preparingSelection.flatMap { running in
+                    variants.first { TranslatedListening.isSameVersion($0.selection, running) }?.id
+                }
+                // A language chosen on the series page wins; any language only when none was chosen.
+                let saved = preferredTargetLanguage.map {
+                    TranslatedListening.savedNarration(for: discourseID, target: $0, in: narrations.documents)
+                } ?? TranslatedListening.savedNarration(for: discourseID, in: narrations.documents)
+                featuredVariantID = playing ?? preparing ?? (preparingSelection == nil ? saved?.id : nil)
+            }
+            if let featuredVariant {
+                selectedLanguageID = featuredVariant.selection.targetLanguage
+                selectedVoiceID = featuredVariant.selection.voice.id
+                pace = featuredVariant.selection.pace
+            } else if preparation.discourseID == discourseID, let selection = preparation.selection {
+                selectedLanguageID = selection.targetLanguage
+                selectedVoiceID = selection.voice.id
+                pace = selection.pace
             }
         }
         if readingDocument == nil { refreshLanguages() }
@@ -495,7 +732,7 @@ struct TranslatedNarrationView: View {
     private func refreshCachedAudio() { playableIDs = NarrationCachePresentation.playableIDs(in: variants) }
 
     private func refreshLanguages() {
-        guard isVisible, scenePhase == .active, let sourceLanguage, !isBusy,
+        guard isVisible, scenePhase == .active, let sourceLanguage,
               transcripts.availability(for: discourseID) != .unavailable else { return }
         availabilityTask?.cancel()
         let requestID = UUID()
@@ -510,8 +747,24 @@ struct TranslatedNarrationView: View {
                 languages = options
                 languagesChecked = true
                 if selectedLanguageID.isEmpty, let preferredTargetLanguage,
-                   let preferred = options.first(where: { NarrationLanguageSupport.isSameLanguage($0.id, preferredTargetLanguage) }) {
+                   let preferred = options.first(where: {
+                       NarrationLanguageSupport.languageAndScript(for: $0.id)
+                           == NarrationLanguageSupport.languageAndScript(for: preferredTargetLanguage)
+                   }) {
                     selectedLanguageID = preferred.id
+                }
+                if let featuredVariant {
+                    selectedLanguageID = options.first(where: {
+                        NarrationLanguageSupport.languageAndScript(for: $0.id)
+                            == NarrationLanguageSupport.languageAndScript(for: featuredVariant.selection.targetLanguage)
+                    })?.id ?? featuredVariant.selection.targetLanguage
+                    selectedVoiceID = featuredVariant.selection.voice.id
+                    pace = featuredVariant.selection.pace
+                    loadingLanguages = false
+                    return
+                }
+                if selectedVoiceID.isEmpty, let language = options.first(where: { $0.id == selectedLanguageID }) {
+                    selectedVoiceID = NarrationVoicePreferences.preferredVoiceID(for: language.id, voices: language.voices) ?? ""
                 }
                 let choice = NarrationSelectionPresentation.choice(
                     sourceLanguage: sourceLanguage, languages: options,
@@ -520,6 +773,14 @@ struct TranslatedNarrationView: View {
                 )
                 selectedLanguageID = choice.languageID
                 selectedVoiceID = choice.voiceID
+                if selectedLanguageID.isEmpty {
+                    let preferred = entry.map { TranslatedListening.targetLanguage(for: $0.series) }
+                    let target = options.first { $0.id == preferred } ?? options.first
+                    selectedLanguageID = target?.id ?? ""
+                    selectedVoiceID = target.map {
+                        NarrationVoicePreferences.preferredVoiceID(for: $0.id, voices: $0.voices) ?? $0.voices.first?.id ?? ""
+                    } ?? ""
+                }
             } catch {
                 guard !Task.isCancelled, availabilityRequestID == requestID else { return }
                 availabilityError = "Couldn't check translation languages. Please try again."
@@ -529,120 +790,36 @@ struct TranslatedNarrationView: View {
         }
     }
 
-    private func beginPreparation(_ requested: NarrationSelection) {
-        guard !isBusy, isVisible, scenePhase == .active else { return }
-        // The lease covers preflight and Apple's consent, not just audio rendering.
-        let owner = UUID()
-        guard narrations.reservePreparation(owner: owner) else { return }
-        preparationOwner = owner
-        availabilityTask?.cancel()
-        availabilityRequestID = nil
-        loadingLanguages = false
-        let attempt = NarrationTranslationLifetime()
-        lifetime = attempt
-        retrySelection = requested
+    private func selectSaved(_ document: NarrationDocument) {
+        NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
+        featuredVariantID = document.id
+        selectedLanguageID = document.selection.targetLanguage
+        selectedVoiceID = document.selection.voice.id
+        pace = document.selection.pace
+    }
+
+    /// One preparation runs at a time; asking for another version pauses the one running.
+    private func ensurePreparing(_ requested: NarrationSelection, autoPlay: Bool = true) {
+        guard isVisible, scenePhase == .active, let hostID else { return }
+        if preparation.isRunning {
+            if preparation.discourseID == discourseID, let running = preparation.selection,
+               TranslatedListening.isSameVersion(running, requested) { return }
+            preparation.pause()
+        }
+        guard !serviceBusy else {
+            errorMessage = "Another preparation is still stopping. Try again in a moment."
+            return
+        }
         errorMessage = nil
         cacheError = nil
-        statusMessage = nil
-        stage = .checkingSupport
-        updateIdleTimer()
-        Self.log.info("Preparation outcome=started")
-        startupTask = Task {
-            do {
-                try checkPreflight(attempt, owner: owner)
-                guard let sourceLanguage,
-                      NarrationLanguageSupport.languageAndScript(for: sourceLanguage)
-                        == NarrationLanguageSupport.languageAndScript(for: requested.sourceLanguage) else {
-                    throw NarrationPreparationError.invalidSelection
-                }
-                guard let support = try await NarrationLanguageSupport.support(from: sourceLanguage, to: requested.targetLanguage) else {
-                    throw NarrationTranslationError.unsupportedPair
-                }
-                try checkPreflight(attempt, owner: owner)
-                stage = .fetchingTranscript
-                let transcript = try await transcripts.transcript(for: discourseID)
-                try checkPreflight(attempt, owner: owner)
-                let configuration = try NarrationLanguageSupport.configuration(
-                    source: sourceLanguage, target: requested.targetLanguage, strategy: support.strategy
-                )
-                stage = .preparingLanguages
-                translationJob = NarrationTranslationJob(
-                    lifetime: attempt, owner: owner, transcript: transcript, selection: requested, configuration: configuration
-                )
-                Self.log.info("Preparation strategy=\(support.strategy.rawValue, privacy: .public)")
-            } catch {
-                finish(.failure(error), lifetime: attempt)
-            }
-        }
-    }
-
-    private func checkPreflight(_ attempt: NarrationTranslationLifetime, owner: UUID) throws {
-        try attempt.check()
-        guard lifetime?.id == attempt.id, narrations.preparationOwner == owner else { throw CancellationError() }
-    }
-
-    private func finish(_ result: Result<NarrationDocument, Error>, lifetime attempt: NarrationTranslationLifetime) {
-        guard lifetime?.id == attempt.id else { return }
-        attempt.invalidate()
-        switch result {
-        case .success(let document):
-            refreshCachedAudio()
-            featuredVariantID = document.id
-            statusMessage = "Narration is ready. Tap Play to listen."
-            retrySelection = nil
-            Self.log.info("Preparation outcome=ready")
-        case .failure(let error):
-            if error is CancellationError {
-                statusMessage = "Preparation paused. Completed text and audio are saved. Resume when you're ready."
-                Self.log.info("Preparation outcome=cancelled")
-            } else {
-                errorMessage = preparationFailureMessage(error)
-                Self.log.error("Preparation outcome=failed stage=\(stage.rawValue, privacy: .public)")
-            }
-        }
-        if let owner = preparationOwner {
-            narrations.cancel(owner: owner)
-            narrations.releasePreparation(owner: owner)
-        }
-        preparationOwner = nil
-        translationJob = nil
-        lifetime = nil
-        startupTask = nil
+        preparation.start(discourseID: discourseID, selection: requested, hostID: hostID, player: player, listen: autoPlay)
         updateIdleTimer()
     }
 
-    private func preparationFailureMessage(_ error: Error) -> String {
-        if let error = error as? NarrationTranslationError { return error.localizedDescription }
-        if let error = error as? NarrationPreparationError { return error.localizedDescription }
-        if let error = error as? NativeNarrationSpeechError { return error.localizedDescription }
-        if stage == .fetchingTranscript {
-            if let error = error as? TranscriptFetcher.FetchError { return error.localizedDescription }
-            return "Couldn't load the source transcript. Check your connection and try again."
-        }
-        if stage == .creatingAudio {
-            let detail = narrations.errorMessage
-                ?? "Check free storage and the selected system voice, then try again. Saved segments are kept."
-            return "Couldn't finish creating the narration audio. \(detail)"
-        }
-        return "Couldn't prepare this narration. Check the language downloads and try again."
-    }
-
-    private func cancelPreparation(matching id: UUID? = nil) {
-        guard let attempt = lifetime, id == nil || id == attempt.id else { return }
-        attempt.invalidate()
-        if let owner = preparationOwner {
-            narrations.cancel(owner: owner)
-            narrations.releasePreparation(owner: owner)
-        }
-        preparationOwner = nil
-        startupTask?.cancel()
-        startupTask = nil
-        translationJob = nil
-        lifetime = nil
-        errorMessage = nil
-        statusMessage = "Preparation paused. Completed text and audio are saved. Resume when you're ready."
+    private func cancelPreparation() {
+        guard preparation.discourseID == discourseID else { return }
+        preparation.pause()
         updateIdleTimer()
-        Self.log.info("Preparation outcome=cancelled")
     }
 
     private func updateIdleTimer() {
@@ -653,15 +830,6 @@ struct TranslatedNarrationView: View {
     }
 
     private func close() {
-        if lifetime != nil {
-            confirmingClose = true
-            return
-        }
-        dismiss()
-    }
-
-    private func pauseAndClose() {
-        cancelPreparation()
         dismiss()
     }
 
@@ -676,8 +844,7 @@ struct TranslatedNarrationView: View {
             refreshCachedAudio()
             readingDocument = nil
             cacheReloadGeneration += 1
-            errorMessage = "The saved audio is missing or unreadable. Resume the narration to rebuild it."
-            retrySelection = document.selection
+            errorMessage = "The saved audio is missing or unreadable. Continue translating to rebuild it."
             return
         }
         switch NarrationPlaybackPresentation.action(
@@ -689,7 +856,19 @@ struct TranslatedNarrationView: View {
         case .resume: player.togglePlayPause()
         case .readAlong: break
         }
-        readingDocument = document
+    }
+
+    /// Starts at a chosen passage, ignoring the saved position and the recording's matching moment.
+    private func play(_ requested: NarrationDocument, from position: TimeInterval) {
+        guard deletingIDs.isEmpty, entry != nil else { return }
+        NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
+        let document = narrations.documents.first { $0.id == requested.id } ?? requested
+        if document.isComplete, let url = NarrationCachePresentation.audioURL(for: document) {
+            narrations.savePosition(documentID: document.id, position: position)
+            player.playNarration(document, url: url)
+        } else {
+            NarrationPreviewPlayback.shared.play(documentID: document.id, player: player, resumeAt: position)
+        }
     }
 
     private func playFinishedPassages(of document: NarrationDocument) {
@@ -704,38 +883,31 @@ struct TranslatedNarrationView: View {
                 NarrationPreviewPlayback.shared.play(documentID: document.id, player: player, resumeAt: start)
             }
         }
-        readingDocument = narrations.documents.first { $0.id == document.id } ?? document
     }
 
     private func delete(_ document: NarrationDocument, prepareAgain: Bool = false) {
-        guard !isBusy else { return }
-        if player.currentNarration?.id == document.id { player.stop() }
+        guard deletingIDs.isEmpty else { return }
         deletingIDs.insert(document.id)
         Task {
             defer { deletingIDs.remove(document.id) }
             do {
-                try await narrations.remove(document.id)
+                try await preparation.delete(document, player: player)
                 if readingDocument?.id == document.id { readingDocument = nil }
                 if featuredVariantID == document.id { featuredVariantID = nil }
-                if retrySelection == document.selection {
-                    retrySelection = nil
-                    statusMessage = nil
-                    errorMessage = nil
-                }
+                errorMessage = nil
                 if prepareAgain {
                     deletingIDs.remove(document.id)
-                    beginPreparation(document.selection)
+                    ensurePreparing(document.selection, autoPlay: false)
                 }
             } catch {
-                errorMessage = "Couldn't delete the saved narration. Please try again."
-                retrySelection = nil
+                errorMessage = "Couldn't delete the saved translation. Please try again."
                 Self.log.error("Cache deletion outcome=failed")
             }
         }
     }
 
     private func returnToOriginal() {
-        guard !isBusy, let entry else { return }
+        guard let entry else { return }
         guard let url = downloads.localFileURL(for: discourseID) else {
             originalAudioURL = nil
             return
@@ -828,7 +1000,7 @@ struct NarrationPlaybackFailureBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(failure.label, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-            Button("Resume or Rebuild Narration", systemImage: "arrow.clockwise", action: recover)
+            Button("Rebuild Translation", systemImage: "arrow.clockwise", action: recover)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("narration.recoverPlayback")
         }
@@ -837,99 +1009,6 @@ struct NarrationPlaybackFailureBanner: View {
         .padding()
         .background(.ultraThinMaterial)
         .accessibilityIdentifier("narration.playbackFailure")
-    }
-}
-
-private enum NarrationPreparationStage: String {
-    case checkingSupport, fetchingTranscript, preparingLanguages, creatingAudio
-    var label: String {
-        switch self {
-        case .checkingSupport: "Checking the language pair…"
-        case .fetchingTranscript: "Loading the source transcript…"
-        case .preparingLanguages: "Preparing translation languages…"
-        case .creatingAudio: "Translating and creating audio…"
-        }
-    }
-}
-
-@available(macCatalyst 26.0, *)
-private struct NarrationTranslationJob: Identifiable {
-    let lifetime: NarrationTranslationLifetime
-    let owner: UUID
-    let transcript: Transcript
-    let selection: NarrationSelection
-    let configuration: TranslationSession.Configuration
-    var id: UUID { lifetime.id }
-}
-
-// Each attempt owns a fresh host, so no session survives its language-download consent presentation.
-@available(macCatalyst 26.0, *)
-private struct NarrationTranslationTaskHost: View {
-    let job: NarrationTranslationJob
-    let updateStage: @MainActor (NarrationPreparationStage) -> Void
-    let complete: @MainActor (Result<NarrationDocument, Error>) -> Void
-    let stop: @MainActor () -> Void
-    @State private var configuration: TranslationSession.Configuration?
-    @State private var started = false
-
-    init(
-        job: NarrationTranslationJob,
-        updateStage: @escaping @MainActor (NarrationPreparationStage) -> Void,
-        complete: @escaping @MainActor (Result<NarrationDocument, Error>) -> Void,
-        stop: @escaping @MainActor () -> Void
-    ) {
-        self.job = job
-        self.updateStage = updateStage
-        self.complete = complete
-        self.stop = stop
-        _configuration = State(initialValue: job.configuration)
-    }
-
-    var body: some View {
-        Color.clear
-            .frame(width: 1, height: 1)
-            .accessibilityHidden(true)
-            .translationTask(configuration) { @MainActor session in
-                guard !started else { return }
-                started = true
-                do {
-                    try job.lifetime.check()
-                    let service = NarrationService.shared
-                    guard service.preparationOwner == job.owner else { throw CancellationError() }
-                    updateStage(.creatingAudio)
-                    var languagesPrepared = false
-                    let document = try await service.prepare(
-                        transcript: job.transcript, selection: job.selection,
-                        translate: { texts in
-                            // Complete cached batches need neither translation assets nor download consent.
-                            if !languagesPrepared {
-                                updateStage(.preparingLanguages)
-                                try await AppleNarrationTranslator.prepare(using: session, lifetime: job.lifetime)
-                                try job.lifetime.check()
-                                languagesPrepared = true
-                                updateStage(.creatingAudio)
-                            }
-                            return try await AppleNarrationTranslator.translate(
-                                texts, using: session,
-                                sourceLanguage: job.selection.sourceLanguage, targetLanguage: job.selection.targetLanguage,
-                                lifetime: job.lifetime
-                            )
-                        },
-                        renderer: NativeNarrationSpeechRenderer(rateScale: job.selection.pace.voiceRateScale), owner: job.owner,
-                        onFailure: { complete(.failure($0)) }
-                    )
-                    try job.lifetime.check()
-                    complete(.success(document))
-                } catch {
-                    complete(.failure(error))
-                }
-            }
-            .onDisappear {
-                stop()
-                job.lifetime.invalidate()
-                configuration?.invalidate()
-                configuration = nil
-            }
     }
 }
 
@@ -991,6 +1070,7 @@ private struct TranslatedNarrationReader: View {
     let document: NarrationDocument
     let canReturnToOriginal: Bool
     let play: @MainActor () -> Void
+    let playFrom: @MainActor (TimeInterval) -> Void
     let returnToOriginal: @MainActor () -> Void
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1011,7 +1091,6 @@ private struct TranslatedNarrationReader: View {
     private var highlightedIndex: Int? { isCurrent ? live.segmentIndex(at: player.currentTime) : nil }
     private var accent: Color { settings.effectiveAccentTheme.color }
     private var fontSize: CGFloat { CGFloat(settings.transcriptFontSize) }
-    private var isBusy: Bool { narrations.isPreparing || narrations.preparationOwner != nil }
     /// A partial timeline ends at its last finished passage, not at the rendition's eventual length.
     private var playableDuration: TimeInterval {
         if isCurrent, let current = player.currentNarration, !current.isComplete { return current.duration }
@@ -1049,8 +1128,11 @@ private struct TranslatedNarrationReader: View {
                                 Color.clear.frame(height: 1).accessibilityHidden(true)
                             case .passage(let segment):
                                 Button {
-                                    guard isCurrent else { return }
-                                    seek(toPassage: segment.index)
+                                    if isCurrent, player.narrationPlaybackFailure == nil {
+                                        seek(toPassage: segment.index, play: true)
+                                    } else {
+                                        playFrom(live.startTime(forSegmentAt: segment.index))
+                                    }
                                 } label: {
                                     Text(segment.text)
                                         .font(.system(size: fontSize, weight: highlighted == segment.index ? .semibold : .regular))
@@ -1063,7 +1145,7 @@ private struct TranslatedNarrationReader: View {
                                         .foregroundStyle(highlighted == segment.index ? accent : .primary)
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(!isCurrent)
+                                .disabled(!catalogEntryAvailable || (!isCurrent && !audioAvailable))
                                 .accessibilityHint("Plays from the start of this passage")
                                 .accessibilityAddTraits(highlighted == segment.index ? .isSelected : [])
                                 .accessibilityIdentifier("narration.segment.\(segment.index)")
@@ -1110,7 +1192,7 @@ private struct TranslatedNarrationReader: View {
                 .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 .accessibilityElement(children: .combine)
             } else {
-                Text("\(NarrationTimeFormatting.passages(live.segments.count, of: live.expectedSegmentCount)) ready. Resume preparation to hear the rest.")
+                Text("\(NarrationTimeFormatting.passages(live.segments.count, of: live.expectedSegmentCount)) ready. Go back and tap Continue translating for the rest.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if preview.waitingDocumentID == document.id {
@@ -1132,13 +1214,14 @@ private struct TranslatedNarrationReader: View {
             : narrations.playablePrefix(of: document.id) != nil
     }
 
-    private func seek(toPassage index: Int) {
+    private func seek(toPassage index: Int, play: Bool = false) {
         let start = live.startTime(forSegmentAt: index)
         if let current = player.currentNarration, !current.isComplete, index >= current.segments.count {
-            // A newer passage is outside the timeline that is playing; rebuild it to include that passage.
+            // A newer passage is outside the timeline that is playing; rebuilding it also starts playback.
             preview.play(documentID: document.id, player: player, resumeAt: start)
         } else {
             player.seek(to: start)
+            if play, !player.isPlaying { player.setPlaying(true) }
         }
     }
 
@@ -1153,7 +1236,7 @@ private struct TranslatedNarrationReader: View {
             if isCurrent {
                 ProgressView(value: elapsed, total: max(playableDuration, 1))
                     .tint(accent)
-                    .accessibilityLabel(live.isComplete ? "Narration progress" : "Progress through finished passages")
+                    .accessibilityLabel(live.isComplete ? "Translation progress" : "Progress through finished passages")
                     .accessibilityValue("\(formatTime(elapsed)) of \(formatTime(playableDuration))")
                     .accessibilityIdentifier("narration.playbackProgress")
                 HStack {
@@ -1175,14 +1258,14 @@ private struct TranslatedNarrationReader: View {
                         Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.largeTitle).frame(width: 44, height: 44)
                     }
-                    .accessibilityLabel(player.isPlaying ? "Pause narration" : "Play narration")
+                    .accessibilityLabel(player.isPlaying ? "Pause translation" : "Play translation")
                     .accessibilityIdentifier("narration.togglePlayback")
                     Button { player.skipForward() } label: {
                         Image(systemName: "goforward.30").frame(width: 44, height: 44)
                     }
                     .accessibilityLabel("Skip forward 30 seconds")
                 } else {
-                    Button(live.isComplete ? "Play Narration" : "Play Finished Part", systemImage: "play.fill", action: play)
+                    Button(live.isComplete ? "Play Translation" : "Play Finished Part", systemImage: "play.fill", action: play)
                         .frame(minHeight: 44)
                         .disabled(!audioAvailable || !catalogEntryAvailable || preview.isLoading)
                         .accessibilityIdentifier("narration.startPlayback")
@@ -1231,13 +1314,10 @@ private struct TranslatedNarrationReader: View {
                 .accessibilityValue("\(Int(settings.transcriptFontSize)) points")
                 .accessibilityIdentifier("narration.textSize")
             }
-            Button("Return to Original", systemImage: "arrow.uturn.backward", action: returnToOriginal)
-                .frame(minHeight: 44)
-                .disabled(!canReturnToOriginal || isBusy)
-                .accessibilityIdentifier("narration.returnToOriginal")
-            if !canReturnToOriginal {
-                Text("Download the original audio from the series page to return to Osho's recording.")
-                    .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if canReturnToOriginal {
+                Button("Switch to Osho's recording", systemImage: "waveform", action: returnToOriginal)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("narration.returnToOriginal")
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
@@ -1248,78 +1328,6 @@ private struct TranslatedNarrationReader: View {
     private func formatTime(_ seconds: TimeInterval) -> String {
         let seconds = seconds.isFinite ? max(0, seconds).rounded(.down) : 0
         return Duration.seconds(seconds).formatted(.time(pattern: seconds >= 3_600 ? .hourMinuteSecond : .minuteSecond))
-    }
-}
-
-struct TranslatedNarrationLibraryView: View {
-    @Environment(AudioPlayerService.self) private var player
-    @Environment(DownloadService.self) private var downloads
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    private let narrations = NarrationService.shared
-    @State private var loaded = false
-    @State private var playableIDs = Set<String>()
-    @State private var selectedDocument: NarrationDocument?
-    @State private var presentationOwner = UUID()
-
-    var body: some View {
-        List {
-            if !loaded {
-                ProgressView("Loading saved narrations…").accessibilityIdentifier("narration.library.loading")
-            } else if narrations.documents.isEmpty {
-                ContentUnavailableView(
-                    "No Translated Narrations", systemImage: "globe",
-                    description: Text("Open a discourse in the player and tap Translate to prepare a narration.")
-                )
-                .listRowBackground(Color.clear)
-                .accessibilityIdentifier("narration.library.empty")
-            }
-            ForEach(narrations.documents.sorted { $0.updatedAt > $1.updatedAt }) { document in
-                Button { selectedDocument = document } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(Catalog.discourseLookup[document.discourseID]?.discourse.displayTitle ?? "Saved Discourse")
-                            .font(.subheadline).foregroundStyle(.primary)
-                        SavedNarrationLabel(document: document, isPlayable: playableIDs.contains(document.id))
-                    }
-                    .padding(.vertical, 4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens playback, resume and delete options")
-                .accessibilityIdentifier("narration.library.\(document.id)")
-            }
-            if let error = narrations.errorMessage {
-                Text(error).font(.footnote).foregroundStyle(.orange)
-                Button("Try Again") { Task { await load() } }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .readableScrollColumn(sizeClass)
-        .navigationTitle("Translated Narrations")
-        .accessibilityIdentifier("narration.library")
-        .reservesMiniPlayerSpace()
-        .task { await load() }
-        .onAppear { EngagementService.shared.registerNarrationPresentation(owner: presentationOwner) }
-        .onDisappear { EngagementService.shared.unregisterNarrationPresentation(owner: presentationOwner) }
-        .onChange(of: narrations.documents) { _, documents in
-            playableIDs = NarrationCachePresentation.playableIDs(in: documents)
-        }
-        .sheet(item: $selectedDocument) { document in
-            if #available(macCatalyst 26.0, *) {
-                TranslatedNarrationView(discourseID: document.discourseID, selectedDocumentID: document.id)
-                    .environment(player)
-                    .environment(downloads)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-    }
-
-    private func load() async {
-        await narrations.load()
-        guard !Task.isCancelled else { return }
-        playableIDs = NarrationCachePresentation.playableIDs(in: narrations.documents)
-        loaded = true
     }
 }
 #endif

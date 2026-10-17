@@ -1,13 +1,58 @@
 #if TRANSLATED_NARRATION
 import Foundation
 
-/// Listening to a series through translation instead of its recording. The choice is per series,
-/// and a series in a language the listener has hidden starts out translated.
+/// Language preferences are separate from recording history and saved narration identities.
 enum TranslatedListening {
     private static let preferenceKey = "narration.translatedSeries"
+    private static let targetPreferenceKey = "narration.targetLanguageBySeries"
+    private static let lastTargetPreferenceKey = "narration.preferredTargetLanguage"
 
-    /// The app's two catalog languages translate into each other; the sheet still offers others.
     static func targetLanguage(for series: SeriesInfo) -> String {
+        targetLanguage(for: series, defaults: .standard)
+    }
+
+    /// Pair availability is checked asynchronously by the selector, not inferred from a stored tag.
+    static func targetLanguage(for series: SeriesInfo, defaults: UserDefaults) -> String {
+        var targets = defaults.dictionary(forKey: targetPreferenceKey) as? [String: String] ?? [:]
+        if targets[series.id] == nil,
+           (defaults.dictionary(forKey: preferenceKey) as? [String: Bool])?[series.id] == true {
+            // A legacy translated series meant its counterpart, regardless of later global choices.
+            targets[series.id] = counterpart(for: series)
+            defaults.set(targets, forKey: targetPreferenceKey)
+        }
+        let preferred = targets[series.id] ?? defaults.string(forKey: lastTargetPreferenceKey)
+        guard let preferred, !preferred.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !NarrationLanguageSupport.isSameLanguage(preferred, NarrationLanguageSupport.sourceLanguage(for: series.language))
+        else { return counterpart(for: series) }
+        return preferred
+    }
+
+    static func setTargetLanguage(_ language: String, for series: SeriesInfo, defaults: UserDefaults = .standard) {
+        guard !language.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !NarrationLanguageSupport.isSameLanguage(language, NarrationLanguageSupport.sourceLanguage(for: series.language))
+        else { return }
+        var targets = defaults.dictionary(forKey: targetPreferenceKey) as? [String: String] ?? [:]
+        targets[series.id] = language
+        defaults.set(targets, forKey: targetPreferenceKey)
+        defaults.set(language, forKey: lastTargetPreferenceKey)
+        setPrefersTranslation(true, for: series, defaults: defaults)
+    }
+
+    /// A temporarily unsupported preference is retained for devices or OS versions that support it.
+    static func resolvedTargetLanguage(
+        for series: SeriesInfo, availableLanguages: [String], defaults: UserDefaults = .standard
+    ) -> String? {
+        let source = NarrationLanguageSupport.sourceLanguage(for: series.language)
+        let targets = availableLanguages.filter { !NarrationLanguageSupport.isSameLanguage($0, source) }
+        for preferred in [targetLanguage(for: series, defaults: defaults), counterpart(for: series)] {
+            if let match = targets.first(where: {
+                NarrationLanguageSupport.languageAndScript(for: $0) == NarrationLanguageSupport.languageAndScript(for: preferred)
+            }) { return match }
+        }
+        return targets.first
+    }
+
+    private static func counterpart(for series: SeriesInfo) -> String {
         series.language == .english ? "hi" : "en"
     }
 
@@ -43,6 +88,12 @@ enum TranslatedListening {
     }
 
     static func setPrefersTranslation(_ value: Bool, for series: SeriesInfo, defaults: UserDefaults = .standard) {
+        if value {
+            let target = targetLanguage(for: series, defaults: defaults)
+            var targets = defaults.dictionary(forKey: targetPreferenceKey) as? [String: String] ?? [:]
+            targets[series.id] = target
+            defaults.set(targets, forKey: targetPreferenceKey)
+        }
         var stored = defaults.dictionary(forKey: preferenceKey) as? [String: Bool] ?? [:]
         stored[series.id] = value
         defaults.set(stored, forKey: preferenceKey)
@@ -74,13 +125,27 @@ enum TranslatedListening {
     /// The most useful saved rendition in the target language: complete first, then most progress.
     @MainActor
     static func savedNarration(for discourseID: String, target: String, in documents: [NarrationDocument]) -> NarrationDocument? {
-        documents
-            .filter { $0.discourseID == discourseID && NarrationLanguageSupport.isSameLanguage($0.selection.targetLanguage, target) }
-            .max { lhs, rhs in
-                if lhs.isComplete != rhs.isComplete { return !lhs.isComplete }
-                if lhs.segments.count != rhs.segments.count { return lhs.segments.count < rhs.segments.count }
-                return lhs.updatedAt < rhs.updatedAt
-            }
+        savedNarration(for: discourseID, in: documents.filter {
+            NarrationLanguageSupport.languageAndScript(for: $0.selection.targetLanguage)
+                == NarrationLanguageSupport.languageAndScript(for: target)
+        })
+    }
+
+    /// The most useful saved rendition in any language.
+    @MainActor
+    static func savedNarration(for discourseID: String, in documents: [NarrationDocument]) -> NarrationDocument? {
+        documents.filter { $0.discourseID == discourseID }.max { lhs, rhs in
+            if lhs.isComplete != rhs.isComplete { return !lhs.isComplete }
+            if lhs.segments.count != rhs.segments.count { return lhs.segments.count < rhs.segments.count }
+            return lhs.updatedAt < rhs.updatedAt
+        }
+    }
+
+    /// Same language, voice and pace; voice display names and quality labels change between OS versions.
+    static func isSameVersion(_ lhs: NarrationSelection, _ rhs: NarrationSelection) -> Bool {
+        NarrationLanguageSupport.languageAndScript(for: lhs.targetLanguage)
+            == NarrationLanguageSupport.languageAndScript(for: rhs.targetLanguage)
+            && lhs.voice.id == rhs.voice.id && lhs.pace == rhs.pace
     }
 }
 #endif

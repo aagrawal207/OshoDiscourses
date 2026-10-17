@@ -17,6 +17,19 @@ struct NarrationProgressTests {
         #expect(estimator.fraction == 1)
     }
 
+    @Test func translatedPassagesCountAsHalfDoneUntilSpoken() {
+        var estimator = NarrationProgressEstimator(lengths: [100, 300, 600], completed: [0], startedAt: 0)
+        #expect(estimator.workFraction == 0.1)
+        estimator.markTranslated([0, 1, 1, 9])
+        #expect(estimator.workFraction == 0.25)
+        estimator.complete(1, at: 5)
+        #expect(estimator.workFraction == 0.4)
+        #expect(estimator.fraction == 0.4)
+        estimator.markTranslated([2])
+        estimator.complete(2, at: 6)
+        #expect(estimator.workFraction == 1)
+    }
+
     @Test func estimateWaitsForTwoPassagesAndTenSeconds() {
         var estimator = NarrationProgressEstimator(lengths: [100, 100, 100, 100], completed: [], startedAt: 50)
         estimator.complete(0, at: 54)

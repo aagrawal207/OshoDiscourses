@@ -10,18 +10,18 @@ enum NativeNarrationSpeechError: String, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .busy: return "Narration preparation is already running."
+        case .busy: return "A translation is already running."
         case .emptyText: return "There is no text to narrate."
         case .voiceUnavailable: return "The selected system voice is no longer installed. Choose another voice."
-        case .invalidOutput: return "Narration needs a writable local M4A destination."
-        case .outputExists: return "A narration file already exists at this destination."
+        case .invalidOutput: return "The translation's audio couldn't be saved on this device."
+        case .outputExists: return "A translation audio file already exists here."
         case .noAudio: return "The system voice did not produce any audio."
         case .invalidBuffer, .unsupportedFormat, .formatChanged:
             return "The system voice produced an unsupported audio format."
-        case .incompleteAudio: return "The narration audio is incomplete. Please try again."
-        case .timedOut: return "Narration preparation stopped responding. Please try again."
-        case .invalidSegment: return "A narration segment is missing, empty, or damaged."
-        case .exportUnavailable: return "This device could not assemble the narration audio."
+        case .incompleteAudio: return "The translation's audio is incomplete. Please try again."
+        case .timedOut: return "Translating stopped responding. Please try again."
+        case .invalidSegment: return "A translated passage is missing, empty or damaged."
+        case .exportUnavailable: return "This device couldn't join the translated passages into one file."
         }
     }
 }

@@ -2,6 +2,11 @@
 
 ## Scope and baseline
 
+The current listening interface and background-lifecycle fixes are recorded in
+[Translation listening redesign](translation-listening-redesign.md). That record
+supersedes the screen-owned preparation behavior described below. The updated
+preview is installed; locked-phone preparation still needs physical verification.
+
 This work restores the translation feature from `wip/translated-narration-1.16`
 (`17c9039`) onto the submitted 1.16.3 source. The working branch is
 `feature/translated-narration` in `OshoDiscourses-Translation`. The original
@@ -21,8 +26,8 @@ Open this worktree's `OshoDiscourses.xcodeproj` and run the `OshoDiscourses` sch
 In the player, choose **Translate**, select a language and system voice, then
 choose **Prepare narration**. Apple may need to download a language pack. Keep the
 preparation screen open; locking the phone or switching apps keeps it going on iOS 26+.
-**Pause and save** preserves completed work. Saved audio is also available in
-**Downloads > Translated Narrations**.
+**Pause and save** preserves completed work. Saved translations are listed in
+**Downloads**, under their series, with unfinished ones under **In Progress**.
 
 The local feature flag is `TRANSLATED_NARRATION_UI=TRANSLATED_NARRATION`. This is
 not a new App Store submission. iPhone/iPad translation uses iOS 18+; native Mac

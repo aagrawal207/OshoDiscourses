@@ -5,12 +5,18 @@ import os
 @Observable
 @MainActor
 final class NarrationService {
-    static let shared = NarrationService(
+    static let shared: NarrationService = NarrationService(
         directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("narrations", isDirectory: true),
         defaults: .standard,
         backgroundActivity: makeBackgroundActivity(),
-        pacer: NarrationPausePacer()
+        pacer: NarrationPausePacer(),
+        audioKeepsAppRunning: { AppRuntime.shared.audioPlayer.isPlaying },
+        passageAudioInUse: { (id: String) -> Bool in
+            let player = AppRuntime.shared.audioPlayer
+            return (player.isPlayingNarrationPreview && player.currentNarration?.id == id) || NarrationPreviewPlayback.shared.loadingDocumentID == id
+        },
+        journal: .shared
     )
 
     enum Event {
@@ -19,6 +25,10 @@ final class NarrationService {
     }
 
     private(set) var documents: [NarrationDocument] = []
+    /// When each rendition was last listened to, for Continue Listening; device-local like its position.
+    private(set) var recentPlays: [String: Date] = [:]
+    /// Changes whenever saved files are removed, so storage totals can refresh without a document change.
+    private(set) var storageRevision = 0
     private(set) var isPreparing = false
     private(set) var preparationOwner: UUID?
     private(set) var progress = 0.0
@@ -29,8 +39,14 @@ final class NarrationService {
     private(set) var completedPassages = 0
     private(set) var totalPassages = 0
     private(set) var estimatedSecondsRemaining: TimeInterval?
-    /// True only while the system has accepted the work; otherwise leaving the app must pause it.
-    private(set) var continuesInBackground = false
+    private(set) var backgroundStatus: NarrationBackgroundStatus = .idle
+    private(set) var isLowPowerModeEnabled = false
+    /// Submitted requests do not count; both submission and a usable attached task are required.
+    var continuesInBackground: Bool { backgroundStatus == .running }
+    var backgroundStatusMessage: String {
+        guard backgroundStatus != .idle else { return "" }
+        return backgroundStatus.message + (isLowPowerModeEnabled ? " Low Power Mode is on." : "")
+    }
     @ObservationIgnored var onEvent: (@MainActor (Event) -> Void)?
     @ObservationIgnored private var hasLoaded = false
     @ObservationIgnored private var timings: [String: NarrationOriginalTiming] = [:]
@@ -39,8 +55,12 @@ final class NarrationService {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let retrySleep: @MainActor (Duration) async throws -> Void
     @ObservationIgnored private let now: @MainActor () -> TimeInterval
+    @ObservationIgnored private let lowPowerMode: @MainActor () -> Bool
     @ObservationIgnored private let backgroundActivity: (any NarrationBackgroundActivity)?
     @ObservationIgnored private let pacer: (any NarrationPacing)?
+    @ObservationIgnored private let journal: NarrationJournal?
+    @ObservationIgnored private let audioKeepsAppRunning: @MainActor () -> Bool
+    @ObservationIgnored private let passageAudioInUse: @MainActor (String) -> Bool
     @ObservationIgnored private var estimator: NarrationProgressEstimator?
     @ObservationIgnored private var active: Preparation?
     @ObservationIgnored private var ready: [String: NarrationCache.Snapshot] = [:]
@@ -48,6 +68,8 @@ final class NarrationService {
     @ObservationIgnored private var deletingDiscourses: Set<String> = []
     @ObservationIgnored private var revision: UInt64 = 0
     private static let positionPrefix = "narration.position."
+    private static let recentPlaysKey = "narration.recentPlays"
+    private static let maximumRecentPlays = 20
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "Narration")
 
     private final class Preparation {
@@ -56,16 +78,20 @@ final class NarrationService {
         let documentID: String
         let discourseID: String
         let renderer: any NarrationSpeechRendering
+        let selection: NarrationSelection
         /// Seconds each passage should last at Osho's pace, indexed by chunk; nil where unpaced.
         let paceTargets: [TimeInterval?]
         let onFailure: (@MainActor (Error) -> Void)?
+        let onProgress: (@MainActor (NarrationDocument) -> Void)?
         var rendererCancelled = false
         var failure: WorkFailure?
 
         init(
             job: NarrationCache.Job, owner: UUID?, documentID: String, discourseID: String,
-            renderer: any NarrationSpeechRendering, paceTargets: [TimeInterval?], onFailure: (@MainActor (Error) -> Void)?
+            renderer: any NarrationSpeechRendering, selection: NarrationSelection, paceTargets: [TimeInterval?],
+            onFailure: (@MainActor (Error) -> Void)?, onProgress: (@MainActor (NarrationDocument) -> Void)?
         ) {
+            self.selection = selection
             self.paceTargets = paceTargets
             self.job = job
             self.owner = owner
@@ -73,6 +99,7 @@ final class NarrationService {
             self.discourseID = discourseID
             self.renderer = renderer
             self.onFailure = onFailure
+            self.onProgress = onProgress
         }
     }
 
@@ -103,19 +130,51 @@ final class NarrationService {
         retrySleep: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         now: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         backgroundActivity: (any NarrationBackgroundActivity)? = nil,
-        pacer: (any NarrationPacing)? = nil
+        pacer: (any NarrationPacing)? = nil,
+        lowPowerMode: @escaping @MainActor () -> Bool = { ProcessInfo.processInfo.isLowPowerModeEnabled },
+        audioKeepsAppRunning: @escaping @MainActor () -> Bool = { false },
+        passageAudioInUse: @escaping @MainActor (String) -> Bool = { _ in false },
+        journal: NarrationJournal? = nil
     ) {
         self.pacer = pacer
+        self.passageAudioInUse = passageAudioInUse
+        self.journal = journal
+        self.audioKeepsAppRunning = audioKeepsAppRunning
         cache = NarrationCache(directory: directory)
         self.defaults = defaults
         self.retrySleep = retrySleep
         self.now = now
+        self.lowPowerMode = lowPowerMode
+        isLowPowerModeEnabled = lowPowerMode()
         self.backgroundActivity = backgroundActivity
+        let saved = defaults.dictionary(forKey: Self.recentPlaysKey) as? [String: Double] ?? [:]
+        recentPlays = saved.reduce(into: [:]) { plays, entry in
+            if NarrationCache.isID(entry.key), entry.value.isFinite { plays[entry.key] = Date(timeIntervalSince1970: entry.value) }
+        }
+    }
+
+    func recordPlay(documentID: String, at date: Date = Date()) {
+        guard NarrationCache.isID(documentID) else { return }
+        recentPlays[documentID] = date
+        if recentPlays.count > Self.maximumRecentPlays,
+           let oldest = recentPlays.min(by: { $0.value < $1.value })?.key {
+            recentPlays[oldest] = nil
+        }
+        persistRecentPlays()
+    }
+
+    func dismissFromRecent(documentID: String) {
+        guard recentPlays.removeValue(forKey: documentID) != nil else { return }
+        persistRecentPlays()
+    }
+
+    private func persistRecentPlays() {
+        defaults.set(recentPlays.mapValues(\.timeIntervalSince1970), forKey: Self.recentPlaysKey)
     }
 
     private static func makeBackgroundActivity() -> (any NarrationBackgroundActivity)? {
         #if os(iOS) && !targetEnvironment(macCatalyst)
-        if #available(iOS 26.0, *) { return NarrationContinuedProcessing() }
+        return NarrationGraceTime.system()
         #endif
         return nil
     }
@@ -138,6 +197,7 @@ final class NarrationService {
             hasLoaded = true
             revision &+= 1
             Self.log.info("stage=load outcome=loaded")
+            await removeSpentPassageAudio()
         } catch is CancellationError {
             Self.log.debug("stage=load outcome=cancelled")
         } catch {
@@ -148,7 +208,7 @@ final class NarrationService {
                 documents[index].duration = 0
             }
             revision &+= 1
-            errorMessage = "Saved narration could not be loaded. Please try again."
+            errorMessage = "Saved translations couldn't be loaded. Please try again."
             Self.log.error("stage=load outcome=failed")
         }
     }
@@ -176,7 +236,8 @@ final class NarrationService {
         translate: @escaping @MainActor ([String]) async throws -> [String],
         renderer: any NarrationSpeechRendering,
         owner: UUID? = nil,
-        onFailure: (@MainActor (Error) -> Void)? = nil
+        onFailure: (@MainActor (Error) -> Void)? = nil,
+        onProgress: (@MainActor (NarrationDocument) -> Void)? = nil
     ) async throws -> NarrationDocument {
         try Task.checkCancellation()
         if let owner {
@@ -208,7 +269,7 @@ final class NarrationService {
             : []
         let preparation = Preparation(
             job: job, owner: owner, documentID: plan.document.id, discourseID: transcript.discourseID,
-            renderer: renderer, paceTargets: paceTargets, onFailure: onFailure
+            renderer: renderer, selection: selection, paceTargets: paceTargets, onFailure: onFailure, onProgress: onProgress
         )
         active = preparation
         revision &+= 1
@@ -216,7 +277,7 @@ final class NarrationService {
         preparingDiscourseID = transcript.discourseID
         preparingDocumentID = plan.document.id
         progress = 0
-        statusMessage = "Checking saved narration…"
+        statusMessage = "Checking the saved translation…"
         errorMessage = nil
         let lengths = plan.chunks.map { $0.text.utf16.count }
         estimator = NarrationProgressEstimator(lengths: lengths, completed: [], startedAt: now())
@@ -226,7 +287,7 @@ final class NarrationService {
         beginBackground(selection: selection, job: job)
         let started = ProcessInfo.processInfo.systemUptime
 
-        // Native translation stays in the view's task; only one structured audio batch runs alongside it.
+        // Only one structured audio batch runs alongside the translation host's task.
         return try await withTaskCancellationHandler {
             var stage = Stage.cache
             do {
@@ -240,11 +301,13 @@ final class NarrationService {
                     )
                     publish(snapshot)
                     Self.log.info("stage=cache outcome=\(snapshot.document.segments.isEmpty ? "miss" : "resumed", privacy: .public)")
+                    journal?.record("prepare from=\(snapshot.document.segments.count)/\(plan.chunks.count) lowPower=\(isLowPowerModeEnabled)")
                     let completed = Set(snapshot.document.segments.map(\.index))
                     let missing = plan.chunks.filter { !completed.contains($0.index) }
                     let batches = Self.batches(missing)
                     let savedTranslations = try await cache.pendingTranslations(job: job)
                     try check(job)
+                    recordTranslated(savedTranslations.keys, total: plan.chunks.count)
                     Self.log.info("stage=pipeline lookahead=\(batches.count > 1 ? 1 : 0, privacy: .public)")
                     if let first = batches.first {
                         var translated = try await translatedBatch(
@@ -277,9 +340,11 @@ final class NarrationService {
                     }
                     try check(job)
                     stage = .assembly
-                    statusMessage = "Finishing narration…"
+                    statusMessage = "Finishing the translation…"
                     estimatedSecondsRemaining = nil
-                    if continuesInBackground { backgroundActivity?.update(fraction: progress, subtitle: "Finishing the audio…") }
+                    if backgroundStatus == .requesting || continuesInBackground {
+                        backgroundActivity?.update(fraction: progress, subtitle: "Finishing the audio…")
+                    }
                     let segments = try await cache.segmentURLs(job: job)
                     try check(job)
                     let output = try await cache.outputURL(segment: nil, job: job)
@@ -297,9 +362,11 @@ final class NarrationService {
                 isPreparing = false
                 preparingDiscourseID = nil
                 progress = 1
-                statusMessage = "Narration ready."
+                statusMessage = "Translation ready."
                 endRun(documentID: plan.document.id, success: true)
+                journal?.record("prepare ready")
                 Self.log.info("stage=prepare outcome=ready seconds=\(ProcessInfo.processInfo.systemUptime - started, privacy: .public)")
+                await removeSpentPassageAudio()
                 return snapshot.document
             } catch {
                 let failure = preparation.failure ?? (error as? WorkFailure) ?? WorkFailure(stage: stage, underlying: error)
@@ -365,6 +432,7 @@ final class NarrationService {
                 try await cache.saveTranslations(additions, job: job)
                 try check(job)
                 texts.merge(additions) { _, translated in translated }
+                recordTranslated(additions.keys, total: total)
                 Self.log.debug("stage=translation outcome=translated")
             }
             Self.log.debug("stage=translationCache reused=\(chunks.count - missing.count, privacy: .public)")
@@ -399,6 +467,7 @@ final class NarrationService {
                     let saved = try await cache.checkpoint(index: chunk.index, text: text, duration: duration, job: job)
                     try check(job)
                     estimator?.complete(chunk.index, at: now())
+                    journal?.record("passage \(saved.document.segments.count)/\(total) backgroundTime=\(backgroundStatus.logValue)")
                     publish(saved)
                     snapshot = saved
                     Self.log.debug("stage=checkpoint outcome=saved")
@@ -474,6 +543,24 @@ final class NarrationService {
         }
     }
 
+    /// Playing audio keeps the app running in the background, so preparation needs no background task then.
+    func pauseIfBackgroundTimeNotGranted(audioKeepsAppRunning: Bool = false) {
+        refreshPowerState()
+        Self.log.info("stage=backgroundEntry granted=\(self.continuesInBackground, privacy: .public) audio=\(audioKeepsAppRunning, privacy: .public) lowPower=\(self.isLowPowerModeEnabled, privacy: .public)")
+        guard active != nil || preparationOwner != nil else { return }
+        journal?.record("app entered background backgroundTime=\(backgroundStatus.logValue) audio=\(audioKeepsAppRunning) lowPower=\(isLowPowerModeEnabled)")
+        guard !continuesInBackground, !audioKeepsAppRunning else { return }
+        let reason: NarrationBackgroundReason
+        if case .unavailable(let unavailable) = backgroundStatus {
+            reason = unavailable
+        } else {
+            reason = .notGranted
+        }
+        setBackgroundStatus(.paused(reason))
+        cancel()
+        statusMessage = backgroundStatusMessage
+    }
+
     func audioURL(for document: NarrationDocument) -> URL? {
         guard document.isComplete, !deletingIDs.contains(document.id),
               !deletingDiscourses.contains(document.discourseID),
@@ -502,9 +589,10 @@ final class NarrationService {
         defer { deletingIDs.remove(id) }
         do {
             try await cache.remove(id)
+            storageRevision &+= 1
             Self.log.info("stage=delete outcome=removed")
         } catch {
-            if revision == started { errorMessage = "Narration could not be removed. Please try again." }
+            if revision == started { errorMessage = "The translation couldn't be removed. Please try again." }
             Self.log.error("stage=delete outcome=failed")
             throw error
         }
@@ -531,9 +619,33 @@ final class NarrationService {
             if failed { throw NarrationPreparationError.storage }
             Self.log.info("stage=deleteAll outcome=removed")
         } catch {
-            if revision == started { errorMessage = "Some narration could not be removed. Please try again." }
+            if revision == started { errorMessage = "Some translations couldn't be removed. Please try again." }
             Self.log.error("stage=deleteAll outcome=failed")
         }
+    }
+
+    /// A finished rendition plays from its joined file, so its passage files only take space.
+    /// Passages that are playing, or about to, are kept until a later call.
+    func removeSpentPassageAudio() async {
+        for (id, snapshot) in ready where snapshot.hasPassageAudio {
+            guard active?.documentID != id, !deletingIDs.contains(id),
+                  !deletingDiscourses.contains(snapshot.document.discourseID), !passageAudioInUse(id) else { continue }
+            do {
+                guard let compacted = try await cache.removePassageAudio(of: snapshot),
+                      ready[id]?.document == snapshot.document, !deletingIDs.contains(id) else { continue }
+                ready[id] = compacted
+                storageRevision &+= 1
+                journal?.record("passage audio removed after joining passages=\(snapshot.document.segments.count)")
+                Self.log.info("stage=compact outcome=removed")
+            } catch {
+                Self.log.error("stage=compact outcome=failed")
+            }
+        }
+    }
+
+    /// Bytes on disk for each saved rendition, keyed by document ID.
+    func storageSizes() async -> [String: Int64] {
+        await cache.sizes()
     }
 
     func savePosition(documentID: String, position: TimeInterval) {
@@ -547,7 +659,10 @@ final class NarrationService {
         } else {
             return
         }
-        defaults.set(min(position, limit), forKey: Self.positionPrefix + documentID)
+        let clamped = min(position, limit)
+        // Listening moves a rendition up Continue Listening; a paused autosave does not.
+        if recentPlays[documentID] != nil, abs(self.position(for: documentID) - clamped) > 0.01 { recordPlay(documentID: documentID) }
+        defaults.set(clamped, forKey: Self.positionPrefix + documentID)
     }
 
     func position(for documentID: String) -> TimeInterval {
@@ -574,6 +689,7 @@ final class NarrationService {
     /// The finished passages from the start, which can play before the full narration exists.
     func playablePrefix(of documentID: String) -> (document: NarrationDocument, segmentURLs: [URL])? {
         guard NarrationCache.isID(documentID), !deletingIDs.contains(documentID),
+              ready[documentID]?.hasPassageAudio != false,
               var document = documents.first(where: { $0.id == documentID }),
               !deletingDiscourses.contains(document.discourseID) else { return nil }
         let segments = zip(document.segments, 0...).prefix { $0.0.index == $0.1 && $0.0.duration.isFinite && $0.0.duration > 0 }
@@ -586,29 +702,72 @@ final class NarrationService {
     }
 
     private func beginBackground(selection: NarrationSelection, job: NarrationCache.Job) {
-        guard let backgroundActivity else { return }
+        guard let backgroundActivity else {
+            setBackgroundStatus(.unavailable(.notSupported))
+            return
+        }
+        setBackgroundStatus(.requesting)
         let language = NarrationLanguageSupport.displayName(for: selection.targetLanguage)
-        continuesInBackground = backgroundActivity.begin(
+        backgroundActivity.begin(
             title: "Translating into \(language)", subtitle: "Starting…",
+            onStatusChange: { [weak self] status in
+                guard let self, self.active?.job.id == job.id else { return }
+                self.setBackgroundStatus(status)
+            },
             onExpire: { [weak self] in self?.backgroundExpired(job: job) }
         )
     }
 
+    /// Asks for the grace time again when the app returns; it is spent once used up in the background.
+    func renewBackgroundTimeIfNeeded() {
+        guard let active, backgroundStatus != .running else { return }
+        journal?.record("background time renewed")
+        beginBackground(selection: active.selection, job: active.job)
+    }
+
     private func backgroundExpired(job: NarrationCache.Job) {
-        continuesInBackground = false
         guard active?.job.id == job.id else { return }
-        Self.log.notice("stage=background outcome=expired")
+        // Playing audio keeps the app running, so the work outlives the grace time.
+        if audioKeepsAppRunning() {
+            journal?.record("background time expired; audio keeps translating")
+            setBackgroundStatus(.paused(.expired))
+            return
+        }
+        journal?.record("background time expired")
+        setBackgroundStatus(.paused(.expired))
         cancel(job: job)
         statusMessage = "Preparation was stopped in the background. Completed passages are saved."
     }
 
     private func endRun(documentID: String, success: Bool) {
         backgroundActivity?.end(success: success)
-        continuesInBackground = false
+        if success {
+            setBackgroundStatus(.idle)
+        } else {
+            switch backgroundStatus {
+            case .paused: break
+            default: setBackgroundStatus(.paused(.cancelled))
+            }
+        }
         estimator = nil
         estimatedSecondsRemaining = nil
         preparingDocumentID = nil
         onEvent?(.preparationEnded(documentID: documentID))
+    }
+
+    private func setBackgroundStatus(_ status: NarrationBackgroundStatus) {
+        refreshPowerState()
+        guard backgroundStatus != status else { return }
+        backgroundStatus = status
+        if status != .idle { journal?.record("background status=\(status.logValue) lowPower=\(isLowPowerModeEnabled)") }
+        Self.log.info("stage=background outcome=\(status.logValue, privacy: .public) lowPower=\(self.isLowPowerModeEnabled, privacy: .public)")
+    }
+
+    func refreshPowerState() {
+        let enabled = lowPowerMode()
+        guard enabled != isLowPowerModeEnabled else { return }
+        isLowPowerModeEnabled = enabled
+        Self.log.info("stage=power lowPower=\(enabled, privacy: .public)")
     }
 
     private func cancel(job: NarrationCache.Job) {
@@ -647,10 +806,12 @@ final class NarrationService {
             ?? (failure.underlying as? NativeNarrationSpeechError)?.localizedDescription ?? failure.stage.failureMessage
         statusMessage = "Preparation paused. Saved text and audio will be reused."
         revision &+= 1
+        setBackgroundStatus(.paused(.preparationFailed))
         endRun(documentID: preparation.documentID, success: false)
         Task { await cache.discardStaging(job: job) }
         // Retire the view's session promptly; a native lookahead may still be awaiting consent or a response.
         preparation.onFailure?(failure.underlying)
+        journal?.record("prepare failed stage=\(failure.stage.rawValue) error=\(NarrationJournal.describe(failure.underlying))")
         Self.log.notice("stage=pipeline outcome=stopped reason=\(failure.stage.rawValue, privacy: .public)")
     }
 
@@ -661,6 +822,7 @@ final class NarrationService {
     }
 
     private func publish(_ snapshot: NarrationCache.Snapshot) {
+        refreshPowerState()
         documents.removeAll { $0.id == snapshot.document.id }
         documents.append(snapshot.document)
         documents.sort(by: Self.mostRecent)
@@ -670,7 +832,7 @@ final class NarrationService {
             progress = 1
         } else if let estimator, estimator.passageCount == expected {
             // The final share is reserved for joining passages into one file.
-            progress = estimator.fraction * Double(expected) / Double(expected + 1)
+            progress = estimator.workFraction * Double(expected) / Double(expected + 1)
         } else {
             progress = Double(snapshot.document.segments.count) / Double(expected + 1)
         }
@@ -678,20 +840,34 @@ final class NarrationService {
             completedPassages = snapshot.document.segments.count
             totalPassages = expected
             estimatedSecondsRemaining = snapshot.document.isComplete ? nil : estimator?.secondsRemaining
-            if continuesInBackground, !snapshot.document.isComplete {
-                var subtitle = NarrationTimeFormatting.passages(completedPassages, of: totalPassages)
-                if let estimatedSecondsRemaining { subtitle += " · " + NarrationTimeFormatting.remaining(estimatedSecondsRemaining) }
-                backgroundActivity?.update(fraction: progress, subtitle: subtitle)
-            }
+            if !snapshot.document.isComplete { reportBackgroundProgress() }
         }
         revision &+= 1
         onEvent?(.documentUpdated(snapshot.document))
+        if active?.documentID == snapshot.document.id { active?.onProgress?(snapshot.document) }
+    }
+
+    private func reportBackgroundProgress() {
+        guard backgroundStatus == .requesting || continuesInBackground else { return }
+        var subtitle = NarrationTimeFormatting.passages(completedPassages, of: totalPassages)
+        if let estimatedSecondsRemaining { subtitle += " · " + NarrationTimeFormatting.remaining(estimatedSecondsRemaining) }
+        backgroundActivity?.update(fraction: progress, subtitle: subtitle)
+    }
+
+    /// A finished translation batch is real progress before any of its audio exists.
+    private func recordTranslated(_ indices: some Sequence<Int>, total: Int) {
+        guard var estimator, estimator.passageCount == total else { return }
+        estimator.markTranslated(indices)
+        self.estimator = estimator
+        progress = max(progress, estimator.workFraction * Double(total) / Double(total + 1))
+        reportBackgroundProgress()
     }
 
     private func forget(_ id: String) {
         documents.removeAll { $0.id == id }
         ready[id] = nil
         defaults.removeObject(forKey: Self.positionPrefix + id)
+        dismissFromRecent(documentID: id)
     }
 
     private static func mostRecent(_ lhs: NarrationDocument, _ rhs: NarrationDocument) -> Bool {

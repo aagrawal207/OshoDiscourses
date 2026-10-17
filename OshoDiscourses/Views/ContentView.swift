@@ -27,6 +27,8 @@ struct ContentView: View {
     @State private var whatsNew: WhatsNewContent?
     @State private var whatsNewOwner = UUID()
     @State private var hostWindow = HostWindowBox()
+    @State private var narrationHostID = UUID()
+    @State private var narrationSceneID: String?
     #if DEBUG
     /// `-debugTranscript <discourseID>` on the launch arguments plays that
     /// (already downloaded) discourse and opens its transcript (or the full
@@ -73,6 +75,13 @@ struct ContentView: View {
         }
         .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.bottom }) { rootBottomInset = $0 }
         .environment(navigation)
+        #if TRANSLATED_NARRATION
+        .background {
+            if #available(macCatalyst 26.0, *) {
+                NarrationPreparationHost(hostID: narrationHostID)
+            }
+        }
+        #endif
         .focusedSceneValue(\.appNavigation, navigation)
         .focusedSceneValue(\.commandState, commandState)
         .sheet(isPresented: compactPlayerBinding) {
@@ -81,7 +90,19 @@ struct ContentView: View {
         .fullScreenCover(isPresented: regularPlayerBinding) {
             playerScreen
         }
-        .background { HostWindowReader { hostWindow.window = $0 }.frame(width: 0, height: 0).accessibilityHidden(true) }
+        .background {
+            HostWindowReader {
+                hostWindow.window = $0
+                if let scene = $0?.windowScene { narrationSceneID = scene.session.persistentIdentifier }
+            }.frame(width: 0, height: 0).accessibilityHidden(true)
+        }
+        #if TRANSLATED_NARRATION
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)) { notification in
+            guard let scene = notification.object as? UIScene,
+                  scene.session.persistentIdentifier == narrationSceneID else { return }
+            if #available(macCatalyst 26.0, *) { NarrationPreparationController.shared.hostDisappeared(narrationHostID) }
+        }
+        #endif
         .task { await presentWhatsNewWhenQuiet() }
         .onDisappear(perform: abandonWhatsNew)
         .sheet(isPresented: Binding(get: { whatsNew != nil }, set: { if !$0 { finishWhatsNew() } })) {
@@ -116,6 +137,9 @@ struct ContentView: View {
             }
         }
         #endif
+        #endif
+        #if TRANSLATED_NARRATION
+        .environment(\.narrationPreparationHostID, narrationHostID)
         #endif
         .preferredColorScheme(colorSchemeForAppearance(settings.appearance))
     }

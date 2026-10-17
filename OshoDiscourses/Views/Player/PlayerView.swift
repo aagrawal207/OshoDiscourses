@@ -17,7 +17,6 @@ struct PlayerView: View {
     @State private var showTranscript = false
     #if TRANSLATED_NARRATION
     @State private var narrationDiscourse: CatalogDiscourse?
-    @State private var showNarrationRecovery = false
     #endif
     /// The wide player's reading pane; the listener's choice persists.
     @AppStorage("player.transcriptPaneVisible") private var showsTranscriptPane = true
@@ -47,7 +46,7 @@ struct PlayerView: View {
 
     private var hasOpenSheet: Bool {
         #if TRANSLATED_NARRATION
-        if narrationDiscourse != nil || showNarrationRecovery { return true }
+        if narrationDiscourse != nil { return true }
         #endif
         return showQueue || showAudioEnhancement || showTranscript || showBookmarkSheet
     }
@@ -169,21 +168,6 @@ struct PlayerView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-        }
-        .sheet(isPresented: $showNarrationRecovery) {
-            NavigationStack {
-                TranslatedNarrationLibraryView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showNarrationRecovery = false }
-                                .keyboardShortcut(.cancelAction)
-                        }
-                    }
-            }
-            .environment(player)
-            .environment(downloads)
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         #endif
         .sheet(isPresented: $showBookmarkSheet) {
@@ -315,7 +299,7 @@ struct PlayerView: View {
 
                 #if TRANSLATED_NARRATION
                 if #available(macCatalyst 26.0, *), let failure = player.narrationPlaybackFailure {
-                    NarrationPlaybackFailureBanner(failure: failure) { showNarrationRecovery = true }
+                    NarrationPlaybackFailureBanner(failure: failure) { openNarration() }
                         .padding(.top, 8)
                 }
                 #endif
@@ -730,17 +714,21 @@ struct PlayerView: View {
             .accessibilityIdentifier("player.audioEnhancement")
             .disabled(player.isPlayingNarration)
 
-            playerControlButton(icon: "doc.plaintext", label: "Transcript", isActive: arrangement != .single) {
-                openTranscript()
+            #if TRANSLATED_NARRATION
+            // A translation reads along in its own text, in the same place as the transcript.
+            if player.isPlayingNarration {
+                if #available(macCatalyst 26.0, *) {
+                    playerControlButton(icon: "doc.plaintext", label: "Read Along", isActive: false, action: openNarration)
+                        .accessibilityLabel("Read along")
+                        .accessibilityHint("Shows the translated text as it plays")
+                        .accessibilityIdentifier("player.readNarration")
+                }
+            } else {
+                transcriptControl(arrangement: arrangement)
             }
-            .accessibilityValue(paneFits ? (arrangement != .single ? "Shown" : "Hidden") : "")
-            .accessibilityLabel("Transcript")
-            .accessibilityHint(player.isPlayingNarration
-                                ? "Use Read Along for the translated narration"
-                                : (hasTranscript ? "Reads along with the playing audio" : "No transcript for this discourse"))
-            .accessibilityIdentifier("player.transcript")
-            .disabled(!hasTranscript)
-            .opacity(hasTranscript ? 1 : 0.35)
+            #else
+            transcriptControl(arrangement: arrangement)
+            #endif
 
             playerControlButton(
                 icon: sleepTimer.isActive ? "moon.fill" : "moon",
@@ -755,22 +743,22 @@ struct PlayerView: View {
             .accessibilityLabel("Sleep timer")
             .accessibilityValue(sleepTimer.isActive ? sleepTimer.statusLabel : "Off")
 
-            #if TRANSLATED_NARRATION
-            if player.isPlayingNarration {
-                if #available(macCatalyst 26.0, *) {
-                    playerControlButton(icon: "doc.plaintext", label: "Read Along", isActive: false, action: openNarration)
-                        .accessibilityLabel("Read translated narration")
-                        .accessibilityIdentifier("player.readNarration")
-                }
-            } else {
-                bookmarkControl
-            }
-            #else
             bookmarkControl
-            #endif
         }
         // Short control labels must fit five columns on narrow screens.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    private func transcriptControl(arrangement: Arrangement) -> some View {
+        playerControlButton(icon: "doc.plaintext", label: "Transcript", isActive: arrangement != .single) {
+            openTranscript()
+        }
+        .accessibilityValue(paneFits ? (arrangement != .single ? "Shown" : "Hidden") : "")
+        .accessibilityLabel("Transcript")
+        .accessibilityHint(hasTranscript ? "Reads along with the playing audio" : "No transcript for this discourse")
+        .accessibilityIdentifier("player.transcript")
+        .disabled(!hasTranscript)
+        .opacity(hasTranscript ? 1 : 0.35)
     }
 
     private var bookmarkControl: some View {
@@ -788,7 +776,7 @@ struct PlayerView: View {
             showBookmarkSheet = true
         }
         .accessibilityLabel("Add bookmark")
-        .accessibilityHint(player.isPlayingNarration ? "Saves this moment in the original recording" : "Saves the current position")
+        .accessibilityHint(player.isPlayingNarration ? "Saves this moment in Osho's recording" : "Saves the current position")
         .disabled(player.isPlayingNarration && narrationTimeline?.originalTime(forTranslated: player.currentTime) == nil)
     }
 

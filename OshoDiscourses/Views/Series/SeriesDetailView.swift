@@ -1,4 +1,7 @@
 import SwiftUI
+#if TRANSLATED_NARRATION
+import AVFoundation
+#endif
 
 struct SeriesDetailView: View {
     @Environment(AudioPlayerService.self) private var player
@@ -10,6 +13,14 @@ struct SeriesDetailView: View {
     /// Listening through translation: rows open or play the narration instead of the recording.
     @State private var listensTranslated = false
     @State private var translationDiscourse: CatalogDiscourse?
+    #if TRANSLATED_NARRATION
+    @State private var selectedTargetLanguage = ""
+    @State private var availableTargetLanguages: [String]?
+    @State private var targetsWithoutVoices = Set<String>()
+    @State private var checkingLanguages = true
+    @State private var languageCheckFailed = false
+    @State private var languageRefreshID = 0
+    #endif
 
     private var isRegular: Bool { AppLayout.isRegular(sizeClass) }
     /// Header and list share one column so their edges line up on iPad.
@@ -77,16 +88,18 @@ struct SeriesDetailView: View {
             }
         }
         #if TRANSLATED_NARRATION
-        .onAppear {
-            listensTranslated = TranslatedListening.prefersTranslation(seriesInfo, filter: UserSettings.shared.languageFilter)
+        .onAppear { refreshListeningPreferences() }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            refreshListeningPreferences()
         }
-        .onChange(of: listensTranslated) { _, value in
-            TranslatedListening.setPrefersTranslation(value, for: seriesInfo)
+        .onReceive(NotificationCenter.default.publisher(for: AVSpeechSynthesizer.availableVoicesDidChangeNotification)) { _ in
+            languageRefreshID += 1
         }
         .task { await NarrationService.shared.loadIfNeeded() }
-        .sheet(item: $translationDiscourse) { discourse in
+        .task(id: languageRefreshID) { await loadListeningLanguages() }
+        .sheet(item: $translationDiscourse, onDismiss: refreshListeningPreferences) { discourse in
             if #available(macCatalyst 26.0, *) {
-                let target = TranslatedListening.targetLanguage(for: seriesInfo)
+                let target = listeningTargetLanguage
                 TranslatedNarrationView(
                     discourseID: discourse.id,
                     selectedDocumentID: TranslatedListening.savedNarration(
@@ -107,23 +120,123 @@ struct SeriesDetailView: View {
     private var listeningPicker: some View {
         #if TRANSLATED_NARRATION
         if TranslatedListening.canTranslate(seriesInfo) {
-            VStack(alignment: .leading, spacing: 6) {
-                Picker("Listen in", selection: $listensTranslated) {
-                    Text(TranslatedListening.originalName(for: seriesInfo)).tag(false)
-                    Text(TranslatedListening.targetName(for: seriesInfo)).tag(true)
+            Menu {
+                Button { selectListeningLanguage(nil) } label: {
+                    Label("Osho's original recording", systemImage: listensTranslated ? "waveform" : "checkmark")
                 }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("series.listeningLanguage")
-                if listensTranslated {
-                    Text("Translated from the transcript and read by a synthetic voice. The recording isn't needed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("Osho's original recording")
+                .accessibilityIdentifier("series.listeningOriginal")
+                Divider()
+                if checkingLanguages {
+                    Text("Checking translation languages…")
                 }
+                if let availableTargetLanguages {
+                    ForEach(availableTargetLanguages, id: \.self) { language in
+                        Button { selectListeningLanguage(language) } label: {
+                            let name = NarrationLanguageSupport.displayName(for: language)
+                            let title = targetsWithoutVoices.contains(language) ? "\(name) (voice needed)" : name
+                            if listensTranslated && language == listeningTargetLanguage {
+                                Label(title, systemImage: "checkmark")
+                            } else {
+                                Text(title)
+                            }
+                        }
+                        .accessibilityLabel(NarrationLanguageSupport.displayName(for: language))
+                        .accessibilityHint(targetsWithoutVoices.contains(language) ? "A system voice is needed to translate this discourse" : "")
+                        .accessibilityIdentifier("series.listeningTarget.\(language)")
+                    }
+                    if availableTargetLanguages.isEmpty && !checkingLanguages {
+                        Text("No translation languages available")
+                    }
+                }
+                if languageCheckFailed {
+                    Text("Couldn't check translation languages")
+                }
+                if !checkingLanguages {
+                    Divider()
+                    Button(languageCheckFailed ? "Try Again" : "Refresh Languages", systemImage: "arrow.clockwise") {
+                        languageRefreshID += 1
+                    }
+                    .accessibilityIdentifier("series.refreshListeningLanguages")
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "globe")
+                    Text(listensTranslated
+                         ? "Listen in \(NarrationLanguageSupport.displayName(for: listeningTargetLanguage))"
+                         : "Osho's original recording")
+                    if checkingLanguages {
+                        ProgressView().controlSize(.small)
+                    } else if languageCheckFailed {
+                        Image(systemName: "exclamationmark.circle")
+                    }
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                .font(.subheadline)
+                .frame(minHeight: 44)
             }
+            .accessibilityIdentifier("series.listeningLanguage")
+            .accessibilityValue(listeningAccessibilityValue)
         }
         #endif
     }
+
+    private var listeningTargetLanguage: String {
+        #if TRANSLATED_NARRATION
+        selectedTargetLanguage.isEmpty ? TranslatedListening.targetLanguage(for: seriesInfo) : selectedTargetLanguage
+        #else
+        ""
+        #endif
+    }
+
+    #if TRANSLATED_NARRATION
+    private var listeningAccessibilityValue: String {
+        let choice = listensTranslated ? NarrationLanguageSupport.displayName(for: listeningTargetLanguage) : "Original recording"
+        if checkingLanguages { return "\(choice), checking translation languages" }
+        if languageCheckFailed { return "\(choice), couldn't check translation languages" }
+        return choice
+    }
+
+    private func refreshListeningPreferences() {
+        listensTranslated = TranslatedListening.prefersTranslation(seriesInfo, filter: UserSettings.shared.languageFilter)
+        selectedTargetLanguage = availableTargetLanguages.flatMap {
+            TranslatedListening.resolvedTargetLanguage(for: seriesInfo, availableLanguages: $0)
+        } ?? TranslatedListening.targetLanguage(for: seriesInfo)
+    }
+
+    private func selectListeningLanguage(_ language: String?) {
+        if let language {
+            TranslatedListening.setTargetLanguage(language, for: seriesInfo)
+            selectedTargetLanguage = language
+            listensTranslated = true
+        } else {
+            TranslatedListening.setPrefersTranslation(false, for: seriesInfo)
+            listensTranslated = false
+        }
+    }
+
+    private func loadListeningLanguages() async {
+        guard TranslatedListening.canTranslate(seriesInfo) else { return }
+        guard #available(macCatalyst 26.0, *) else { return }
+        checkingLanguages = true
+        languageCheckFailed = false
+        do {
+            let languages = try await NarrationLanguageSupport.availableLanguages(
+                sourceLanguage: NarrationLanguageSupport.sourceLanguage(for: seriesInfo.language),
+                voices: NativeNarrationSpeechRenderer.availableVoices()
+            )
+            guard !Task.isCancelled else { return }
+            availableTargetLanguages = languages.map(\.id)
+            targetsWithoutVoices = Set(languages.filter { $0.voices.isEmpty }.map(\.id))
+            refreshListeningPreferences()
+        } catch {
+            guard !Task.isCancelled else { return }
+            languageCheckFailed = true
+        }
+        checkingLanguages = false
+    }
+    #endif
 
     private var headerSection: some View {
         VStack(spacing: 16) {
@@ -337,6 +450,7 @@ struct SeriesDetailView: View {
             ForEach(discourses) { discourse in
                 DiscourseRowView(
                     discourse: discourse, seriesInfo: seriesInfo, listensTranslated: listensTranslated,
+                    targetLanguage: listeningTargetLanguage,
                     openTranslation: { translationDiscourse = $0 }
                 )
 
@@ -359,6 +473,7 @@ private struct DiscourseRowView: View {
     let discourse: CatalogDiscourse
     let seriesInfo: SeriesInfo
     var listensTranslated = false
+    var targetLanguage = ""
     var openTranslation: (CatalogDiscourse) -> Void = { _ in }
     @State private var showDownloadHint = false
     @State private var showTranscript = false
@@ -452,6 +567,8 @@ private struct DiscourseRowView: View {
         // discover on its own — expose it as a button with the same action.
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel("Discourse \(discourse.number)\(isCompleted ? ", completed" : "")\(hasTranscript ? ", transcript available" : "")")
+        .accessibilityIdentifier("series.discourse.\(discourse.id)")
+        .accessibilityValue(translatedMode ? "\(targetName) translation" : "Original recording")
         .accessibilityHint(rowHint)
         .accessibilityAction {
             if translatedMode { openTranslation(discourse) } else if !listensTranslated { playDiscourse() }
@@ -490,7 +607,7 @@ private struct DiscourseRowView: View {
                 Button {
                     openTranslation(discourse)
                 } label: {
-                    Label("Listen in \(TranslatedListening.targetName(for: seriesInfo))…", systemImage: "globe")
+                    Label("Listen in \(targetName)…", systemImage: "globe")
                 }
             }
             #endif
@@ -533,20 +650,26 @@ private struct DiscourseRowView: View {
     private var translatedMode: Bool { listensTranslated && hasTranscript }
 
     private var rowHint: String {
-        if translatedMode { return "Opens the \(targetName) narration" }
+        if translatedMode { return "Opens the \(targetName) translation" }
         if listensTranslated { return "No transcript to translate yet" }
         return isDownloaded ? "Plays this discourse" : "Downloads this discourse"
     }
 
     #if TRANSLATED_NARRATION
-    private var targetName: String { TranslatedListening.targetName(for: seriesInfo) }
+    private var targetName: String { NarrationLanguageSupport.displayName(for: targetLanguage) }
     private var savedTranslation: NarrationDocument? {
         TranslatedListening.savedNarration(
-            for: discourse.id, target: TranslatedListening.targetLanguage(for: seriesInfo),
+            for: discourse.id, target: targetLanguage,
             in: NarrationService.shared.documents
         )
     }
-    private var isTranslating: Bool { NarrationService.shared.preparingDiscourseID == discourse.id }
+    private var isTranslating: Bool {
+        let narrations = NarrationService.shared
+        guard narrations.preparingDiscourseID == discourse.id,
+              let preparing = narrations.documents.first(where: { $0.id == narrations.preparingDocumentID }) else { return false }
+        return NarrationLanguageSupport.languageAndScript(for: preparing.selection.targetLanguage)
+            == NarrationLanguageSupport.languageAndScript(for: targetLanguage)
+    }
 
     private var translationStatus: String? {
         let narrations = NarrationService.shared
@@ -561,28 +684,38 @@ private struct DiscourseRowView: View {
     @ViewBuilder
     private var translationButton: some View {
         let narrations = NarrationService.shared
-        if isTranslating {
-            Button { openTranslation(discourse) } label: {
-                CircularProgressView(progress: narrations.progress).frame(width: 28, height: 28)
-            }
-            .accessibilityLabel("Translating")
-            .accessibilityValue("\(Int(narrations.progress * 100)) percent")
-        } else if let saved = savedTranslation, saved.isComplete, let url = narrations.audioURL(for: saved) {
+        if let saved = savedTranslation, saved.isComplete ? narrations.audioURL(for: saved) != nil : !saved.segments.isEmpty {
+            // Part of a translation is enough to start listening; the row's other tap continues translating.
             let current = player.currentNarration?.id == saved.id
             Button {
-                if current { player.togglePlayPause() } else { Task { await TranslatedListening.play(saved, url: url, player: player) } }
+                if current, player.narrationPlaybackFailure == nil {
+                    player.togglePlayPause()
+                } else {
+                    let loadedTrack = player.currentTrackId
+                    Task {
+                        let start = await TranslatedListening.translatedStart(for: saved, player: player)
+                        guard player.currentTrackId == loadedTrack else { return }
+                        NarrationPreviewPlayback.shared.play(documentID: saved.id, player: player, resumeAt: start)
+                    }
+                }
             } label: {
                 Image(systemName: current && player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.title2)
                     .foregroundStyle(Color.accent)
             }
-            .accessibilityLabel(current && player.isPlaying ? "Pause \(targetName) narration" : "Play \(targetName) narration")
+            .accessibilityLabel(current && player.isPlaying ? "Pause \(targetName) translation" : "Play \(targetName) translation")
+        } else if isTranslating {
+            Button { openTranslation(discourse) } label: {
+                CircularProgressView(progress: narrations.progress).frame(width: 28, height: 28)
+            }
+            .accessibilityLabel("Translating")
+            .accessibilityValue("\(Int(narrations.progress * 100)) percent")
         } else if let saved = savedTranslation {
             Button { openTranslation(discourse) } label: {
                 CircularProgressView(progress: Double(saved.segments.count) / Double(max(1, saved.expectedSegmentCount)))
                     .frame(width: 28, height: 28)
             }
-            .accessibilityLabel("Continue \(targetName) narration")
+            .accessibilityLabel("Continue \(targetName) translation")
         } else {
             Button { openTranslation(discourse) } label: {
                 Image(systemName: "globe")
@@ -591,7 +724,7 @@ private struct DiscourseRowView: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel("Prepare \(targetName) narration")
+            .accessibilityLabel("Translate into \(targetName)")
         }
     }
     #else

@@ -20,13 +20,13 @@ enum NarrationTranslationError: LocalizedError, Equatable {
         case .emptyInput:
             return "The source transcript contains no text to translate."
         case .invalidResponse:
-            return "Apple Translation returned an incomplete or invalid translation. Try preparing the narration again."
+            return "Apple Translation returned an incomplete or invalid translation. Try translating again."
         case .languagesNotReady:
             return "The translation languages aren't ready. Connect to the internet and try again to allow Apple's language download."
         case .languagePreparationFailed:
             return "Language preparation didn't finish. Allow Apple's language download, check your connection and free storage, then try again."
         case .translationFailed:
-            return "Apple Translation couldn't translate the transcript. Check the language downloads and try again. Saved narration segments are kept."
+            return "Apple Translation couldn't translate the transcript. Check the language downloads and try again. Saved passages are kept."
         case .sessionBusy:
             return "Translation is already running. Wait for it to finish and try again."
         }

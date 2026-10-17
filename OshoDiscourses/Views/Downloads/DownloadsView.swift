@@ -13,24 +13,97 @@ struct DownloadsView: View {
     @State private var selection = Set<String>()
     @State private var showDeleteAllConfirm = false
     @State private var seriesPendingDelete: SeriesInfo?
+    @State private var translationSizes: [String: Int64] = [:]
+    @State private var openedTranslation: NarrationDocument?
+    private let narrations = NarrationService.shared
 
     private var isEditing: Bool { editMode.isEditing }
 
-    private var groupedDownloads: [(seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] {
-        downloads.downloadedDiscourses()
+    /// A downloaded recording or a translation saved on this device; both play offline.
+    enum SavedItem: Identifiable {
+        case recording(CatalogDiscourse)
+        case translation(NarrationDocument, CatalogDiscourse)
+
+        var id: String {
+            switch self {
+            case .recording(let discourse): discourse.id
+            case .translation(let document, _): document.id
+            }
+        }
+
+        var discourse: CatalogDiscourse {
+            switch self {
+            case .recording(let discourse), .translation(_, let discourse): discourse
+            }
+        }
     }
 
-    private var filteredDownloads: [(seriesInfo: SeriesInfo, discourses: [CatalogDiscourse])] {
+    struct SavedGroup {
+        let seriesInfo: SeriesInfo
+        var items: [SavedItem]
+    }
+
+    /// Translations made on this device; preview builds without the feature have none.
+    private var savedTranslations: [NarrationDocument] {
+        #if TRANSLATED_NARRATION
+        narrations.documents
+        #else
+        []
+        #endif
+    }
+
+    private var finishedTranslations: [NarrationDocument] { savedTranslations.filter(\.isComplete) }
+
+    /// Translations still being made, or stopped part way; one just started may have no passage yet.
+    private var unfinishedTranslations: [NarrationDocument] {
+        savedTranslations.filter {
+            !$0.isComplete && Catalog.discourseLookup[$0.discourseID] != nil
+                && (!$0.segments.isEmpty || narrations.preparingDocumentID == $0.id)
+        }
+    }
+
+    private var groupedDownloads: [SavedGroup] {
+        var groups: [String: SavedGroup] = [:]
+        for group in downloads.downloadedDiscourses() {
+            groups[group.seriesInfo.id] = SavedGroup(seriesInfo: group.seriesInfo, items: group.discourses.map { .recording($0) })
+        }
+        for document in finishedTranslations {
+            guard let (discourse, series) = Catalog.discourseLookup[document.discourseID] else { continue }
+            groups[series.id, default: SavedGroup(seriesInfo: series, items: [])].items.append(.translation(document, discourse))
+        }
+        return groups.values.map { group in
+            var group = group
+            // A recording leads its own translations, then languages in a stable order.
+            group.items.sort { lhs, rhs in
+                if lhs.discourse.number != rhs.discourse.number { return lhs.discourse.number < rhs.discourse.number }
+                switch (lhs, rhs) {
+                case (.recording, .translation): return true
+                case (.translation, .recording): return false
+                default: return lhs.id < rhs.id
+                }
+            }
+            return group
+        }
+        .sorted { $0.seriesInfo.name < $1.seriesInfo.name }
+    }
+
+    private var filteredDownloads: [SavedGroup] {
         guard !searchText.isEmpty else { return groupedDownloads }
         let query = searchText.lowercased()
         return groupedDownloads.compactMap { group in
             let matchesSeries = group.seriesInfo.name.lowercased().contains(query)
-            let matchingDiscourses = group.discourses.filter {
-                matchesSeries || $0.displayTitle.lowercased().contains(query)
+            let matching = group.items.filter { item in
+                if matchesSeries || item.discourse.displayTitle.lowercased().contains(query) { return true }
+                guard case .translation(let document, _) = item else { return false }
+                return Self.languageName(document).lowercased().contains(query) || "translation".contains(query)
             }
-            guard !matchingDiscourses.isEmpty else { return nil }
-            return (seriesInfo: group.seriesInfo, discourses: matchingDiscourses)
+            guard !matching.isEmpty else { return nil }
+            return SavedGroup(seriesInfo: group.seriesInfo, items: matching)
         }
+    }
+
+    fileprivate static func languageName(_ document: NarrationDocument) -> String {
+        NarrationLanguageSupport.displayName(for: document.selection.targetLanguage)
     }
 
     /// Discourses currently downloading or queued, in run order (active first,
@@ -71,23 +144,32 @@ struct DownloadsView: View {
             }
             .searchable(text: $searchText, prompt: "Search downloads")
             .task(id: downloads.downloadedIDs) { sizesByID = await downloads.downloadedSizes() }
+            .task { await narrations.loadIfNeeded() }
+            // Sizes change as passages are saved and after joining frees them.
+            .task(id: narrations.documents.map { "\($0.id):\($0.segments.count):\($0.isComplete)" } + ["\(narrations.storageRevision)"]) {
+                translationSizes = await narrations.storageSizes()
+            }
             .toolbar { downloadsToolbar }
             .safeAreaInset(edge: .bottom) {
                 if isEditing { multiSelectDeleteBar }
             }
             .reservesMiniPlayerSpace()
             .confirmationDialog(
-                "Delete all \(downloads.downloadedIDs.count) downloaded discourses?",
+                deleteAllTitle,
                 isPresented: $showDeleteAllConfirm,
                 titleVisibility: .visible
             ) {
                 Button("Delete All", role: .destructive) {
+                    let translations = finishedTranslations.map(\.id)
                     downloads.deleteAllDownloads()
+                    removeTranslations(translations)
                     exitEditing()
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes the audio files from this device. Your bookmarks and listening history are kept.")
+                Text(finishedTranslations.isEmpty
+                     ? "This removes the audio files from this device. Your bookmarks and listening history are kept."
+                     : "This removes the audio files from this device. Translations can be made again from the transcript. Your bookmarks and listening history are kept.")
             }
             .confirmationDialog(
                 seriesPendingDelete.map { "Delete all downloads in \($0.name)?" } ?? "",
@@ -99,15 +181,49 @@ struct DownloadsView: View {
             ) {
                 Button("Delete Series Downloads", role: .destructive) {
                     if let series = seriesPendingDelete {
-                        let ids = Catalog.discourses(for: series)
-                            .map(\.id)
-                            .filter { downloads.isDownloaded($0) }
-                        downloads.deleteDownloads(ids: ids)
+                        let ids = groupedDownloads.first { $0.seriesInfo.id == series.id }?.items.map(\.id) ?? []
+                        deleteItems(ids: ids)
                     }
                     seriesPendingDelete = nil
                 }
                 Button("Cancel", role: .cancel) { seriesPendingDelete = nil }
             }
+            .sheet(item: $openedTranslation) { document in
+                #if TRANSLATED_NARRATION
+                if #available(macCatalyst 26.0, *) {
+                    TranslatedNarrationView(discourseID: document.discourseID, selectedDocumentID: document.id)
+                        .environment(player)
+                        .environment(downloads)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
+                #endif
+            }
+        }
+    }
+
+    private var deleteAllTitle: String {
+        let recordings = downloads.downloadedIDs.count
+        let translations = finishedTranslations.count
+        switch (recordings, translations) {
+        case (_, 0): return "Delete all \(recordings) downloaded discourses?"
+        case (0, _): return "Delete all \(translations) translations?"
+        default: return "Delete all \(recordings) downloads and \(translations) translations?"
+        }
+    }
+
+    /// Recordings and translations share one selection; translation IDs are rendition hashes.
+    private func deleteItems(ids: [String]) {
+        let translations = ids.filter(NarrationCache.isID)
+        downloads.deleteDownloads(ids: ids.filter { !NarrationCache.isID($0) })
+        removeTranslations(translations)
+    }
+
+    private func removeTranslations(_ ids: [String]) {
+        let documents = ids.compactMap { id in narrations.documents.first { $0.id == id } }
+        guard !documents.isEmpty else { return }
+        Task {
+            for document in documents { await removeTranslation(document, player: player) }
         }
     }
 
@@ -144,12 +260,12 @@ struct DownloadsView: View {
 
     private var multiSelectDeleteBar: some View {
         HStack {
-            Text(selection.isEmpty ? "Select discourses" : "\(selection.count) selected")
+            Text(selection.isEmpty ? "Select downloads" : "\(selection.count) selected")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Spacer()
             Button(role: .destructive) {
-                downloads.deleteDownloads(ids: Array(selection))
+                deleteItems(ids: Array(selection))
                 exitEditing()
             } label: {
                 Text("Delete")
@@ -209,28 +325,6 @@ struct DownloadsView: View {
                 }
             }
 
-            #if TRANSLATED_NARRATION
-            if #available(macCatalyst 26.0, *) {
-                NavigationLink {
-                    TranslatedNarrationLibraryView()
-                        .environment(player)
-                        .environment(downloads)
-                } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Translated Narrations")
-                            Text("Saved audio and preparation progress")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "globe")
-                            .foregroundStyle(Color.accent)
-                    }
-                }
-                .accessibilityIdentifier("downloads.translatedNarrations")
-            }
-            #endif
         }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
@@ -255,7 +349,7 @@ struct DownloadsView: View {
                     searchText.isEmpty ? "No Downloads" : "No Results",
                     systemImage: searchText.isEmpty ? "arrow.down.circle" : "magnifyingglass",
                     description: Text(searchText.isEmpty
-                        ? "Downloaded discourses will appear here."
+                        ? "Downloaded discourses and translations will appear here."
                         : "No downloads match \"\(searchText)\".")
                 )
             }
@@ -263,22 +357,34 @@ struct DownloadsView: View {
         } else {
             ForEach(Array(filteredDownloads.enumerated()), id: \.element.seriesInfo.id) { index, group in
                 Section {
-                    ForEach(group.discourses) { discourse in
-                        DownloadedDiscourseRow(
-                            discourse: discourse,
-                            seriesInfo: group.seriesInfo,
-                            sizeText: sizeText(for: sizesByID[discourse.id])
-                        )
-                        .tag(discourse.id)
+                    ForEach(group.items) { item in
+                        switch item {
+                        case .recording(let discourse):
+                            DownloadedDiscourseRow(
+                                discourse: discourse,
+                                seriesInfo: group.seriesInfo,
+                                sizeText: sizeText(for: sizesByID[discourse.id])
+                            )
+                            .tag(discourse.id)
+                        case .translation(let document, let discourse):
+                            TranslationRow(
+                                document: document, discourse: discourse,
+                                sizeText: sizeText(for: translationSizes[document.id]),
+                                open: { openedTranslation = document },
+                                remove: { removeTranslations([document.id]) }
+                            )
+                            .tag(document.id)
+                        }
                     }
                     .onDelete { indexSet in
-                        deleteDiscourses(at: indexSet, in: group.discourses)
+                        deleteItems(ids: indexSet.map { group.items[$0].id })
                     }
                 } header: {
                     DownloadedSeriesHeader(
                         seriesInfo: group.seriesInfo,
-                        count: group.discourses.count,
-                        sizeText: seriesSizeText(for: group.discourses),
+                        recordings: group.items.filter { if case .recording = $0 { true } else { false } }.count,
+                        translations: group.items.filter { if case .translation = $0 { true } else { false } }.count,
+                        sizeText: seriesSizeText(for: group.items),
                         onDeleteSeries: isEditing ? nil : { seriesPendingDelete = group.seriesInfo }
                     )
                 } footer: {
@@ -298,13 +404,16 @@ struct DownloadsView: View {
             let showHint = !isEditing
             let showUsage = totalBytes > 0 && searchText.isEmpty
             if showHint {
-                Text("Swipe a discourse left to delete, or use a series' ••• menu to clear a whole series or select several.")
+                Text("Swipe left to delete, or use a series' ••• menu to clear a whole series or select several.")
             }
             if showHint && showUsage {
                 Divider()
             }
             if showUsage {
-                Text("\(format(totalBytes)) used on this device")
+                let translations = translationSizes.values.reduce(0, +)
+                Text(translations > 0
+                     ? "\(format(totalBytes)) used on this device, including \(format(translations)) of translations"
+                     : "\(format(totalBytes)) used on this device")
             }
         }
         .font(.caption)
@@ -318,16 +427,27 @@ struct DownloadsView: View {
     @ViewBuilder
     private var inProgressSection: some View {
         let items = searchText.isEmpty ? inProgress : []
-        if !items.isEmpty {
+        let translations = searchText.isEmpty ? unfinishedTranslations : []
+        if !items.isEmpty || !translations.isEmpty {
             Section {
-                if downloads.waitingReason != nil { DownloadWaitingNotice() }
+                if !items.isEmpty, downloads.waitingReason != nil { DownloadWaitingNotice() }
                 ForEach(items) { discourse in
                     InProgressRow(discourse: discourse)
                 }
+                ForEach(translations) { document in
+                    TranslationProgressRow(document: document, sizeText: sizeText(for: translationSizes[document.id])) {
+                        openedTranslation = document
+                    }
+                }
+                .onDelete { offsets in removeTranslations(offsets.map { translations[$0].id }) }
             } header: {
-                Text("Downloading")
+                Text(translations.isEmpty ? "Downloading" : "In Progress")
             } footer: {
-                Text("Downloads run one at a time. Tap to cancel.")
+                switch (items.isEmpty, translations.isEmpty) {
+                case (false, true): Text("Downloads run one at a time. Tap to cancel.")
+                case (true, false): Text("Tap a translation to continue or pause it.")
+                default: Text("Downloads run one at a time; tap one to cancel. Tap a translation to continue or pause it.")
+                }
             }
         }
     }
@@ -357,12 +477,12 @@ struct DownloadsView: View {
     }
 
     private var totalBytes: Int64 {
-        sizesByID.values.reduce(0, +)
+        sizesByID.values.reduce(0, +) + translationSizes.values.reduce(0, +)
     }
 
-    /// Per-series size summed from the discourse-level map.
-    private func seriesSizeText(for discourses: [CatalogDiscourse]) -> String? {
-        let bytes = discourses.reduce(Int64(0)) { $0 + (sizesByID[$1.id] ?? 0) }
+    /// Per-series size summed from the recording and translation maps.
+    private func seriesSizeText(for items: [SavedItem]) -> String? {
+        let bytes = items.reduce(Int64(0)) { $0 + (sizesByID[$1.id] ?? translationSizes[$1.id] ?? 0) }
         return bytes > 0 ? format(bytes) : nil
     }
 
@@ -375,24 +495,22 @@ struct DownloadsView: View {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
-    private func deleteDiscourses(at offsets: IndexSet, in discourses: [CatalogDiscourse]) {
-        for index in offsets {
-            try? downloads.deleteDownload(discourseID: discourses[index].id)
-        }
-    }
 }
 
 // MARK: - Series Header
 
 private struct DownloadedSeriesHeader: View {
     let seriesInfo: SeriesInfo
-    let count: Int
+    let recordings: Int
+    let translations: Int
     let sizeText: String?
     /// When non-nil, shows a ••• menu offering to delete the whole series.
     let onDeleteSeries: (() -> Void)?
 
     private var subtitle: String {
-        var parts = ["\(count) episodes"]
+        var parts: [String] = []
+        if recordings > 0 { parts.append(recordings == 1 ? "1 episode" : "\(recordings) episodes") }
+        if translations > 0 { parts.append(translations == 1 ? "1 translation" : "\(translations) translations") }
         if let sizeText { parts.append(sizeText) }
         return parts.joined(separator: " · ")
     }
@@ -677,5 +795,194 @@ private struct InProgressRow: View {
             .accessibilityValue(isQueued ? "Queued" : downloads.waitingReason?.rowLabel ?? "\(Int(progress * 100)) percent")
         }
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Translation Rows
+
+/// Shares the translation screen's deletion, which also stops the rendition's playback and translation.
+@MainActor
+private func removeTranslation(_ document: NarrationDocument, player: AudioPlayerService) async {
+    #if TRANSLATED_NARRATION
+    if #available(macCatalyst 26.0, *) {
+        try? await NarrationPreparationController.shared.delete(document, player: player)
+        return
+    }
+    #endif
+    if player.currentNarration?.id == document.id { player.stop() }
+    try? await NarrationService.shared.remove(document.id)
+}
+
+/// Plays a saved translation from its own position, or from the moment the recording reached when switching.
+@MainActor
+private func playTranslation(_ document: NarrationDocument, player: AudioPlayerService) {
+    if player.currentNarration?.id == document.id, player.narrationPlaybackFailure == nil {
+        player.togglePlayPause()
+        return
+    }
+    #if TRANSLATED_NARRATION
+    let loadedTrack = player.currentTrackId
+    Task {
+        let start = await TranslatedListening.translatedStart(for: document, player: player)
+        guard player.currentTrackId == loadedTrack else { return }
+        NarrationPreviewPlayback.shared.play(documentID: document.id, player: player, resumeAt: start)
+    }
+    #endif
+}
+
+/// A finished translation, listed under its series beside the downloaded recordings.
+private struct TranslationRow: View {
+    @Environment(AudioPlayerService.self) private var player
+    @Environment(\.editMode) private var editMode
+    let document: NarrationDocument
+    let discourse: CatalogDiscourse
+    let sizeText: String?
+    let open: () -> Void
+    let remove: () -> Void
+    private let narrations = NarrationService.shared
+
+    private var isCurrent: Bool { player.currentNarration?.id == document.id }
+    private var isEditing: Bool { editMode?.wrappedValue.isEditing == true }
+    private var isPlayable: Bool { narrations.audioURL(for: document) != nil }
+    private var language: String { DownloadsView.languageName(document) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(discourse.number)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Discourse \(discourse.number)")
+                    .font(.body)
+                    .lineLimit(1)
+                    .foregroundStyle(isCurrent ? Color.accent : .primary)
+                Label(isPlayable ? "\(language) translation · \(document.selection.voice.name)" : "\(language) translation · Audio missing",
+                      systemImage: "globe")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if let sizeText {
+                Text(sizeText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            if !isEditing {
+                Button(action: activate) {
+                    Image(systemName: isPlayable
+                          ? (isCurrent && player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                          : "arrow.clockwise.circle")
+                        .font(.title3)
+                        .foregroundStyle(Color.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isPlayable ? (isCurrent && player.isPlaying ? "Pause" : "Play") : "Rebuild")
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isEditing else { return }
+            activate()
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Discourse \(discourse.number), \(language) translation")
+        .accessibilityIdentifier("downloads.translation.\(document.id)")
+        .accessibilityHint(isPlayable ? "Plays this translation" : "Opens the translation to rebuild its audio")
+        .accessibilityAction {
+            guard !isEditing else { return }
+            activate()
+        }
+        .hoverEffect(.highlight)
+        .contextMenu {
+            if !isEditing {
+                if isPlayable {
+                    Button(action: activate) {
+                        let pauses = isCurrent && player.isPlaying
+                        Label(pauses ? "Pause" : "Play", systemImage: pauses ? "pause" : "play")
+                    }
+                }
+                Button(action: open) {
+                    Label("Read Along and Options", systemImage: "doc.plaintext")
+                }
+                Divider()
+                Button(role: .destructive, action: remove) {
+                    Label("Remove Translation", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func activate() {
+        if isPlayable { playTranslation(document, player: player) } else { open() }
+    }
+}
+
+/// A translation still being made or stopped part way. Tapping opens it to continue or pause.
+private struct TranslationProgressRow: View {
+    @Environment(AudioPlayerService.self) private var player
+    let document: NarrationDocument
+    let sizeText: String?
+    let open: () -> Void
+    private let narrations = NarrationService.shared
+
+    private var discourse: CatalogDiscourse? { Catalog.discourseLookup[document.discourseID]?.discourse }
+    private var isTranslating: Bool { narrations.preparingDocumentID == document.id }
+    private var isCurrent: Bool { player.currentNarration?.id == document.id }
+    private var canPlay: Bool { narrations.playablePrefix(of: document.id) != nil }
+    private var fraction: Double {
+        if isTranslating, narrations.progress.isFinite { return min(1, max(0, narrations.progress)) }
+        return Double(document.segments.count) / Double(max(1, document.expectedSegmentCount))
+    }
+    private var status: String {
+        let passages = NarrationTimeFormatting.passages(document.segments.count, of: document.expectedSegmentCount)
+        return (isTranslating ? "Translating · " : "Paused · ") + passages
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(discourse?.seriesName ?? "Saved discourse")
+                        .font(.body)
+                        .lineLimit(2)
+                    Label("Discourse \(discourse?.number ?? 0) · \(DownloadsView.languageName(document)) translation", systemImage: "globe")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    ProgressView(value: fraction)
+                        .tint(Color.accent)
+                    HStack {
+                        Text(status)
+                        Spacer()
+                        if let sizeText { Text(sizeText) }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Opens the translation to continue or pause it")
+            .accessibilityIdentifier("downloads.translationProgress.\(document.id)")
+
+            if canPlay {
+                Button { playTranslation(document, player: player) } label: {
+                    Image(systemName: isCurrent && player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isCurrent && player.isPlaying ? "Pause" : "Play the finished part")
+            }
+        }
     }
 }

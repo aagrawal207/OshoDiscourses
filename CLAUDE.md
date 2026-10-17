@@ -223,10 +223,15 @@ Apple Translation translates source transcripts and an ordinary system voice
 renders offline audio. Synthetic positions never update original listening
 history, bookmarks, statistics or cloud progress. Saved narrations survive deletion
 of the original download. Their library owns deletion. Preparation is reserved
-to one window before preflight/consent. On iOS 26+ it keeps running in the background
-through a continued-processing task with Lock Screen progress; closing its screen or
-system expiry pauses it. Finished passages can play while later ones are prepared,
-and preparation shows passages done and an estimated time left.
+to one window before preflight/consent, but the listening sheet does not own it.
+The window's translation host handles consent; on iOS 26+ a separately created
+installed-language session owns generation. Closing the listening sheet does not
+cancel it. There is no lock-screen task: leaving the app gets only the short
+`beginBackgroundTask` grace time (`NarrationGraceTime`), except that playing audio
+keeps the app and its translation running. A run iOS stopped continues from its last
+saved passage when the app is on screen again. Finished passages can play while later
+ones are prepared. See [the listening redesign](docs/translation-listening-redesign.md)
+for implementation and device verification status.
 
 ### What's New screen
 

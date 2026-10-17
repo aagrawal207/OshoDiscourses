@@ -90,6 +90,7 @@ struct HomeView: View {
             .navigationDestination(for: SeriesInfo.self) { series in
                 SeriesDetailView(seriesInfo: series)
             }
+            .task { await NarrationService.shared.loadIfNeeded() }
             .onChange(of: navigation?.pendingSeries, initial: true) { _, series in
                 guard let series else { return }
                 navigation?.pendingSeries = nil
@@ -107,6 +108,10 @@ struct HomeView: View {
         let seriesInfo: SeriesInfo
         let position: TimeInterval
         let savedDuration: TimeInterval
+        /// Set for a translation, which plays its own audio and keeps its own position.
+        var narration: NarrationDocument?
+
+        var trackID: String { narration.map { AudioPlayerService.narrationTrackID(for: $0.id) } ?? discourse.id }
     }
 
     struct ContinueGroup: Identifiable {
@@ -130,6 +135,41 @@ struct HomeView: View {
     }
 
     private var continueListening: [ContinueItem] {
+        let recordings = recentRecordings
+        let translations = recentTranslations
+        guard !translations.isEmpty else { return Array(recordings.prefix(8)) }
+        // Most recent first across both kinds; recordings saved before last-listened times existed sort last.
+        var merged: [ContinueItem] = []
+        var pending = translations[...]
+        for recording in recordings {
+            let saved = playbackState.lastSaved(discourseId: recording.id) ?? .distantPast
+            while let next = pending.first, next.playedAt > saved {
+                merged.append(next.item)
+                pending = pending.dropFirst()
+            }
+            merged.append(recording)
+        }
+        merged += pending.map(\.item)
+        return Array(merged.prefix(8))
+    }
+
+    private var recentTranslations: [(item: ContinueItem, playedAt: Date)] {
+        let narrations = NarrationService.shared
+        return narrations.recentPlays.sorted { $0.value > $1.value }.compactMap { id, playedAt in
+            guard let document = narrations.documents.first(where: { $0.id == id }),
+                  let (disc, series) = Catalog.discourseLookup[document.discourseID] else { return nil }
+            let position = narrations.position(for: id)
+            guard position > 0 || player.currentTrackId == AudioPlayerService.narrationTrackID(for: id) else { return nil }
+            let duration = document.isComplete ? document.duration : narrations.playablePrefix(of: id)?.document.duration ?? 0
+            let item = ContinueItem(
+                id: AudioPlayerService.narrationTrackID(for: id), discourse: disc, seriesInfo: series,
+                position: position, savedDuration: duration, narration: document
+            )
+            return (item, playedAt)
+        }
+    }
+
+    private var recentRecordings: [ContinueItem] {
         playbackState.recentlyPlayed.compactMap { discourseID in
             guard downloads.isDownloaded(discourseID) else { return nil }
             let position = playbackState.getPosition(discourseId: discourseID)
@@ -151,8 +191,14 @@ struct HomeView: View {
                 savedDuration: savedDuration
             )
         }
-        .prefix(8)
-        .map { $0 }
+    }
+
+    private func dismissFromContinueListening(_ item: ContinueItem) {
+        if let narration = item.narration {
+            NarrationService.shared.dismissFromRecent(documentID: narration.id)
+        } else {
+            playbackState.dismissFromRecent(discourseId: item.id)
+        }
     }
 
     // MARK: - Recently Completed
@@ -275,7 +321,7 @@ struct HomeView: View {
                 Button {
                     withAnimation {
                         for item in continueListening {
-                            playbackState.dismissFromRecent(discourseId: item.id)
+                            dismissFromContinueListening(item)
                         }
                     }
                 } label: {
@@ -300,7 +346,7 @@ struct HomeView: View {
                     ForEach(group.items) { item in
                         ContinueListeningRow(item: item, onDismiss: {
                             withAnimation {
-                                playbackState.dismissFromRecent(discourseId: item.id)
+                                dismissFromContinueListening(item)
                             }
                         })
                     }
@@ -579,11 +625,17 @@ private struct ContinueListeningRow: View {
     var onDismiss: (() -> Void)?
 
     private var isCurrentlyPlaying: Bool {
-        player.currentTrackId == item.discourse.id && player.isPlaying
+        isCurrentTrack && player.isPlaying
     }
 
     private var isCurrentTrack: Bool {
-        player.currentTrackId == item.discourse.id
+        player.currentTrackId == item.trackID
+    }
+
+    private var title: String {
+        guard let narration = item.narration else { return "Discourse \(item.discourse.number)" }
+        let language = NarrationLanguageSupport.displayName(for: narration.selection.targetLanguage)
+        return "Discourse \(item.discourse.number) · \(language) translation"
     }
 
     private var progressFraction: Double {
@@ -599,10 +651,17 @@ private struct ContinueListeningRow: View {
             // the discourse and its progress; tapping either plays.
             Button { playItem() } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Discourse \(item.discourse.number)")
-                        .font(.subheadline)
-                        .foregroundStyle(isCurrentTrack ? Color.accent : .primary)
-                        .lineLimit(1)
+                    Label {
+                        Text(title)
+                    } icon: {
+                        if item.narration != nil {
+                            Image(systemName: "globe").foregroundStyle(.secondary)
+                        }
+                    }
+                    .labelStyle(ContinueTitleLabelStyle(showsIcon: item.narration != nil))
+                    .font(.subheadline)
+                    .foregroundStyle(isCurrentTrack ? Color.accent : .primary)
+                    .lineLimit(1)
 
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
@@ -653,6 +712,10 @@ private struct ContinueListeningRow: View {
             player.togglePlayPause()
             return
         }
+        if let narration = item.narration {
+            NarrationPreviewPlayback.shared.play(documentID: narration.id, player: player)
+            return
+        }
         guard downloads.localFileURL(for: item.discourse.id) != nil else { return }
 
         let allDiscourses = Catalog.discourses(for: item.seriesInfo)
@@ -670,5 +733,17 @@ private struct ContinueListeningRow: View {
 
         let startIndex = queueItems.firstIndex { $0.id == item.discourse.id } ?? 0
         player.playQueue(items: queueItems, startIndex: startIndex)
+    }
+}
+
+/// A translation row shows a small globe before its title; a recording row shows the title alone.
+private struct ContinueTitleLabelStyle: LabelStyle {
+    let showsIcon: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            if showsIcon { configuration.icon.imageScale(.small) }
+            configuration.title
+        }
     }
 }

@@ -318,17 +318,17 @@ final class PlaybackStateService {
             resetListeningContinuity()
             return
         }
+        // A translation keeps its own position, but its listening time counts like the recording's.
         if player.isPlayingNarration {
             player.saveNarrationPosition()
+        }
+        guard let trackId = player.currentTrackId, player.currentTime.isFinite, player.currentTime > 0 else {
             resetListeningContinuity()
             return
         }
-        guard let trackId = player.currentTrackId,
-              Self.isOriginalDiscourseID(trackId), player.currentTime.isFinite, player.currentTime > 0 else {
-            resetListeningContinuity()
-            return
+        if Self.isOriginalDiscourseID(trackId) {
+            savePosition(discourseId: trackId, position: player.currentTime, duration: player.duration)
         }
-        savePosition(discourseId: trackId, position: player.currentTime, duration: player.duration)
 
         // A listener can leave and return to the same recording between autosave ticks.
         if player.currentTrackId != lastRecordedTrackId || player.playbackGeneration != lastRecordedGeneration {

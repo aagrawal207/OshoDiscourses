@@ -25,7 +25,11 @@ struct MiniPlayerView: View {
     }
 
     private var discourseLine: String? {
-        if player.isPlayingNarration { return "Translated narration" }
+        if let narration = player.currentNarration {
+            let language = NarrationLanguageSupport.displayName(for: narration.selection.targetLanguage)
+            let number = Catalog.discourseLookup[narration.discourseID]?.discourse.number
+            return (number.map { "Discourse \($0) · " } ?? "") + "\(language) translation"
+        }
         guard !player.currentSeries.isEmpty,
               let hash = player.currentTitle.lastIndex(of: "#") else { return nil }
         let number = player.currentTitle[player.currentTitle.index(after: hash)...]

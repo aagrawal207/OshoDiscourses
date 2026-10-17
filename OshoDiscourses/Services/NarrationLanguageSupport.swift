@@ -82,6 +82,15 @@ enum NarrationLanguageSupport {
     // nonisolated async calls and return only value types to the view's actor.
     @available(macCatalyst 26.0, *)
     static func availableLanguages(sourceLanguage: String, voices: [NarrationVoice]) async throws -> [NarrationLanguageOption] {
+        #if DEBUG
+        // Simulator UI fixtures replace availability only; they never translate or invent installed voices.
+        if ProcessInfo.processInfo.arguments.contains("-debugNarrationOptions") {
+            return ["en", "hi", "fr", "es", "ja"].filter { !isSameLanguage($0, sourceLanguage) }.map {
+                NarrationLanguageOption(id: $0, support: .init(strategy: .standard, status: .installed),
+                                        voices: compatibleVoices(voices, targetLanguage: $0))
+            }
+        }
+        #endif
         let standard = standardAvailability()
         let highFidelity = highFidelityAvailability()
         var languages = await standard.supportedLanguages

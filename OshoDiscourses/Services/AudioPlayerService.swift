@@ -62,10 +62,10 @@ final class AudioPlayerService {
 
         var label: String {
             switch self {
-            case .incomplete: return "Finish preparing this narration before playing it."
-            case .nonlocalAudio, .unavailableAudio: return "The prepared narration audio is unavailable. Prepare it again."
+            case .incomplete: return "Finish translating this discourse before playing it."
+            case .nonlocalAudio, .unavailableAudio: return "The translation's audio is missing. Open the translation to rebuild it."
             case .unknownDiscourse: return "The source discourse is unavailable."
-            case .playback: return "The narration could not play. Try preparing it again."
+            case .playback: return "The translation couldn't play. Try translating it again."
             }
         }
     }
@@ -316,6 +316,8 @@ final class AudioPlayerService {
     private var player: AVPlayer?
     // Queued callbacks can outlive an item, whose object address can be reused.
     private(set) var playbackGeneration: UInt64 = 0
+    /// Playback intent includes pause/seek actions that don't replace the loaded track.
+    private(set) var playbackIntentGeneration: UInt64 = 0
     private var audioMixGeneration: UInt64 = 0
     private var audioMixTask: Task<Void, Never>?
     private var processingMonitor: Task<Void, Never>?
@@ -484,6 +486,7 @@ final class AudioPlayerService {
     }
 
     func togglePlayPause() {
+        playbackIntentGeneration &+= 1
         if isPlaying {
             pausePlayback()
         } else {
@@ -494,6 +497,7 @@ final class AudioPlayerService {
     /// For remote controls: a repeated or late request leaves playback in the
     /// requested state instead of toggling it back.
     func setPlaying(_ playing: Bool) {
+        playbackIntentGeneration &+= 1
         if playing {
             if !isPlaying { resumePlayback() }
         } else if isPlaying || wantsPlayback {
@@ -571,6 +575,7 @@ final class AudioPlayerService {
     }
 
     func seek(to time: TimeInterval) {
+        playbackIntentGeneration &+= 1
         let target: TimeInterval
         if let narration = currentNarration {
             guard time.isFinite else { return }
@@ -1086,7 +1091,8 @@ final class AudioPlayerService {
         if wantsPlayback {
             resumePlayback()
             if isPlaying {
-                if isPlayingNarration {
+                if let narration = currentNarration {
+                    narrationStore.recordPlay(documentID: narration.id)
                     Self.log.info("outcome=narration_started")
                 } else {
                     playbackStateService?.recordPlay(discourseId: trackID)
@@ -1389,7 +1395,7 @@ final class AudioPlayerService {
         commandCenter.playCommand.addTarget { [weak self] _ in
             guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
-                self?.resumePlayback()
+                self?.setPlaying(true)
             }
             return .success
         }
@@ -1398,7 +1404,7 @@ final class AudioPlayerService {
         commandCenter.pauseCommand.addTarget { [weak self] _ in
             guard self != nil else { return .commandFailed }
             Task { @MainActor [weak self] in
-                self?.pausePlayback()
+                self?.setPlaying(false)
             }
             return .success
         }
@@ -1486,7 +1492,7 @@ final class AudioPlayerService {
         info[MPMediaItemPropertyArtist] = "Osho"
         if let narration = currentNarration {
             let language = NarrationLanguageSupport.displayName(for: narration.selection.targetLanguage)
-            info[MPMediaItemPropertyArtist] = "Osho · \(language) synthesized narration"
+            info[MPMediaItemPropertyArtist] = "Osho · \(language) translation"
         }
         info[MPMediaItemPropertyAlbumTitle] = currentSeries
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
