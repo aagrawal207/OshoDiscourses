@@ -13,7 +13,7 @@ To try it:
 Translation needs a network connection only to fetch the transcript and, the first time, Apple's language download. If iOS stops translating after the app leaves the screen, it continues from the last saved passage when the app is open again. Translated audio is saved on the device and can be deleted from Downloads. More voices can be downloaded in the iOS Settings app under Accessibility > Read & Speak > Voices. Machine translation may contain mistakes.
 
 ALSO NEW
-After the app is closed, the last downloaded talk the listener was hearing returns paused in the mini-player. Nothing plays until the listener taps Play.
+After the app is closed, the last talk the listener was hearing, a downloaded recording or a saved translation, returns paused in the mini-player. It is the first row of Continue Listening on Home. Nothing plays until the listener taps Play.
 
 OPTIONAL SUPPORT (UNCHANGED FROM 1.16.3)
 Settings > About > Support Development offers one-time tips and three optional yearly support subscriptions. None unlocks recordings, translations or features.
