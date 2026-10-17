@@ -136,7 +136,7 @@ private fun BookmarkRow(row: BookmarkRowState, actions: BookmarksActions) {
     val colors = Osho.colors
     val bookmark = row.bookmark
     Row(
-        Modifier.fillMaxWidth().rowContentPadding(vertical = 12.dp),
+        Modifier.fillMaxWidth().rowContentPadding(vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

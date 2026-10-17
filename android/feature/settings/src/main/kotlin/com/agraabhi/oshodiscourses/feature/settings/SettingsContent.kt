@@ -105,7 +105,7 @@ private fun LazyListScope.languageSection(state: SettingsUiState, actions: Setti
                 label = { it.rawValue },
                 onSelect = actions.onLanguage,
                 menuTitle = "Language",
-                modifier = Modifier.rowContentPadding(vertical = 8.dp).semantics(mergeDescendants = false) {},
+                modifier = Modifier.rowContentPadding(vertical = 13.5.dp).semantics(mergeDescendants = false) {},
             )
         }
     }
@@ -129,7 +129,7 @@ private fun LazyListScope.playerSection(state: SettingsUiState, actions: Setting
 }
 
 private fun LazyListScope.soundSection(state: SettingsUiState, actions: SettingsActions) {
-    sectionHeader("sound.header", "Sound")
+    sectionHeader("sound.header", "Sound", afterFooter = true)
     item(key = "denoise") {
         val colors = Osho.colors
         val on = state.settings.noiseReduction
@@ -169,7 +169,7 @@ private fun LazyListScope.appearanceSection(state: SettingsUiState, actions: Set
                 label = { it.rawValue.replaceFirstChar(Char::uppercase) },
                 onSelect = actions.onAppearance,
                 menuTitle = "Theme",
-                modifier = Modifier.rowContentPadding(vertical = 8.dp),
+                modifier = Modifier.rowContentPadding(vertical = 13.5.dp),
             )
         }
     }
@@ -208,7 +208,7 @@ private fun LazyListScope.appearanceSection(state: SettingsUiState, actions: Set
 }
 
 private fun LazyListScope.syncSection(state: SettingsUiState, actions: SettingsActions) {
-    sectionHeader("sync.header", "Sync")
+    sectionHeader("sync.header", "Sync", afterFooter = state.settings.dailyAccentShuffle)
     val connected = state.isSyncConnected
     item(key = "sync.status") {
         val colors = Osho.colors
@@ -253,20 +253,20 @@ private fun LazyListScope.syncSection(state: SettingsUiState, actions: SettingsA
 }
 
 private fun LazyListScope.aboutSection(state: SettingsUiState, versionName: String, actions: SettingsActions) {
-    sectionHeader("about.header", "About")
+    sectionHeader("about.header", "About", afterFooter = true)
     item(key = "about.version") { CardRow(isFirst = true, isLast = false) { LabeledRow("Version", versionName) } }
     item(key = "about.series") { CardRow(isFirst = false, isLast = false) { LabeledRow("Series", "${state.seriesCount}") } }
     item(key = "about.discourses") { CardRow(isFirst = false, isLast = false) { LabeledRow("Discourses", "${state.discourseCount}") } }
     item(key = "about.support") {
-        CardRow(isFirst = false, isLast = false) {
+        CardRow(isFirst = false, isLast = false, dividerStart = LinkTextStart) {
             LinkRow("Support Development", Icons.Rounded.Coffee, Osho.colors.accent, Icons.Rounded.ChevronRight, actions.onOpenSupport)
         }
     }
     item(key = "about.rate") {
-        CardRow(isFirst = false, isLast = false) { LinkRow("Rate Osho Talks", Icons.Rounded.StarBorder, onClick = actions.onRate) }
+        CardRow(isFirst = false, isLast = false, dividerStart = LinkTextStart) { LinkRow("Rate Osho Talks", Icons.Rounded.StarBorder, onClick = actions.onRate) }
     }
     item(key = "about.source") {
-        CardRow(isFirst = false, isLast = false) { LinkRow("Source Code", Icons.Rounded.Code, onClick = actions.onSourceCode) }
+        CardRow(isFirst = false, isLast = false, dividerStart = LinkTextStart) { LinkRow("Source Code", Icons.Rounded.Code, onClick = actions.onSourceCode) }
     }
     item(key = "about.feedback") {
         CardRow(isFirst = false, isLast = true) { LinkRow("Send Feedback", Icons.Outlined.Mail, onClick = actions.onFeedback) }
@@ -290,6 +290,9 @@ private fun LabeledRow(label: String, value: String) {
     }
 }
 
+/** About link rows put their separator under the label, as a SwiftUI `Label` row does. */
+private val LinkTextStart = 56.dp
+
 /** The compact About rows: subheadline label with its icon, tinted trailing arrow (§1.6). */
 @Composable
 private fun LinkRow(
@@ -304,11 +307,11 @@ private fun LinkRow(
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) {}
-            .heightIn(min = 44.dp)
+            .heightIn(min = Grouped.rowMinHeight)
             .padding(horizontal = Grouped.rowPadding, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
         Text(title, style = Osho.typography.subheadline, color = tint, modifier = Modifier.padding(start = 16.dp).weight(1f))
         Icon(trailing, contentDescription = null, tint = Osho.colors.accentSecondary, modifier = Modifier.size(14.dp))
     }

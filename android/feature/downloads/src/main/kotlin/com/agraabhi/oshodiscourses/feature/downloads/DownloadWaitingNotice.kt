@@ -45,15 +45,16 @@ fun DownloadWaitingNotice(reason: WaitingReason, onUseMobileData: () -> Unit, mo
             Icon(
                 if (reason == WaitingReason.WIFI) Icons.Rounded.Wifi else Icons.Rounded.WifiOff,
                 contentDescription = null,
-                tint = colors.label,
-                modifier = Modifier.size(18.dp),
+                // In a List row a Label's icon takes the tint, so iOS draws it in the accent.
+                tint = colors.accent,
+                modifier = Modifier.size(22.dp),
             )
             Text(
                 reason.rowLabel,
                 style = Osho.typography.subheadline,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.label,
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier.padding(start = 12.dp),
             )
         }
         Text(
@@ -80,7 +81,7 @@ fun DownloadWaitingNotice(reason: WaitingReason, onUseMobileData: () -> Unit, mo
                         }
                     },
             ) {
-                Text("Use Mobile Data", style = Osho.typography.subheadline, fontWeight = FontWeight.SemiBold)
+                Text("Use Mobile Data", style = Osho.typography.body)
             }
         }
     }

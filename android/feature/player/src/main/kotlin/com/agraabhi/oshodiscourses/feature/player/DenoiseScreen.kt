@@ -32,7 +32,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Battery4Bar
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -48,8 +47,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -61,6 +58,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
@@ -78,6 +76,7 @@ import com.agraabhi.oshodiscourses.core.ui.components.GroupedDivider
 import com.agraabhi.oshodiscourses.core.ui.components.GroupedSection
 import com.agraabhi.oshodiscourses.core.ui.components.IosSwitch
 import com.agraabhi.oshodiscourses.core.ui.components.MenuPickerRow
+import com.agraabhi.oshodiscourses.core.ui.components.OshoIcons
 import com.agraabhi.oshodiscourses.core.ui.components.SectionFooterText
 import com.agraabhi.oshodiscourses.core.ui.components.SectionGap
 import com.agraabhi.oshodiscourses.core.ui.components.SegmentedControl
@@ -126,7 +125,9 @@ fun DenoiseScreen(
                 DenoisePage.MAIN -> DenoisePageScaffold(
                     title = "DeNoise",
                     leading = { if (onDone == null) BackGlassButton(back) },
-                    trailing = { if (onDone != null) GlassTextButton("Done", onClick = onDone, prominent = true) },
+                    trailing = { if (onDone != null) GlassTextButton("Done", onClick = onDone) },
+                    // iOS Forms leave a deep inset above a header-less first section.
+                    topGap = 40.dp,
                 ) {
                     DenoiseMainContent(
                         state = state,
@@ -143,7 +144,7 @@ fun DenoiseScreen(
                         page = DenoisePage.MAIN
                     })
                 }
-                DenoisePage.VOICE -> DenoisePageScaffold("Quiet Speech", leading = { BackGlassButton({ page = DenoisePage.MAIN }) }) {
+                DenoisePage.VOICE -> DenoisePageScaffold("Quiet Speech", leading = { BackGlassButton({ page = DenoisePage.MAIN }) }, topGap = 40.dp) {
                     QuietSpeechContent(state.voiceFocus, onSelect = {
                         viewModel.setVoiceFocus(it)
                         page = DenoisePage.MAIN
@@ -159,6 +160,7 @@ private fun DenoisePageScaffold(
     title: String,
     leading: @Composable RowScope.() -> Unit = {},
     trailing: @Composable RowScope.() -> Unit = {},
+    topGap: Dp = 8.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // Pushed pages sit over the tab bar and mini-player; in a sheet both are zero.
@@ -167,7 +169,7 @@ private fun DenoisePageScaffold(
     Column(Modifier.fillMaxSize().background(Osho.colors.systemGroupedBackground).statusBarsPadding()) {
         SheetToolbar(title, leading = leading, trailing = trailing)
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = bottom),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topGap, bottom = bottom),
             content = content,
         )
     }
@@ -259,7 +261,7 @@ internal fun DenoiseMainContent(
                 Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(Modifier.alpha(if (state.isEnabled) 1f else 0.4f)) {
+                Row {
                     Text(levelLabel, style = Osho.typography.body, color = colors.label, modifier = Modifier.weight(1f))
                     Text(level.label, style = Osho.typography.body, color = colors.secondaryLabel)
                 }
@@ -320,9 +322,8 @@ private fun EnhancementModeLabel(mode: NoiseReductionMode, modifier: Modifier = 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(mode.displayName, style = Osho.typography.headline, color = colors.label)
         Text(mode.detail, style = Osho.typography.subheadline, color = colors.secondaryLabel)
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Material's battery glyphs stand upright; SF `battery.50percent` lies on its side.
-            Icon(Icons.Outlined.Battery4Bar, contentDescription = null, tint = batteryColor, modifier = Modifier.size(15.dp).rotate(90f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(OshoIcons.Battery50, contentDescription = null, tint = batteryColor, modifier = Modifier.size(width = 26.dp, height = 12.dp))
             Text(mode.batteryNote, style = Osho.typography.caption, fontWeight = FontWeight.Medium, color = batteryColor)
         }
     }

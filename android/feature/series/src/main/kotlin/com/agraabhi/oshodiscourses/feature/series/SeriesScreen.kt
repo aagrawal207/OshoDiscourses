@@ -41,7 +41,6 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Pending
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.rounded.ArrowCircleDown
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -95,6 +94,7 @@ import com.agraabhi.oshodiscourses.core.ui.components.DownloadRing
 import com.agraabhi.oshodiscourses.core.ui.components.GlassIconButton
 import com.agraabhi.oshodiscourses.core.ui.components.InlineTopBar
 import com.agraabhi.oshodiscourses.core.ui.components.MenuAction
+import com.agraabhi.oshodiscourses.core.ui.components.OshoIcons
 import com.agraabhi.oshodiscourses.core.ui.components.OshoMenu
 import com.agraabhi.oshodiscourses.core.ui.components.SeriesThumbnail
 import com.agraabhi.oshodiscourses.core.ui.tabContentPadding
@@ -284,8 +284,9 @@ private fun SeriesHeader(series: SeriesInfo, completedCount: Int, transcriptCoun
                 }
             }
             viewModel.description?.let { meta ->
+                // iOS wraps this inside a list row, so its 16 pt sits inside the row's own inset.
                 Column(
-                    modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp),
+                    modifier = Modifier.padding(top = 8.dp, start = 24.dp, end = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -341,7 +342,7 @@ private fun DownloadAllButton(remaining: Int, language: Language, onClick: () ->
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.ArrowCircleDown, contentDescription = null, tint = colors.accent, modifier = Modifier.size(scaled(18.dp)))
+        Icon(OshoIcons.ArrowDownCircleFill, contentDescription = null, tint = colors.accent, modifier = Modifier.size(scaled(20.dp)))
         Spacer(Modifier.width(8.dp))
         Text("Download All", style = type.subheadline, fontWeight = FontWeight.SemiBold, color = colors.accent)
         if (remaining > 0) {
@@ -526,14 +527,15 @@ private fun RowAction(row: DiscourseRowState, language: Language, onClick: () ->
                 DownloadRing(progress = progress.toFloat(), queued = queued)
             }
         }
-        download is DownloadState.Failed -> IconAction(Icons.Rounded.SyncProblem, "Retry download", colors.systemRed, scaled(26.dp), onClick)
+        download is DownloadState.Failed -> IconAction(Icons.Rounded.SyncProblem, "Retry download", colors.systemRed, scaled(24.dp), onClick)
         row.isDownloaded -> {
             val pausing = row.isCurrentlyPlaying
             IconAction(
                 if (pausing) Icons.Rounded.PauseCircle else Icons.Rounded.PlayCircle,
                 if (pausing) "Pause" else "Play",
                 colors.accent,
-                scaled(32.dp),
+                // SF `.title2` circles draw about 23 across; Material's ring fills 20 of 24.
+                scaled(28.dp),
                 onClick,
             )
         }

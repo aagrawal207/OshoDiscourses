@@ -26,12 +26,13 @@ data class OshoTypography(
     val caption2: TextStyle = style(11, 13),
     /** Collapsed navigation title. */
     val navInline: TextStyle = style(17, 22, FontWeight.SemiBold),
-    /** iOS 26 tab bar label. */
-    val tabLabel: TextStyle = style(10, 12, FontWeight.SemiBold),
+    /** iOS 26 tab bar label: 10 pt SF runs as wide as 11 sp Roboto. */
+    val tabLabel: TextStyle = style(11, 13, FontWeight.SemiBold),
     val segment: TextStyle = style(13, 16, FontWeight.Medium),
     /** Grouped list section header; never uppercased. */
     val listHeader: TextStyle = style(17, 22, FontWeight.SemiBold),
-    val listFooter: TextStyle = style(13, 18),
+    /** iOS 26 list footers set 13 pt on a 16 pt line, tighter than `.footnote`. */
+    val listFooter: TextStyle = style(13, 16),
 ) {
     /** Material slots mapped to the nearest iOS style, for stock components. */
     fun toMaterial(): Typography = Typography(

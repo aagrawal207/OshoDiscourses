@@ -7,7 +7,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextInput
+import com.agraabhi.oshodiscourses.core.ui.components.SEARCH_REVEAL_TAG
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.agraabhi.oshodiscourses.core.model.Appearance
 import com.agraabhi.oshodiscourses.core.model.LanguageFilter
@@ -74,6 +77,8 @@ class LibraryScreenScreenshotTest {
     @Test
     fun searchingLight() {
         show(LibraryFixtures.withDownloads())
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search by name or topic").performTextInput("zen")
         capture("library_search_light")
     }
@@ -81,6 +86,8 @@ class LibraryScreenScreenshotTest {
     @Test
     fun noResultsLight() {
         show(LibraryFixtures.withDownloads())
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search by name or topic").performTextInput("xyzzy")
         capture("library_no_results_light")
     }
@@ -88,6 +95,8 @@ class LibraryScreenScreenshotTest {
     @Test
     fun noResultsDark() {
         show(LibraryFixtures.withDownloads(), Appearance.DARK)
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search by name or topic").performTextInput("xyzzy")
         capture("library_no_results_dark")
     }

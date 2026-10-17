@@ -1,10 +1,12 @@
 package com.agraabhi.oshodiscourses.core.ui.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
@@ -34,7 +39,10 @@ data class MenuAction(
     val onClick: () -> Unit,
 )
 
-/** Material's DropdownMenu restyled as an iOS menu (ui-style.md §8): r 16, elevated card, 17 sp rows. */
+/** iOS 26 menus are much rounder than iOS 18's; measured from the reference screens. */
+val MenuCornerRadius = 26.dp
+
+/** Material's DropdownMenu restyled as an iOS 26 menu (ui-style.md §8): elevated card, 17 sp rows, accent icons. */
 @Composable
 fun OshoMenu(
     expanded: Boolean,
@@ -48,7 +56,7 @@ fun OshoMenu(
             expanded = expanded,
             onDismissRequest = onDismiss,
             offset = offset,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(MenuCornerRadius),
             containerColor = colors.secondarySystemGroupedBackground,
             shadowElevation = 12.dp,
             tonalElevation = 0.dp,
@@ -57,9 +65,10 @@ fun OshoMenu(
             actions.forEach { action ->
                 if (action.dividerBefore) HorizontalDivider(thickness = 0.5.dp, color = colors.separator)
                 val tint = if (action.destructive) colors.systemRed else colors.label
+                val iconTint = if (action.destructive) colors.systemRed else colors.accent
                 DropdownMenuItem(
                     text = { Text(action.label, style = Osho.typography.body, color = tint) },
-                    leadingIcon = action.icon?.let { icon -> { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) } },
+                    leadingIcon = action.icon?.let { icon -> { Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp)) } },
                     onClick = {
                         onDismiss()
                         action.onClick()
@@ -83,24 +92,28 @@ fun OshoMenu(
     modifier: Modifier = Modifier,
     offset: DpOffset = DpOffset(0.dp, 0.dp),
     maxWidth: Dp = 280.dp,
+    reservesCheckColumn: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = modifier.widthIn(min = 220.dp, max = maxWidth),
+        modifier = modifier.widthIn(min = if (reservesCheckColumn) 250.dp else 220.dp, max = maxWidth),
         offset = offset,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(MenuCornerRadius),
         containerColor = Osho.colors.secondarySystemGroupedBackground,
         shadowElevation = 12.dp,
         tonalElevation = 0.dp,
-        border = BorderStroke(0.5.dp, Osho.colors.separator),
     ) {
-        content()
+        CompositionLocalProvider(LocalReservesCheckColumn provides reservesCheckColumn, content = content)
     }
 }
 
-/** A menu row; [checked] non-null reserves a trailing checkmark slot. */
+/** iOS 26 menus with a toggle keep a leading column for its checkmark, and indent every row to match. */
+private val LocalReservesCheckColumn = staticCompositionLocalOf { false }
+private val CheckColumnWidth = 26.dp
+
+/** A menu row; [checked] non-null shows a checkmark when on (leading if the menu reserves a column). */
 @Composable
 fun OshoMenuItem(
     text: String,
@@ -111,15 +124,29 @@ fun OshoMenuItem(
     checked: Boolean? = null,
 ) {
     val color = if (destructive) Osho.colors.systemRed else Osho.colors.label
+    val reserve = LocalReservesCheckColumn.current
     DropdownMenuItem(
         text = { Text(text, style = Osho.typography.body) },
         onClick = onClick,
         enabled = enabled,
-        leadingIcon = icon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(20.dp)) } },
-        trailingIcon = checked?.let { on -> { if (on) Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) } },
+        leadingIcon = if (reserve || icon != null) {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (reserve) {
+                        Box(Modifier.width(CheckColumnWidth), contentAlignment = Alignment.CenterStart) {
+                            if (checked == true) Icon(Icons.Rounded.Check, contentDescription = null, tint = Osho.colors.label, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    if (icon != null) Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+                }
+            }
+        } else {
+            null
+        },
+        trailingIcon = if (reserve) null else checked?.let { on -> { if (on) Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) } },
         colors = MenuDefaults.itemColors(
             textColor = color,
-            leadingIconColor = color,
+            leadingIconColor = if (destructive) color else Osho.colors.accent,
             trailingIconColor = Osho.colors.label,
             disabledTextColor = Osho.colors.tertiaryLabel,
             disabledLeadingIconColor = Osho.colors.tertiaryLabel,
@@ -134,23 +161,27 @@ fun OshoMenuHeader(text: String) {
         text,
         style = Osho.typography.footnote,
         color = Osho.colors.secondaryLabel,
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = menuTextInset(), end = 16.dp, top = 8.dp, bottom = 4.dp),
     )
 }
 
-/** Non-interactive explanatory text inside a menu. */
+/** Headers and notes line up with the row icons. */
+@Composable
+private fun menuTextInset(): Dp = if (LocalReservesCheckColumn.current) 12.dp + CheckColumnWidth else 16.dp
+
+/** Non-interactive text inside a menu, drawn like a disabled row as iOS does. */
 @Composable
 fun OshoMenuNote(text: String) {
     Text(
         text,
-        style = Osho.typography.footnote,
-        color = Osho.colors.secondaryLabel,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        style = Osho.typography.body,
+        color = Osho.colors.tertiaryLabel,
+        modifier = Modifier.fillMaxWidth().padding(start = menuTextInset(), end = 16.dp, top = 6.dp, bottom = 6.dp),
     )
 }
 
-/** The thick iOS gap between menu sections. */
+/** The hairline iOS 26 draws between menu sections, inset like the rows. */
 @Composable
 fun OshoMenuDivider() {
-    HorizontalDivider(Modifier.padding(vertical = 4.dp), thickness = 6.dp, color = Osho.colors.tertiarySystemFill)
+    HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), thickness = 0.5.dp, color = Osho.colors.separator)
 }

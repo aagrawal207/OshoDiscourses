@@ -7,7 +7,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextInput
+import com.agraabhi.oshodiscourses.core.ui.components.SEARCH_REVEAL_TAG
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -141,6 +145,8 @@ class DownloadsInteractionTest {
     @Test
     fun searchFiltersBySeriesName() {
         show(Fixtures.populated())
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search downloads").performTextInput("maha")
         compose.onNode(hasText("Ashtavakra Maha Geeta") and hasClickAction()).assertExists()
         compose.onNodeWithText("A Bird on the Wing").assertDoesNotExist()

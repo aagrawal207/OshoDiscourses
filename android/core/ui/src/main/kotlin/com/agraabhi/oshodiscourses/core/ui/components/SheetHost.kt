@@ -17,12 +17,14 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -58,6 +60,12 @@ import kotlin.math.abs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+/** iOS 26 sheet corners follow the display's radius. */
+private val SheetCorner = 38.dp
+
+/** How far a floating (medium) sheet sits inside the screen edges. */
+private val SheetFloatInset = 8.dp
+
 /** iOS presentation detents: about half the screen, or full height below the status bar. */
 enum class SheetDetent { MEDIUM, LARGE }
 
@@ -65,6 +73,7 @@ enum class SheetDetent { MEDIUM, LARGE }
  * An iOS-style sheet drawn in the same window as the player, so it stacks over it, shares its
  * back handling and shows in screenshots. Drags and content overscroll resize or dismiss it.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SheetHost(
     visible: Boolean,
@@ -86,7 +95,7 @@ fun SheetHost(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .background(Color.Black.copy(alpha = 0.15f))
                     .clearAndSetSemantics {}
                     .pointerInput(Unit) { detectTapGestures { dismiss() } },
             )
@@ -96,14 +105,24 @@ fun SheetHost(
             val topGap = with(density) { WindowInsets.statusBars.getTop(this) + 10.dp.roundToPx() }
             val available = constraints.maxHeight.toFloat()
             val large = (available - topGap).coerceAtLeast(0f)
-            val heights = detents.sorted().map { if (it == SheetDetent.LARGE) large else minOf(large, available * 0.5f) }
+            // iOS grows a sheet to full height while the keyboard is up, so its fields stay in view.
+            val keyboard = WindowInsets.isImeVisible
+            val heights = detents.sorted().map { if (it == SheetDetent.LARGE || keyboard) large else minOf(large, available * 0.5f) }
             AnimatedVisibility(
                 transition,
                 modifier = Modifier.align(Alignment.BottomCenter),
                 enter = slideInVertically(tween(350)) { it },
                 exit = slideOutVertically(tween(300)) { it },
             ) {
-                SheetSurface(heights, visible, showsDragIndicator, grouped, onDismiss = { dismiss() }, content = content)
+                SheetSurface(
+                    heights = heights,
+                    visible = visible,
+                    showsDragIndicator = showsDragIndicator,
+                    grouped = grouped,
+                    floats = detents.min() == SheetDetent.MEDIUM,
+                    onDismiss = { dismiss() },
+                    content = content,
+                )
             }
         }
     }
@@ -115,6 +134,7 @@ private fun SheetSurface(
     visible: Boolean,
     showsDragIndicator: Boolean,
     grouped: Boolean,
+    floats: Boolean,
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -180,14 +200,19 @@ private fun SheetSurface(
     }
 
     val density = LocalDensity.current
+    // iOS 26 floats a medium sheet inside the screen edges and docks it once dragged to full height.
+    val progress = if (maxHeight > minHeight) ((sheetHeight - minHeight) / (maxHeight - minHeight)).coerceIn(0f, 1f) else 0f
+    val inset = if (floats) SheetFloatInset * (1f - progress) else 0.dp
+    val bottomCorner = if (floats) SheetCorner * (1f - progress) else 0.dp
     ProvideElevatedSurfaces {
         val colors = Osho.colors
         Column(
             Modifier
+                .padding(start = inset, end = inset, bottom = inset)
                 .fillMaxWidth()
                 .height(with(density) { sheetHeight.toDp() })
                 .graphicsLayer { translationY = translation }
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner, bottomStart = bottomCorner, bottomEnd = bottomCorner))
                 .background(if (grouped) colors.systemGroupedBackground else colors.systemBackground)
                 .consumeWindowInsets(WindowInsets.statusBars)
                 .nestedScroll(connection)

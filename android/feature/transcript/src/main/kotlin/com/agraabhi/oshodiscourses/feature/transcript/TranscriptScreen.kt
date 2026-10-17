@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -131,8 +132,16 @@ internal fun TranscriptContentScreen(
     BackHandler(enabled = state.isSelecting && state.textSelection == null, onBack = vm::stopSelecting)
     BackHandler(enabled = state.isSearching && state.textSelection == null, onBack = vm::cancelSearch)
 
-    Box(modifier.fillMaxSize().background(Osho.colors.systemBackground)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    // A large iOS sheet: it stops just under the status bar so the dimmed player shows above it.
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = 10.dp)
+                .clip(RoundedCornerShape(topStart = 38.dp, topEnd = 38.dp))
+                .background(Osho.colors.systemBackground),
+        ) {
             if (showsHandle) SheetHandle(Modifier.align(Alignment.CenterHorizontally))
             TranscriptToolbar(state, vm, pageURL, onDismiss, onOpenURL = { runCatching { uriHandler.openUri(it) } })
             AnimatedVisibility(

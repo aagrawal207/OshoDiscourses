@@ -120,11 +120,14 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
             LocalMiniPlayerClearance provides miniPlayerClearance,
             LocalHazeState provides hazeState,
         ) {
-            NavDisplay(
-                entriesByTab.getValue(navigator.selectedTab),
-                modifier = Modifier.fillMaxSize().hazeSource(hazeState),
-                onBack = { navigator.pop() },
-            )
+            // One display per tab: iOS switches tabs instantly, while pushes inside a tab still slide.
+            key(navigator.selectedTab) {
+                NavDisplay(
+                    entriesByTab.getValue(navigator.selectedTab),
+                    modifier = Modifier.fillMaxSize().hazeSource(hazeState),
+                    onBack = { navigator.pop() },
+                )
+            }
 
             if (player.hasTrack) {
                 MiniPlayer(
@@ -148,8 +151,7 @@ fun AppShell(navigator: AppNavigator = rememberAppNavigator()) {
 
         AddBookmarkSheet(visible = navigator.isAddBookmarkPresented, onDismiss = navigator::closeAddBookmark)
 
-        // The player draws its own page and follows the finger, so it needs only a dimmed backdrop.
-        ModalLayer(visible = navigator.isPlayerPresented && player.hasTrack, onBack = navigator::closePlayer, opaque = false) {
+        ModalLayer(visible = navigator.isPlayerPresented && player.hasTrack, onBack = navigator::closePlayer) {
             PlayerScreen(
                 onDismiss = navigator::closePlayer,
                 onOpenTranscript = navigator::showTranscript,
@@ -218,15 +220,13 @@ private fun tabEntryProvider(navigator: AppNavigator): (NavKey) -> NavEntry<NavK
 }
 
 /**
- * A full-height sheet over the shell (iOS `.sheet` large): slides up, elevated surfaces, and no
- * tab or mini-player clearance. A non-[opaque] layer dims the shell instead of covering it.
+ * A full-height sheet over the shell (iOS `.sheet` large): slides up over a dimmed shell, with
+ * elevated surfaces and no tab or mini-player clearance. The content draws its own sheet card.
  */
 @Composable
-private fun ModalLayer(visible: Boolean, onBack: () -> Unit, opaque: Boolean = true, content: @Composable () -> Unit) {
-    if (!opaque) {
-        AnimatedVisibility(visible = visible, enter = fadeIn(tween(350)), exit = fadeOut(tween(300))) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).clearAndSetSemantics {})
-        }
+private fun ModalLayer(visible: Boolean, onBack: () -> Unit, content: @Composable () -> Unit) {
+    AnimatedVisibility(visible = visible, enter = fadeIn(tween(350)), exit = fadeOut(tween(300))) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)).clearAndSetSemantics {})
     }
     AnimatedVisibility(
         visible = visible,
@@ -240,7 +240,7 @@ private fun ModalLayer(visible: Boolean, onBack: () -> Unit, opaque: Boolean = t
             LocalHazeState provides null,
         ) {
             ProvideElevatedSurfaces {
-                Box(Modifier.fillMaxSize().then(if (opaque) Modifier.background(Osho.colors.systemBackground) else Modifier)) { content() }
+                Box(Modifier.fillMaxSize()) { content() }
             }
         }
     }

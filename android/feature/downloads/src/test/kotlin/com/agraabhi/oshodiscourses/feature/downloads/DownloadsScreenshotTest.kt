@@ -6,7 +6,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextInput
+import com.agraabhi.oshodiscourses.core.ui.components.SEARCH_REVEAL_TAG
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.agraabhi.oshodiscourses.core.domain.downloads.WaitingReason
 import com.agraabhi.oshodiscourses.core.model.Appearance
@@ -100,6 +104,8 @@ class DownloadsScreenshotTest {
     @Test
     fun searchNoResults() {
         downloads(Fixtures.populated())
+        // The field hides until a pull reveals it, so this taps it through semantics.
+        compose.onNodeWithTag(SEARCH_REVEAL_TAG).performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("Search downloads").performTextInput("zen")
         compose.onRoot().captureRoboImage("$DIR/downloads_search_no_results.png")
     }
