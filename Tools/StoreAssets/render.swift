@@ -164,7 +164,7 @@ func load(_ url: URL) -> CGImage {
 }
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let version = CommandLine.arguments.dropFirst().first ?? "1.16.1"
+let version = CommandLine.arguments.dropFirst().first ?? "1.17.0"
 precondition(version.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression) != nil)
 let directory = root.appendingPathComponent("docs/app-store/screenshots/\(version)")
 let story = try JSONDecoder().decode([Slide].self,
@@ -246,9 +246,9 @@ let creative = root.appendingPathComponent("docs/app-store/creative")
 try header.save(creative.appendingPathComponent("product-page-header-21x9.png"))
 
 let galleries: [(String, [String])] = [
-    ("listen-and-read", ["01-listen", "03-read-along", "02-hindi"]),
-    ("explore-and-offline", ["04-explore", "06-denoise", "05-offline"]),
-    ("bookmarks-and-routine", ["07-bookmarks", "08-sleep-timer", "09-listening-stats"]),
+    ("listen-and-read", ["01-listen", "04-read-along", "03-hindi"]),
+    ("explore-and-offline", ["05-explore", "07-denoise", "06-offline"]),
+    ("bookmarks-and-routine", ["08-bookmarks", "09-sleep-timer", "10-listening-stats"]),
 ]
 for (name, slides) in galleries {
     let canvas = Canvas(2464, 1770)
@@ -264,12 +264,15 @@ for family in ["iphone", "ipad"] {
     let tablet = family == "ipad"
     let thumbWidth: CGFloat = tablet ? 420 : 330
     let thumbHeight: CGFloat = tablet ? 560 : 717
-    let canvas = Canvas(Int(thumbWidth * 3 + 48), Int(thumbHeight * 3 + 48))
+    let columns = story.count <= 9 ? 3 : 5
+    let rows = (story.count + columns - 1) / columns
+    let canvas = Canvas(Int(thumbWidth * CGFloat(columns)) + 12 * (columns + 1),
+                        Int(thumbHeight * CGFloat(rows)) + 12 * (rows + 1))
     canvas.background(Palette(night: true))
     for (index, slide) in story.enumerated() {
         canvas.image(load(directory.appendingPathComponent("\(family)/\(slide.id).png")),
-                     in: canvas.rect(12 + CGFloat(index % 3) * (thumbWidth + 12),
-                                     12 + CGFloat(index / 3) * (thumbHeight + 12), thumbWidth, thumbHeight))
+                     in: canvas.rect(12 + CGFloat(index % columns) * (thumbWidth + 12),
+                                     12 + CGFloat(index / columns) * (thumbHeight + 12), thumbWidth, thumbHeight))
     }
     try canvas.save(directory.appendingPathComponent("\(family)-overview.jpg"), jpeg: true)
 }

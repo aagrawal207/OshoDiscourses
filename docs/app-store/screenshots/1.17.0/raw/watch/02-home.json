@@ -1,0 +1,19 @@
+{
+  "name": "02-home",
+  "device": "Osho Store Watch 46mm",
+  "model": "Apple Watch Series 11 (46mm)",
+  "os": "watchOS 26.5 (23T570)",
+  "udid": "600B5AEA-31B3-4F50-AF02-8562400785D3",
+  "pairedPhone": {
+    "device": "Osho Store iPhone",
+    "model": "iPhone 17 Pro",
+    "os": "iOS 26.5 (23F77)",
+    "udid": "B72834A1-DFE2-4BB1-83EE-E0CEA3DCBE69"
+  },
+  "appBuild": "1.16.0 (28)",
+  "configuration": "Debug (simulator)",
+  "gitHead": "e31cba9e84a9dbb9743e5a68288490a4d4bac284",
+  "dataSource": "Real WatchConnectivity: Watch home list with the iPhone's now-playing row and iPhone section",
+  "statusBar": "watchOS simulator does not support status_bar overrides; the clock shows the host time",
+  "capturedAt": "2026-10-03T01:31:44.554615+00:00"
+}

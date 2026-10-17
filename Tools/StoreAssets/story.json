@@ -11,7 +11,17 @@
     "style": "night"
   },
   {
-    "id": "02-hindi",
+    "id": "02-translation",
+    "source": "translation",
+    "title": [
+      "Hear a talk",
+      "in your language."
+    ],
+    "subtitle": "Apple Translation on your device, read by a system voice.",
+    "style": "paper"
+  },
+  {
+    "id": "03-hindi",
     "source": "transcript-hindi",
     "title": [
       "Listen in Hindi.",
@@ -21,7 +31,7 @@
     "style": "night"
   },
   {
-    "id": "03-read-along",
+    "id": "04-read-along",
     "source": "transcript-english",
     "title": [
       "Read along",
@@ -31,7 +41,7 @@
     "style": "night"
   },
   {
-    "id": "04-explore",
+    "id": "05-explore",
     "source": "library",
     "title": [
       "Find your",
@@ -42,7 +52,7 @@
     "ipadSource": "home-popular"
   },
   {
-    "id": "05-offline",
+    "id": "06-offline",
     "source": "downloads",
     "title": [
       "Download it.",
@@ -52,7 +62,7 @@
     "style": "paper"
   },
   {
-    "id": "06-denoise",
+    "id": "07-denoise",
     "source": "denoise",
     "title": [
       "Make the voice",
@@ -62,7 +72,7 @@
     "style": "paper"
   },
   {
-    "id": "07-bookmarks",
+    "id": "08-bookmarks",
     "source": "bookmarks",
     "title": [
       "Save a moment.",
@@ -72,7 +82,7 @@
     "style": "night"
   },
   {
-    "id": "08-sleep-timer",
+    "id": "09-sleep-timer",
     "source": "sleep-timer",
     "title": [
       "Set a timer.",
@@ -82,7 +92,7 @@
     "style": "night"
   },
   {
-    "id": "09-listening-stats",
+    "id": "10-listening-stats",
     "source": "stats",
     "title": [
       "See your listening",

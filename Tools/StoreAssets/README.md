@@ -1,9 +1,10 @@
 # Store and GitHub artwork
 
-The current [1.16.1 bundle](../../docs/app-store/screenshots/1.16.1/README.md) reorders the
-[1.16.0 bundle](../../docs/app-store/screenshots/1.16.0/README.md), which contains nine
-iPhone and nine iPad posters, five Apple Watch captures, their raw captures, and a
-checksum manifest. The
+The current [1.17.0 bundle](../../docs/app-store/screenshots/1.17.0/README.md) adds a
+translation slide to the [1.16.1 bundle](../../docs/app-store/screenshots/1.16.1/README.md),
+which reorders the [1.16.0 bundle](../../docs/app-store/screenshots/1.16.0/README.md). It
+contains ten iPhone and ten iPad posters, five Apple Watch captures, their raw captures,
+and a checksum manifest. The
 GitHub README uses a separate hero and three gallery strips.
 
 ## Tools
@@ -16,6 +17,7 @@ GitHub README uses a separate hero and three gallery strips.
 | `story.json` | Defines the ordered captions, palette and source image for each poster |
 | `render.swift` | Uses AppKit/CoreText/ImageIO to render opaque sRGB images, JPEG galleries and the checksum manifest |
 | `prepare.py` | Validates and plans the 1.16.0 listing; `--apply` prepares it once 1.15.0 has released |
+| `seed-narration.py`, `NarrationFixture.swift` | Builds a saved translation on the Mac with the app's narration code and copies it into screenshot simulators, which can't run Apple Translation |
 | `subscription-images.swift` | Renders the three yearly support promotional images and their checksum manifest into `docs/app-store/subscription-images/` |
 
 Capture scripts are restricted to simulators whose names start with `Osho Store `.
@@ -91,10 +93,10 @@ was checked against the shipped alignment data.
 ## Render and validate
 
 ```bash
-swift Tools/StoreAssets/render.swift 1.16.1 --allow-mixed-builds
-asc screenshots validate --path docs/app-store/screenshots/1.16.0/iphone --device-type IPHONE_69
-asc screenshots validate --path docs/app-store/screenshots/1.16.0/ipad --device-type IPAD_PRO_3GEN_129
-asc screenshots validate --path docs/app-store/screenshots/1.16.0/watch --device-type APP_WATCH_SERIES_10
+swift Tools/StoreAssets/render.swift 1.17.0 --allow-mixed-builds
+asc screenshots validate --path docs/app-store/screenshots/1.17.0/iphone --device-type IPHONE_69
+asc screenshots validate --path docs/app-store/screenshots/1.17.0/ipad --device-type IPAD_PRO_3GEN_129
+asc screenshots validate --path docs/app-store/screenshots/1.17.0/watch --device-type APP_WATCH_SERIES_10
 python3 Tools/StoreAssets/prepare.py
 ```
 
@@ -102,7 +104,7 @@ The renderer keeps the raw app image intact inside a rounded frame. Headlines us
 the system serif design and captions use the system sans-serif font, obtained
 through AppKit's font APIs. Review both overview images and the README hero after
 changing the story or source captures. The upload directories contain only the
-nine ordered PNGs for iPhone and iPad, and the Watch PNGs in file-name order.
+ten ordered PNGs for iPhone and iPad, and the Watch PNGs in file-name order.
 
 `prepare.py` checks that 1.15.0 has released before any remote write. It resolves
 the new localization and an editable app-info record, previews changes, and
