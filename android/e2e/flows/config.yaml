@@ -16,4 +16,5 @@ executionOrder:
     - "09 Settings appearance dark and accent change"
     - "10 Support sheet shows products or the could-not-load state"
     - "11 Listening Stats and History"
+    - "13 A talk closed while playing comes back paused in the mini-player"
     - "12 Deleting the playing talk in Downloads clears its row and the mini-player"

@@ -23,6 +23,7 @@ import com.agraabhi.oshodiscourses.core.domain.player.PlaybackError
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerController
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerState
 import com.agraabhi.oshodiscourses.core.domain.player.QueueItem
+import com.agraabhi.oshodiscourses.core.domain.progress.ContinueListening
 import com.agraabhi.oshodiscourses.core.domain.progress.PlaybackProgress
 import com.agraabhi.oshodiscourses.core.domain.progress.PlaybackStateRepository
 import com.agraabhi.oshodiscourses.core.domain.settings.SettingsRepository
@@ -70,6 +71,7 @@ class PlaybackEngine(
     private val playerFactory: () -> ExoPlayer,
     private val reviewPrompter: ReviewPrompter? = null,
     private val serviceBinding: PlaybackServiceBinding = PlaybackServiceBinding.None,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : PlayerController {
 
     private val mainDispatcher: CoroutineDispatcher =
@@ -77,6 +79,14 @@ class PlaybackEngine(
 
     private val mutableState = MutableStateFlow(PlayerState())
     override val state: StateFlow<PlayerState> = mutableState.asStateFlow()
+
+    private val mutableAudioOpen = MutableStateFlow(false)
+
+    /**
+     * Whether ExoPlayer holds the loaded talk. False for a launch-restored talk until its first play,
+     * so DeNoise can report it as paused rather than preparing.
+     */
+    val isAudioOpen: StateFlow<Boolean> = mutableAudioOpen.asStateFlow()
 
     private var exo: ExoPlayer? = null
 
@@ -105,6 +115,10 @@ class PlaybackEngine(
     private var interrupted = false
     private var wasPlayingBeforeInterruption = false
     private var noiseReductionEnabled = false
+
+    // ExoPlayer does not hold the queue yet. A restored talk waits for its first play, because
+    // building the player creates the DeNoise renderers and gives Media3 a playlist to show.
+    private var itemsDeferred = false
 
     // Callbacks can outlive an item; finishing is allowed once per load.
     private var generation = 0L
@@ -270,18 +284,28 @@ class PlaybackEngine(
     // endregion
 
     /**
-     * Loads the latest downloaded discourse paused at its saved position, without opening the file
-     * until play. Call once progress and downloads have loaded; false when nothing was restored.
+     * Loads the talk Home's Continue Listening leads with, paused at its saved position, for a cold launch.
+     * Opens no audio, takes no focus and binds no service until play; false when nothing qualifies.
      */
-    suspend fun restoreLastSession(): Boolean = onMain { restoreLastSessionNow() }
+    suspend fun restoreLastSession(): Boolean {
+        // Building the queue checks each series file on disk.
+        val checkStarted = System.nanoTime()
+        val plan = withContext(ioDispatcher) { restorePlan() } ?: return false
+        val checkMs = (System.nanoTime() - checkStarted) / 1_000_000
+        return onMain {
+            // A talk loaded meanwhile, by the listener or a headset key, wins.
+            if (current != null) return@onMain false
+            loadItem(plan.start, resumeAt = null, autoPlay = false, playlist = plan.items, deferPlayer = true)
+            Log.i(TAG, "outcome=session_restored checkMs=$checkMs")
+            true
+        }
+    }
 
-    private fun restoreLastSessionNow(): Boolean {
-        if (current != null) return false
-        val id = playbackState.state.value.recentlyPlayed.firstOrNull { downloads.localFileURI(it) != null } ?: return false
-        val result = seriesQueue(id) as? SeriesQueue.Ready ?: return false
-        loadItem(result.start, resumeAt = null, autoPlay = false, playlist = result.items)
-        Log.i(TAG, "outcome=session_restored")
-        return true
+    /** Home's first Continue Listening talk; nothing is loaded, so no current track joins the list. */
+    private fun restorePlan(): SeriesQueue.Ready? {
+        val progress = playbackState.state.value
+        val ids = ContinueListening.discourseIDs(progress, downloads.downloadedIDs.value, currentTrackID = null) { catalog.entry(it) != null }
+        return ids.firstNotNullOfOrNull { seriesQueue(it) as? SeriesQueue.Ready }
     }
 
     /**
@@ -289,7 +313,11 @@ class PlaybackEngine(
      * when nothing is loaded. Null when there is nothing downloaded to resume. Main thread only.
      */
     internal fun resumptionItems(): MediaSession.MediaItemsWithStartPosition? {
-        if (current == null && !restoreLastSessionNow()) return null
+        if (current == null) {
+            val plan = restorePlan() ?: return null
+            loadItem(plan.start, resumeAt = null, autoPlay = false, playlist = plan.items)
+            Log.i(TAG, "outcome=session_restored for=resumption")
+        }
         if (queue.isEmpty()) return null
         return MediaSession.MediaItemsWithStartPosition(queue.map(::mediaItem), currentIndex, (currentTime * 1000).toLong())
     }
@@ -314,6 +342,21 @@ class PlaybackEngine(
         if (items.isEmpty()) return
         // A position for the start item only makes sense if that item is what loads.
         loadItem(start, if (items[start].id == target) explicit else null, autoPlay = false, playlist = items)
+    }
+
+    /**
+     * Saves the loaded talk's position and listening time now, when the app leaves the foreground or
+     * its task is removed, so a later kill loses nothing. Main thread only; a no-op when nothing moved.
+     */
+    fun saveProgressNow() {
+        val item = current ?: return
+        if (pending != null || finishedGeneration == generation) return
+        refreshPosition()
+        val position = currentTime
+        val saved = lastSavedPosition?.takeIf { it.first == item.id }?.second ?: playbackState.getPosition(item.id)
+        if (abs(saved - position) < SAVE_EPSILON_SECONDS) return
+        Log.i(TAG, "outcome=progress_saved_now playing=$isPlaying")
+        autoSaveTick()
     }
 
     /** Releases the player and stops background work; the engine is unusable afterwards. */
@@ -344,6 +387,8 @@ class PlaybackEngine(
             // Readiness would seek to the restore position and undo a seek made while loading.
             pending = PendingStart(target)
             currentTime = target
+            // A restored talk can be seeked and then closed before it ever plays.
+            savePosition(item.id, target)
             publish()
             return
         }
@@ -432,7 +477,13 @@ class PlaybackEngine(
         loadItem(startIndex.coerceIn(0, items.lastIndex), resumeAt, playlist = items)
     }
 
-    private fun loadItem(index: Int, resumeAt: Double?, autoPlay: Boolean = true, playlist: List<QueueItem>? = null) {
+    private fun loadItem(
+        index: Int,
+        resumeAt: Double?,
+        autoPlay: Boolean = true,
+        playlist: List<QueueItem>? = null,
+        deferPlayer: Boolean = false,
+    ) {
         // The outgoing position belongs to the loaded item, even when the caller replaces the queue.
         // A finished talk's position was cleared on completion and must not be written back.
         current?.takeIf { finishedGeneration != generation }?.let { outgoing ->
@@ -458,17 +509,37 @@ class PlaybackEngine(
         didManuallySeekNearEnd = false
         stopProgressUpdates()
 
-        val player = player
-        player.pause()
-        if (playlist != null) player.setMediaItems(items.map(::mediaItem), index, 0) else player.seekTo(index, 0)
-        if (autoPlay) {
-            if (player.playbackState == Player.STATE_IDLE) player.prepare()
-            serviceBinding.connect()
+        if (deferPlayer) {
+            itemsDeferred = true
+            exo?.let {
+                it.pause()
+                it.clearMediaItems()
+            }
+        } else {
+            val player = player
+            player.pause()
+            if (playlist != null || itemsDeferred) {
+                player.setMediaItems(items.map(::mediaItem), index, 0)
+                itemsDeferred = false
+            } else {
+                player.seekTo(index, 0)
+            }
+            if (autoPlay) {
+                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                serviceBinding.connect()
+            }
         }
         pipeline.onDiscontinuity()
         startAutoSave()
-        Log.i(TAG, "outcome=item_loaded index=$index of=${items.size} autoPlay=$autoPlay")
+        Log.i(TAG, "outcome=item_loaded index=$index of=${items.size} autoPlay=$autoPlay deferred=$deferPlayer")
         publish()
+    }
+
+    /** Hands a restored queue to ExoPlayer; its first play is the first time audio is opened. */
+    private fun openDeferredItems() {
+        if (!itemsDeferred) return
+        itemsDeferred = false
+        player.setMediaItems(queue.map(::mediaItem), currentIndex, 0)
     }
 
     private fun checkReadiness() {
@@ -520,6 +591,7 @@ class PlaybackEngine(
         previousPosition = null
         interrupted = false
         error = null
+        itemsDeferred = false
         exo?.let {
             it.pause()
             it.stop()
@@ -537,6 +609,7 @@ class PlaybackEngine(
         if (isPlaying) return
         wantsPlayback = true
         error = null
+        openDeferredItems()
         serviceBinding.connect()
         val player = player
         if (player.playbackState == Player.STATE_IDLE) player.prepare()
@@ -760,7 +833,7 @@ class PlaybackEngine(
         queue = queue.filterIndexed { index, _ -> index !in goneSet }
         currentIndex -= gone.count { it < currentIndex }
         // Descending, so each index still names the same media item while earlier ones go.
-        gone.asReversed().forEach { exo?.removeMediaItem(it) }
+        if (!itemsDeferred) gone.asReversed().forEach { exo?.removeMediaItem(it) }
         Log.i(TAG, "outcome=queue_pruned removed=${gone.size} remaining=${queue.size}")
         // Readiness compares indices, and a callback during removal may have seen them mid-shift.
         checkReadiness()
@@ -873,6 +946,7 @@ class PlaybackEngine(
     private fun publish() {
         val item = current
         val status = pipeline.status.value
+        mutableAudioOpen.value = item != null && !itemsDeferred
         mutableState.value = PlayerState(
             currentTrackId = item?.id,
             currentTitle = item?.title.orEmpty(),
@@ -938,6 +1012,9 @@ class PlaybackEngine(
     companion object {
         private const val TAG = "Playback"
         private const val ARTIST = "Osho"
+
+        /** Below this a background save would only rewrite the same position. */
+        private const val SAVE_EPSILON_SECONDS = 0.25
 
         private fun seconds(ms: Long): Double = if (ms == C.TIME_UNSET || ms < 0) 0.0 else ms / 1000.0
 

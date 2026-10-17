@@ -39,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -147,8 +148,10 @@ class AppContainer(private val application: Application) : AppServices {
         sleepTimerService.onExpire = { playbackEngine.setPlaying(false) }
 
         mainScope.launch {
-            playbackEngine.state
-                .map { Triple(it.hasTrack, it.isPlaying && !it.isBuffering, it.error != null) }
+            // A restored talk has no audio open yet; DeNoise reports it as waiting, as for a paused one.
+            combine(playbackEngine.state, playbackEngine.isAudioOpen) { state, open ->
+                Triple(state.hasTrack && open, state.isPlaying && !state.isBuffering, state.error != null)
+            }
                 .distinctUntilChanged()
                 .collect { (hasTrack, playing, failed) -> denoiseEngine.onPlaybackChanged(hasTrack, playing, failed) }
         }
@@ -157,6 +160,11 @@ class AppContainer(private val application: Application) : AppServices {
             val started = SystemClock.elapsedRealtime()
             withContext(Dispatchers.IO) { bundledCatalog.warmUp() }
             Log.i(TAG, "outcome=catalog_warm ms=${SystemClock.elapsedRealtime() - started}")
+            downloadEngine.awaitReady()
+            // Paused, with no focus, service or notification until the listener presses play.
+            val restoreStarted = SystemClock.elapsedRealtime()
+            val restored = playbackEngine.restoreLastSession()
+            Log.i(TAG, "outcome=session_restore restored=$restored ms=${SystemClock.elapsedRealtime() - restoreStarted}")
         }
 
         appScope.launch { runCatching { sync.start() }.onFailure { if (it is CancellationException) throw it; Log.w(TAG, "sync start failed", it) } }
@@ -180,6 +188,8 @@ class AppContainer(private val application: Application) : AppServices {
                 }
 
                 override fun onStop(owner: LifecycleOwner) {
+                    // A force-stop or low-memory kill after this would otherwise lose up to one auto-save tick.
+                    playbackEngine.saveProgressNow()
                     appScope.launch { data.transcriptState.flush() }
                 }
             },

@@ -10,6 +10,7 @@ appId: com.agraabhi.oshodiscourses
       visible: "Clear text"
     commands:
       - tapOn: "Clear text"
+- runFlow: reveal_search.yaml
 - tapOn: "Search by name or topic"
 - inputText: "New Alchemy"
 - hideKeyboard

@@ -141,6 +141,37 @@ class SessionControlsTest {
     }
 
     @Test
+    fun aHeadsetPlayAfterALaunchRestoreResumesTheRestoredTalk() = test {
+        val f = EngineFixture(
+            backgroundScope,
+            context,
+            progress = PlaybackProgress(positions = mapOf(BIRD[1] to 240.0), recentlyPlayed = listOf(BIRD[1])),
+        )
+        assertThat(f.engine.restoreLastSession()).isTrue()
+        val session = MediaSession.Builder(context, f.engine.sessionPlayer).setId("test-${System.nanoTime()}").build()
+        try {
+            // The restore left ExoPlayer empty, which is what makes Media3 ask for resumption.
+            assertThat(f.engine.sessionPlayer.mediaItemCount).isEqualTo(0)
+            val controller = MediaSession.ControllerInfo.createTestOnlyControllerInfo(
+                "com.example.bluetooth", 0, 0, 0, 0, false, Bundle.EMPTY, false,
+            )
+            val resumed = PlaybackSessionCallback(f.engine).onPlaybackResumption(session, controller, true).get()
+            assertThat(resumed.mediaItems.map { it.mediaId }).containsExactlyElementsIn(BIRD).inOrder()
+            assertThat(resumed.startIndex).isEqualTo(1)
+            assertThat(resumed.startPositionMs).isEqualTo(240_000)
+
+            f.engine.sessionPlayer.setMediaItems(resumed.mediaItems, resumed.startIndex, resumed.startPositionMs)
+            f.engine.sessionPlayer.play()
+            f.runUntil { f.state.isPlaying }
+            assertThat(f.state.currentTrackId).isEqualTo(BIRD[1])
+            assertThat(f.state.currentTime).isWithin(0.5).of(240.0)
+            assertThat(f.engine.sessionPlayer.mediaItemCount).isEqualTo(3)
+        } finally {
+            session.release()
+        }
+    }
+
+    @Test
     fun playbackResumptionFailsWithNothingDownloaded() = test {
         val f = EngineFixture(backgroundScope, context, downloaded = emptySet(), progress = PlaybackProgress(recentlyPlayed = listOf(BIRD[0])))
         val session = MediaSession.Builder(context, f.engine.sessionPlayer).setId("test-${System.nanoTime()}").build()

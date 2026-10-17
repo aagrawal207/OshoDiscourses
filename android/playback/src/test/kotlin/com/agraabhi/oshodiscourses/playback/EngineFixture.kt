@@ -31,6 +31,7 @@ import com.agraabhi.oshodiscourses.core.testing.FakeSleepTimer
 import com.agraabhi.oshodiscourses.core.testing.SampleCatalog
 import com.agraabhi.oshodiscourses.denoise.DenoiseAudioPipeline
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.IOException
 
@@ -91,6 +92,18 @@ class FakeSources(private val durations: Map<String, Double>, val failing: Mutab
     }
 }
 
+/** Counts service binds, the step that lets Media3 post the notification and go foreground. */
+class RecordingServiceBinding : PlaybackServiceBinding {
+    var connects = 0
+        private set
+
+    override fun connect() {
+        connects++
+    }
+
+    override fun release() = Unit
+}
+
 class EngineFixture(
     scope: CoroutineScope,
     context: Context,
@@ -109,6 +122,7 @@ class EngineFixture(
     val progress = FakePlaybackStateRepository(progress)
     val stats = FakeListeningStatsRepository()
     val pipeline = RecordingPipeline()
+    val binding = RecordingServiceBinding()
     val sources = FakeSources(durations, failing.toMutableSet())
     val player: ExoPlayer = TestExoPlayerBuilder(context).setMediaSourceFactory(sources).build()
     val engine = PlaybackEngine(
@@ -122,6 +136,9 @@ class EngineFixture(
         pipeline = pipeline,
         scope = scope,
         playerFactory = { player },
+        serviceBinding = binding,
+        // Inline, so a restore's file checks return to the Robolectric main thread that owns the player.
+        ioDispatcher = Dispatchers.Unconfined,
     )
 
     val state: PlayerState get() = engine.state.value

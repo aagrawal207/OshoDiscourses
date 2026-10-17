@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.agraabhi.oshodiscourses.core.domain.downloads.DownloadManager
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerController
 import com.agraabhi.oshodiscourses.core.domain.player.PlayerState
+import com.agraabhi.oshodiscourses.core.domain.progress.ContinueListening
 import com.agraabhi.oshodiscourses.core.domain.progress.PlaybackProgress
 import com.agraabhi.oshodiscourses.core.domain.progress.PlaybackStateRepository
 import com.agraabhi.oshodiscourses.core.domain.settings.SettingsRepository
@@ -60,12 +61,9 @@ object HomeContent {
         currentTrackID: String?,
         languageFilter: LanguageFilter,
     ): HomeUiState {
-        val continueItems = progress.recentlyPlayed.mapNotNull { id ->
-            if (id !in downloaded) return@mapNotNull null
-            val position = progress.positions[id] ?: 0.0
-            if (position <= 0 && currentTrackID != id) return@mapNotNull null
+        val continueItems = ContinueListening.discourseIDs(progress, downloaded, currentTrackID) { catalog.entry(it) != null }.mapNotNull { id ->
             val entry = catalog.entry(id) ?: return@mapNotNull null
-            ContinueItem(entry.discourse, entry.series, position, progress.durations[id] ?: 0.0)
+            ContinueItem(entry.discourse, entry.series, progress.positions[id] ?: 0.0, progress.durations[id] ?: 0.0)
         }.take(CONTINUE_COUNTED)
 
         val groups = mutableListOf<ContinueGroup>()
