@@ -1,0 +1,177 @@
+{
+  "versionID": "0aacc378-7a4a-4a25-872c-ea26b8840783",
+  "locale": "en-US",
+  "versionLocalizationID": "e3e22dcc-0140-4fde-bebe-fe9826cb4f91",
+  "readAt": "2026-10-17",
+  "note": "en-GB and hi have no sets of their own and use en-US.",
+  "sets": [
+    {
+      "setID": "55bcca79-042b-48e4-aca2-7d453032e059",
+      "displayType": "APP_IPAD_PRO_3GEN_129",
+      "screenshots": [
+        {
+          "id": "e00e6ccc-21d6-4eeb-84c7-2e6916c2d65a",
+          "fileName": "01-listen.png",
+          "md5": "6da9152c2db3c24ac29683c630eea3b5",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "9a800019-3c94-874f-8004-05d4c39e99b8",
+          "fileName": "02-translation.png",
+          "md5": "04d64fd074d137e1e892a103e6d20d45",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "d9af9e7f-bd10-4595-983d-7627541f5f48",
+          "fileName": "02-hindi.png",
+          "md5": "e56d9b0f3f3f6d583f206a4f93f2285e",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "9c9445e0-5160-4990-8b73-bbaa507be706",
+          "fileName": "03-read-along.png",
+          "md5": "5c98650b2145c5c7223f4d8f13bc4a97",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "79d6c8ba-4a7c-4c75-8470-ba278c0a35eb",
+          "fileName": "04-explore.png",
+          "md5": "980c8aee95ea804ee27de4c48df10628",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "c75f03b6-8bb9-4c21-8d96-242d880b6a36",
+          "fileName": "05-offline.png",
+          "md5": "469fdbec14da57655dc9ef0494ee28ef",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "13958098-edcb-4c6a-999a-09db2aab543e",
+          "fileName": "06-denoise.png",
+          "md5": "9ebb72d8f017669bcf413175bb50b807",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "baf8e705-685c-49db-8730-99b0bb03cb1a",
+          "fileName": "07-bookmarks.png",
+          "md5": "baba49f5b7c79501b7d94f21816b46cd",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "e90359dd-aa68-4b61-91e7-fbc86efac487",
+          "fileName": "08-sleep-timer.png",
+          "md5": "08179a924a01008f87880b4fb5b24573",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "369d1250-0d1a-4c26-9e39-57dff2317223",
+          "fileName": "09-listening-stats.png",
+          "md5": "7bd34da98aeb39bd6528d0df72d5878b",
+          "state": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "setID": "8ef1ea70-93b9-4aa2-b334-2c63a2b263eb",
+      "displayType": "APP_IPHONE_67",
+      "screenshots": [
+        {
+          "id": "4861032e-9674-4a70-bfc1-02913245f42f",
+          "fileName": "01-listen.png",
+          "md5": "efc9497e510fe3e98c4ee8c444b45c64",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "fdc00019-3c94-874f-8013-6f4fdc0add74",
+          "fileName": "02-translation.png",
+          "md5": "c211cd1ee4e42ac509d99e44cd8b7323",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "ab862c94-3988-4943-b15a-5a68173654db",
+          "fileName": "02-hindi.png",
+          "md5": "f9e2369c46e3194dc7741d4978b17443",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "8ec5b991-0620-4549-9b64-b58be6d3caaf",
+          "fileName": "03-read-along.png",
+          "md5": "37849fa13357f8d7d6858f3ee9a0ecb4",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "c5353dc4-f907-4cc5-aaec-2f2db460a0f6",
+          "fileName": "04-explore.png",
+          "md5": "fbcbea5e9156a91c4569554773f70c9b",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "342ef911-a3c0-489d-9d13-d15a8f1c59ba",
+          "fileName": "05-offline.png",
+          "md5": "f5d2a10158efb81067f3b1a3b083f710",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "3a3dc984-4b9f-4e55-b1b8-90b7c6c37c95",
+          "fileName": "06-denoise.png",
+          "md5": "a51261de2f1ecaaa59991dceef9b6903",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "158bed26-6e00-4419-8d74-21badf998108",
+          "fileName": "07-bookmarks.png",
+          "md5": "1257eb26c383ff92de257f9d256efe68",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "5aa0d8b1-0d3c-4ace-817b-48724d56a6bb",
+          "fileName": "08-sleep-timer.png",
+          "md5": "3771c04605d1c5ed307d1568d019de61",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "ddcd986c-1390-4cc0-b2a4-efd4bdbf968b",
+          "fileName": "09-listening-stats.png",
+          "md5": "f25cd313db9745a93ff0e75c24255ff0",
+          "state": "COMPLETE"
+        }
+      ]
+    },
+    {
+      "setID": "a6dc1756-da5a-4a56-a2f6-1342c3aff221",
+      "displayType": "APP_WATCH_SERIES_10",
+      "screenshots": [
+        {
+          "id": "3135686f-306a-4b2f-8994-b088eea7f783",
+          "fileName": "01-now-playing.png",
+          "md5": "66211260edf31bf4febd16c891607fe0",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "eac35ae1-4375-4acf-9048-df5dd90020e8",
+          "fileName": "02-home.png",
+          "md5": "c4f6055f5e180778925f901dc0489f26",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "14ff3e25-8d42-4df3-8e0f-7300cea84e3d",
+          "fileName": "03-save-to-watch.png",
+          "md5": "00a153ae6d640f40044da18cfcb61ba6",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "71a70687-09ca-4f4b-a584-58c33851c8bb",
+          "fileName": "04-on-watch.png",
+          "md5": "f6c483b8e7868e81e7ec3fa2dbecd21e",
+          "state": "COMPLETE"
+        },
+        {
+          "id": "a366a885-9a47-454b-9742-f988e574bb37",
+          "fileName": "05-watch-player.png",
+          "md5": "b954f7258f2bbea243348f4b310ce9b2",
+          "state": "COMPLETE"
+        }
+      ]
+    }
+  ]
+}
