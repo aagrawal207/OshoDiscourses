@@ -90,13 +90,14 @@ logs for each flow). It exits non-zero if any flow fails. A full run takes about
 | `09_settings_appearance` | Dark appearance and the Teal accent persist across a relaunch; restores Light and Purple |
 | `10_support_sheet` | The sheet opens and shows either the tips or "Couldn't load tips from Google Play" |
 | `11_stats_history` | Listening Stats totals, periods and Listening History with the played talk |
+| `13_restore_after_close` | Force-stopping the app while it plays, then launching it, shows the talk in the mini-player, paused, at most one auto-save tick (10 s) before where it stopped; Play resumes from there |
 | `12_downloads_delete` | Swipe-deleting the playing talk empties Downloads, moves it to Previously Downloaded and removes the mini-player |
 
 Rules the flows follow:
 
-- `flows/config.yaml` fixes the order. `03` downloads the talk, `04`–`11` reuse it (the
-  shared `ensure_downloaded` step fetches it again when a flow runs alone) and `12` deletes
-  it, so a run leaves no audio behind.
+- `flows/config.yaml` fixes the order. `03` downloads the talk, `04`–`11` and `13` reuse it
+  (the shared `ensure_downloaded` step fetches it again when a flow runs alone) and `12`
+  deletes it, so a run leaves no audio behind.
 - Selectors are visible text and content descriptions. The tab bar items carry test tags
   (`tab.home`, `tab.library`, `tab.downloads`, `tab.settings`); `AppShell` sets
   `testTagsAsResourceId`, so Maestro selects them with `id:`. Page titles repeat the tab
@@ -152,7 +153,9 @@ Commands used for the device-only checks. Restore every setting afterwards.
 | Headset unplug | Not possible on the emulator: `AUDIO_BECOMING_NOISY` is a protected broadcast | `PlaybackEngineTest` covers it under Robolectric |
 | Doze | `adb shell dumpsys battery unplug; adb shell dumpsys deviceidle force-idle`; undo with `deviceidle unforce` and `battery reset` | Playback continues; a running transfer continues |
 | Airplane mode | `adb shell cmd connectivity airplane-mode enable` / `disable` | Downloads shows "Waiting for a connection"; the job restarts when back online |
-| Swipe from recents | `adb shell input keyevent KEYCODE_APP_SWITCH`, then swipe the card up | The user-initiated transfer job keeps the process and commits the file |
+| Save on background | Play, press Home, wait 1 s for the process `ON_STOP`, `adb shell am force-stop`, then launch | The restored position is within about 1 s of where playback was at the force-stop |
+| Launch restore | Play, then `adb shell am force-stop` (or `run-as com.agraabhi.oshodiscourses kill -9 <pid>` while paused in the background) and launch. `adb shell dumpsys audio`, `dumpsys notification --noredact` and `dumpsys activity services com.agraabhi.oshodiscourses` | The mini-player shows the talk paused at its last saved position; no focus entry, notification or service from the app until Play |
+| Swipe from recents | `adb shell input keyevent KEYCODE_APP_SWITCH`, then swipe the card up | The user-initiated transfer job keeps the process and commits the file. A playing talk keeps playing (Media3's default), and the position is saved |
 | Font scale | `adb shell settings put system font_scale 2.0` (restore `1.0`) | Screens grow; the tab bar stays at its fixed size |
 | Dark mode | `adb shell cmd uimode night yes` (restore `no`) | Only Appearance = System follows it; Light and Dark are explicit |
 | Rotation | `adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation 1` (restore `1` and `0`) | Not locked, as the iOS app allows landscape on iPhone; the player scrolls |

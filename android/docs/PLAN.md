@@ -38,6 +38,18 @@ layout. Read the root `CLAUDE.md` for the iOS architecture and key decisions.
   titles, Add Bookmark), for parity.
 - Glass blur uses the Haze library where the platform supports it, with the
   tinted fallback from the style guide.
+- A cold launch shows the last talk in the mini-player, paused at its saved
+  position (#41). This is an improvement over iOS, which the iOS app adopts
+  too. The talk is exactly the first one Home's Continue Listening shows
+  (`ContinueListening` in `:core:domain`), including a finished talk played
+  again; with none, there is no mini-player. The restore never plays, takes
+  no audio focus and posts no notification until the listener presses play.
+- The position is also saved when the app goes to the background (process
+  `ON_STOP`) and when its task is removed, so a later kill loses no listening.
+  The iOS app does the same.
+- Swiping the app away while a talk plays keeps it playing, Media3's default
+  and the Android convention. iOS stops instead. A swipe while paused stops
+  the service as usual.
 
 ## Stack
 

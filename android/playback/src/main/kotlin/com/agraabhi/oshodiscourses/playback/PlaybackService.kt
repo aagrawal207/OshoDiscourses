@@ -3,6 +3,7 @@ package com.agraabhi.oshodiscourses.playback
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
@@ -46,6 +47,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+
+    // Media3 keeps playing on a swipe-away (the Android convention); the save covers a later kill either way.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        (application as PlaybackEngineProvider).playbackEngine.saveProgressNow()
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         // The engine outlives the service and keeps its player; only the session goes.

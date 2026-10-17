@@ -17,6 +17,7 @@ name: 02 Library search and filter chip open a series
 - tapOn: "English"
 - assertVisible: "A Bird on the Wing"
 - assertNotVisible: "Adhyatam Upanishad"
+- runFlow: ../subflows/reveal_search.yaml
 - tapOn: "Search by name or topic"
 - inputText: "Bird on the"
 - hideKeyboard
