@@ -211,14 +211,14 @@ OshoDiscoursesTests/
   and 1,972 Hindi. The remaining 14 failed text matching after all download
   failures were recovered; some site pages contain another discourse's text.
 
-### Translated narration (local development)
+### Translated narration (1.17.0)
 
-This worktree restores translated narration on `feature/translated-narration`,
-based on the submitted 1.16.3 source. The original release worktree is unchanged.
-`TRANSLATED_NARRATION_UI=TRANSLATED_NARRATION` enables local player and Downloads
-entry points; clear the setting to check the deferred state. No translation build
-has been submitted. The original snapshot remains on `wip/translated-narration-1.16`
-at `17c9039`. See [the port and verification record](docs/translation-port.md).
+Translated narration ships in 1.17.0 (35), merged to `main` from
+`feature/translated-narration`. `TRANSLATED_NARRATION_UI=TRANSLATED_NARRATION` in
+`project.yml`'s base settings compiles the series, player and Downloads entry points
+into every configuration, Release included; clear it to check the original-only
+state. The original snapshot remains on `wip/translated-narration-1.16` at
+`17c9039`. See [the port and verification record](docs/translation-port.md).
 
 Apple Translation translates source transcripts and an ordinary system voice
 renders offline audio. Synthetic positions never update original listening
@@ -383,7 +383,8 @@ Features from the RN version — port status:
 
 ## Dev notes
 
-- 1.16.3 (34) was submitted at 2026-10-12T18:29:28Z (`WAITING_FOR_REVIEW`, release after approval) with optional yearly support, gentle engagement, finer playback speed and India-aware downloads. Build 33 was submitted earlier and withdrawn. The app, subscription group and all three annual subscription versions are in submission `a82513a6-a042-4625-96ea-d430b6520ac3`. The StoreKit expiry fixture fails in the iOS 27 simulator; the rest of the unit suite (530) passes. Xcode cloud signing produced the App Store IPA. See [the release record](docs/app-store/releases/1.16.3.md).
+- 1.17.0 (35) is prepared, not submitted: build 35 is `VALID` and attached to version `0aacc378-7a4a-4a25-872c-ea26b8840783` (release after approval). It adds listening in translation, relaunch restore and the What's New screen. Unit suite 792 of 793 passed (the known StoreKit expiry fixture failed). See [the release record](docs/app-store/releases/1.17.0.md).
+- 1.16.3 (34) is released (`READY_FOR_SALE`, checked 2026-10-17); it was submitted at 2026-10-12T18:29:28Z with optional yearly support, gentle engagement, finer playback speed and India-aware downloads. Build 33 was submitted earlier and withdrawn. The app, subscription group and all three annual subscription versions are in submission `a82513a6-a042-4625-96ea-d430b6520ac3`. The StoreKit expiry fixture fails in the iOS 27 simulator; the rest of the unit suite (530) passes. Xcode cloud signing produced the App Store IPA. See [the release record](docs/app-store/releases/1.16.3.md).
 - 1.16.0 (28) was approved and released on 2026-10-03 with CarPlay, Apple Watch and iPad; the Mac app is a later submission. See [the release record](docs/app-store/releases/1.16.0.md).
 - 1.16.2 (32) is released (`READY_FOR_DISTRIBUTION`, checked 2026-10-11). It adds transcript copy options: Select Text, Select Passages and drag-out. See [the release record](docs/app-store/releases/1.16.2.md).
 - 1.16.1 (31) was released after approval (`READY_FOR_DISTRIBUTION`, checked 2026-10-08; builds 29 and 30 were withdrawn first). It adds en-GB and Hindi store listings, new keywords, reordered screenshots, Health & Fitness as the secondary category, a Settings > About > Rate Osho Talks link, a broader review prompt and mini-player clearance on every page. See [the release record](docs/app-store/releases/1.16.1.md).
