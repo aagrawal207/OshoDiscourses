@@ -22,11 +22,18 @@ final class PlaybackLauncher {
     private let player: AudioPlayerService
     private let downloads: DownloadService
     private let bookmarks: BookmarkService
+    private let narrations: NarrationService
+    private let narrationPlayback: NarrationPreviewPlayback
 
-    init(player: AudioPlayerService, downloads: DownloadService, bookmarks: BookmarkService) {
+    init(
+        player: AudioPlayerService, downloads: DownloadService, bookmarks: BookmarkService,
+        narrations: NarrationService = .shared, narrationPlayback: NarrationPreviewPlayback = .shared
+    ) {
         self.player = player
         self.downloads = downloads
         self.bookmarks = bookmarks
+        self.narrations = narrations
+        self.narrationPlayback = narrationPlayback
     }
 
     /// The downloaded discourses of the series in catalog order, so auto-play
@@ -63,16 +70,33 @@ final class PlaybackLauncher {
         player.playQueue(items: queue.items, startIndex: queue.start, resumeAt: bookmark.timestamp)
     }
 
-    /// Loads the talk Home's Continue Listening shows first, paused, with its series as the queue.
+    /// Loads the item Home's Continue Listening shows first, paused: a recording with its
+    /// series as the queue, or a translation on its own. Returns the restored track ID.
     @discardableResult
-    func restoreLastSession(from playbackState: PlaybackStateService) -> String? {
+    func restoreLastSession(from playbackState: PlaybackStateService) async -> String? {
         guard player.currentTrackId == nil else { return nil }
+        // Saved translations are read from disk; a listener who never played one waits for nothing.
+        if !narrations.recentPlays.isEmpty { await narrations.loadIfNeeded() }
         let downloads = downloads
-        guard let id = playbackState.restorableDiscourseID(
-            isDownloaded: downloads.isDownloaded,
-            hasFile: { downloads.localFileURL(for: $0) != nil }
-        ), let queue = try? seriesQueue(startingAt: id) else { return nil }
-        player.restoreQueue(items: queue.items, startIndex: queue.start)
-        return player.currentTrackId
+        let rows = ContinueListening.rows(
+            playbackState: playbackState, narrations: narrations,
+            isDownloaded: downloads.isDownloaded, currentTrackID: nil
+        )
+        let candidates = ContinueListening.restoreCandidates(
+            rows, hasFile: { downloads.localFileURL(for: $0) != nil },
+            hasNarrationAudio: narrationPlayback.hasPlayableAudio
+        )
+        for row in candidates {
+            guard player.currentTrackId == nil else { return nil }
+            switch row {
+            case .recording(let discourseID):
+                guard let queue = try? seriesQueue(startingAt: discourseID) else { continue }
+                player.restoreQueue(items: queue.items, startIndex: queue.start)
+            case .translation(let document):
+                guard await narrationPlayback.restore(documentID: document.id, player: player) else { continue }
+            }
+            if player.currentTrackId == row.trackID { return row.trackID }
+        }
+        return nil
     }
 }

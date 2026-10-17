@@ -155,7 +155,8 @@ final class NarrationService {
 
     func recordPlay(documentID: String, at date: Date = Date()) {
         guard NarrationCache.isID(documentID) else { return }
-        recentPlays[documentID] = date
+        // Kept at the stored precision, so this process orders rows as the next launch will.
+        recentPlays[documentID] = Date(timeIntervalSince1970: date.timeIntervalSince1970)
         if recentPlays.count > Self.maximumRecentPlays,
            let oldest = recentPlays.min(by: { $0.value < $1.value })?.key {
             recentPlays[oldest] = nil

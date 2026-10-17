@@ -507,17 +507,38 @@ final class AudioPlayerService {
         guard currentTrackId == nil, !items.isEmpty else { return }
         let index = max(0, min(startIndex, items.count - 1))
         let item = items[index]
-        // Restore brings back only original recordings; a translation reopens from its own screen.
-        guard item.narration == nil, !Self.isNarrationTrackID(item.id) else { return }
+        // A translation returns on its own, as it plays; a bare narration ID has no document to load.
+        if item.narration == nil {
+            guard !Self.isNarrationTrackID(item.id) else { return }
+        } else {
+            guard items.count == 1 else { return }
+        }
         guard loadAndPlay(item: item, startsPlayback: false) else { return }
         queue = items
         currentIndex = index
         playRecordPendingID = item.id
+        // loadAndPlay already shows a translation's own saved position.
+        guard item.narration == nil else { return }
         // Shown until readiness seeks the item to the same saved position.
         let saved = playbackStateService?.getPosition(discourseId: item.id) ?? 0
         let savedDuration = playbackStateService?.getDuration(discourseId: item.id) ?? 0
         if saved.isFinite, saved > 0 { currentTime = saved }
         if savedDuration.isFinite, savedDuration > 0 { duration = savedDuration }
+    }
+
+    /// Restores a saved translation paused at its own position. `joinedPassages` is the
+    /// timeline of the finished passages when the translation is only partly prepared.
+    func restoreNarration(_ document: NarrationDocument, url: URL, joinedPassages asset: AVAsset? = nil) {
+        guard currentTrackId == nil, let source = Catalog.discourseLookup[document.discourseID] else { return }
+        let previous = narrationPreviewAsset
+        if let asset {
+            narrationPreviewAsset = NarrationPreviewAsset(documentID: document.id, segmentCount: document.segments.count, asset: asset)
+        }
+        restoreQueue(items: [QueueItem(
+            id: Self.narrationTrackID(for: document.id), url: url,
+            title: source.discourse.displayTitle, series: source.series.name, narration: document
+        )])
+        if currentNarration?.id != document.id { narrationPreviewAsset = previous }
     }
 
     func togglePlayPause() {
@@ -596,7 +617,13 @@ final class AudioPlayerService {
         if isPlayingNarration { narrationPlaybackFailure = nil }
         if let id = playRecordPendingID {
             playRecordPendingID = nil
-            if id == currentTrackId { playbackStateService?.recordPlay(discourseId: id) }
+            if id == currentTrackId {
+                if let narration = currentNarration {
+                    narrationStore.recordPlay(documentID: narration.id)
+                } else {
+                    playbackStateService?.recordPlay(discourseId: id)
+                }
+            }
         }
         refreshAudioProcessingStatus()
         updateNowPlayingInfo()

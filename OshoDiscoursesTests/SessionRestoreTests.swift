@@ -66,6 +66,26 @@ struct SessionRestoreTests {
         Array(Catalog.allDiscourses().prefix(count).map(\.id))
     }
 
+    /// A store with no saved translations, isolated from the host app's.
+    private func emptyNarrations() throws -> (NarrationService, String) {
+        let suite = "session-restore-narrations-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
+        return (NarrationService(directory: directory, defaults: defaults), suite)
+    }
+
+    /// The track relaunch restore tries first, through the selection Home uses.
+    private func restoreTarget(
+        _ state: PlaybackStateService, isDownloaded: (String) -> Bool, hasFile: (String) -> Bool
+    ) throws -> String? {
+        let (narrations, suite) = try emptyNarrations()
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let rows = ContinueListening.rows(
+            playbackState: state, narrations: narrations, isDownloaded: isDownloaded, currentTrackID: nil
+        )
+        return ContinueListening.restoreCandidates(rows, hasFile: hasFile, hasNarrationAudio: { _ in true }).first?.trackID
+    }
+
     @Test func restoresTheFirstContinueListeningRow() throws {
         let (state, suite) = try makeState()
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
@@ -79,9 +99,9 @@ struct SessionRestoreTests {
         let rows = state.continueListeningIDs(isDownloaded: downloaded.contains, currentTrackID: nil)
         #expect(rows == [missingFile, chosen, older])
         // A manifest entry whose file is gone is dropped, as Home drops it once evicted.
-        let restored = state.restorableDiscourseID(isDownloaded: downloaded.contains, hasFile: { $0 != missingFile })
+        let restored = try restoreTarget(state, isDownloaded: downloaded.contains, hasFile: { $0 != missingFile })
         #expect(restored == chosen)
-        #expect(state.restorableDiscourseID(isDownloaded: downloaded.contains, hasFile: { _ in true }) == rows.first)
+        #expect(try restoreTarget(state, isDownloaded: downloaded.contains, hasFile: { _ in true }) == rows.first)
     }
 
     @Test func aCompletedTalkBeingHeardAgainIsRestored() throws {
@@ -97,14 +117,14 @@ struct SessionRestoreTests {
         #expect(state.isCompleted(ids[1]))
 
         #expect(state.continueListeningIDs(isDownloaded: { _ in true }, currentTrackID: nil).first == ids[1])
-        #expect(state.restorableDiscourseID(isDownloaded: { _ in true }, hasFile: { _ in true }) == ids[1])
+        #expect(try restoreTarget(state, isDownloaded: { _ in true }, hasFile: { _ in true }) == ids[1])
     }
 
     @Test func nothingIsRestoredWhenContinueListeningIsEmpty() throws {
         let (state, suite) = try makeState()
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         let ids = catalogIDs(3)
-        #expect(state.restorableDiscourseID(isDownloaded: { _ in true }, hasFile: { _ in true }) == nil, "no saved state")
+        #expect(try restoreTarget(state, isDownloaded: { _ in true }, hasFile: { _ in true }) == nil, "no saved state")
 
         state.savePosition(discourseId: ids[0], position: 590, duration: 600)
         state.recordPlay(discourseId: ids[0])
@@ -117,7 +137,7 @@ struct SessionRestoreTests {
 
         let downloaded: Set = [ids[0], ids[1]]
         #expect(state.continueListeningIDs(isDownloaded: downloaded.contains, currentTrackID: nil).isEmpty)
-        #expect(state.restorableDiscourseID(isDownloaded: downloaded.contains, hasFile: { _ in true }) == nil)
+        #expect(try restoreTarget(state, isDownloaded: downloaded.contains, hasFile: { _ in true }) == nil)
         // The loaded talk is listed without a saved position; a cold launch has none loaded.
         #expect(state.continueListeningIDs(isDownloaded: downloaded.contains, currentTrackID: ids[1]) == [ids[1]])
     }
@@ -141,18 +161,23 @@ struct SessionRestoreTests {
         #expect(library.continueListening().map(\.id) == rows.map(CompanionLibrary.rowID(discourse:)))
     }
 
-    @Test func launcherSkipsATalkWhoseDownloadIsGone() throws {
+    @Test func launcherSkipsATalkWhoseDownloadIsGone() async throws {
         let (state, suite) = try makeState()
         defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-        let player = AudioPlayerService(settings: nil, connectsToSystem: false)
+        let (narrations, narrationSuite) = try emptyNarrations()
+        defer { UserDefaults(suiteName: narrationSuite)?.removePersistentDomain(forName: narrationSuite) }
+        let player = AudioPlayerService(settings: nil, connectsToSystem: false, narrationService: narrations)
         defer { player.stop() }
         let downloads = DownloadService()
-        let launcher = PlaybackLauncher(player: player, downloads: downloads, bookmarks: .shared)
+        let launcher = PlaybackLauncher(
+            player: player, downloads: downloads, bookmarks: .shared,
+            narrations: narrations, narrationPlayback: NarrationPreviewPlayback(narrations: narrations)
+        )
         let gone = try #require(Catalog.allDiscourses().first { !downloads.isDownloaded($0.id) })
         state.savePosition(discourseId: gone.id, position: 120, duration: 3600)
         state.recordPlay(discourseId: gone.id)
 
-        #expect(launcher.restoreLastSession(from: state) == nil)
+        #expect(await launcher.restoreLastSession(from: state) == nil)
         #expect(player.currentTrackId == nil)
     }
 

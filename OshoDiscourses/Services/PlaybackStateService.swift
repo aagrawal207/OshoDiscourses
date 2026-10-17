@@ -193,20 +193,14 @@ final class PlaybackStateService {
         return completedDiscourseIDs.filter { $0.hasPrefix(seriesId + "-") }.count
     }
 
-    /// Home's Continue Listening order: recent talks that are downloaded and started,
-    /// or loaded in the player. CarPlay, the Watch and relaunch restore read this list too.
+    /// Home's Continue Listening order for recordings: recent talks that are downloaded and
+    /// started, or loaded in the player. CarPlay and the Watch list these rows.
     func continueListeningIDs(isDownloaded: (String) -> Bool, currentTrackID: String?) -> [String] {
         recentlyPlayed.filter { id in
             isDownloaded(id)
                 && (getPosition(discourseId: id) > 0 || id == currentTrackID)
                 && Catalog.discourseLookup[id] != nil
         }
-    }
-
-    /// The talk a cold launch puts back in the player: the first Continue Listening
-    /// row whose file is still on disk.
-    func restorableDiscourseID(isDownloaded: (String) -> Bool, hasFile: (String) -> Bool) -> String? {
-        continueListeningIDs(isDownloaded: isDownloaded, currentTrackID: nil).first(where: hasFile)
     }
 
     // MARK: - iCloud Sync (NSUbiquitousKeyValueStore)

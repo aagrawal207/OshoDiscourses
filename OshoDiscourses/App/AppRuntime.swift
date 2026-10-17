@@ -54,7 +54,7 @@ final class AppRuntime {
         // Deferred past the first frame, which the launch splash covers.
         if Self.restoresLastSession {
             let launcher = launcher
-            Task { launcher.restoreLastSession(from: playbackState) }
+            Task { await launcher.restoreLastSession(from: playbackState) }
         }
         // setPlaying also stops a next talk that is still loading after auto-advance.
         SleepTimerService.shared.onExpire = { [weak audioPlayer] in audioPlayer?.setPlaying(false) }

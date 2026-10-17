@@ -84,6 +84,42 @@ final class NarrationPreviewPlayback {
         }
     }
 
+    /// Whether a saved translation still has audio: its joined file, or its finished passages on disk.
+    func hasPlayableAudio(_ document: NarrationDocument) -> Bool {
+        if let saved = narrations.documents.first(where: { $0.id == document.id }), saved.isComplete,
+           narrations.audioURL(for: saved) != nil { return true }
+        guard let prefix = narrations.playablePrefix(of: document.id) else { return false }
+        return prefix.segmentURLs.allSatisfy { FileManager.default.isReadableFile(atPath: $0.path) }
+    }
+
+    /// Loads a saved translation paused at its saved position for relaunch restore, as `play`
+    /// would load it. Returns false when it cannot be loaded, so restore can try the next row.
+    func restore(documentID: String, player: AudioPlayerService) async -> Bool {
+        guard player.currentTrackId == nil else { return false }
+        if let document = narrations.documents.first(where: { $0.id == documentID }), document.isComplete,
+           let url = narrations.audioURL(for: document) {
+            attach(player)
+            player.restoreNarration(document, url: url)
+            return player.currentNarration?.id == documentID
+        }
+        guard let prefix = narrations.playablePrefix(of: documentID), let first = prefix.segmentURLs.first else { return false }
+        let started = generation
+        let playbackGeneration = player.playbackGeneration
+        let playbackIntent = player.playbackIntentGeneration
+        guard let asset = try? await makeTimeline(prefix.segmentURLs) else {
+            Self.log.notice("outcome=restore_failed")
+            return false
+        }
+        // Anything the listener started while the passages were joined wins.
+        guard started == generation, player.currentTrackId == nil,
+              player.playbackGeneration == playbackGeneration,
+              player.playbackIntentGeneration == playbackIntent else { return false }
+        attach(player)
+        player.restoreNarration(prefix.document, url: first, joinedPassages: asset)
+        Self.log.info("outcome=preview_restored passages=\(prefix.document.segments.count, privacy: .public)")
+        return player.currentNarration?.id == documentID
+    }
+
     func stopWaiting() {
         caughtUp = nil
         generation &+= 1

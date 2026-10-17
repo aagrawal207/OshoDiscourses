@@ -135,45 +135,17 @@ struct HomeView: View {
     }
 
     private var continueListening: [ContinueItem] {
-        let recordings = recentRecordings
-        let translations = recentTranslations
-        guard !translations.isEmpty else { return Array(recordings.prefix(8)) }
-        // Most recent first across both kinds; recordings saved before last-listened times existed sort last.
-        var merged: [ContinueItem] = []
-        var pending = translations[...]
-        for recording in recordings {
-            let saved = playbackState.lastSaved(discourseId: recording.id) ?? .distantPast
-            while let next = pending.first, next.playedAt > saved {
-                merged.append(next.item)
-                pending = pending.dropFirst()
-            }
-            merged.append(recording)
-        }
-        merged += pending.map(\.item)
-        return Array(merged.prefix(8))
-    }
-
-    private var recentTranslations: [(item: ContinueItem, playedAt: Date)] {
-        let narrations = NarrationService.shared
-        return narrations.recentPlays.sorted { $0.value > $1.value }.compactMap { id, playedAt in
-            guard let document = narrations.documents.first(where: { $0.id == id }),
-                  let (disc, series) = Catalog.discourseLookup[document.discourseID] else { return nil }
-            let position = narrations.position(for: id)
-            guard position > 0 || player.currentTrackId == AudioPlayerService.narrationTrackID(for: id) else { return nil }
-            let duration = document.isComplete ? document.duration : narrations.playablePrefix(of: id)?.document.duration ?? 0
-            let item = ContinueItem(
-                id: AudioPlayerService.narrationTrackID(for: id), discourse: disc, seriesInfo: series,
-                position: position, savedDuration: duration, narration: document
-            )
-            return (item, playedAt)
-        }
-    }
-
-    private var recentRecordings: [ContinueItem] {
-        playbackState.continueListeningIDs(
+        let rows = ContinueListening.rows(
+            playbackState: playbackState, narrations: NarrationService.shared,
             isDownloaded: downloads.isDownloaded, currentTrackID: player.currentTrackId
-        ).compactMap { discourseID in
-            guard let (disc, series) = Catalog.discourseLookup[discourseID] else { return nil }
+        )
+        return Array(rows.compactMap(continueItem(for:)).prefix(8))
+    }
+
+    private func continueItem(for row: ContinueListening.Row) -> ContinueItem? {
+        guard let (disc, series) = Catalog.discourseLookup[row.discourseID] else { return nil }
+        switch row {
+        case .recording(let discourseID):
             // Deliberately use only the saved position/duration here. Reading
             // player.currentTime/duration would invalidate the whole Home body
             // every 0.5s during playback; ContinueListeningRow already reads
@@ -184,6 +156,14 @@ struct HomeView: View {
                 seriesInfo: series,
                 position: playbackState.getPosition(discourseId: discourseID),
                 savedDuration: playbackState.getDuration(discourseId: discourseID)
+            )
+        case .translation(let document):
+            let narrations = NarrationService.shared
+            let duration = document.isComplete
+                ? document.duration : narrations.playablePrefix(of: document.id)?.document.duration ?? 0
+            return ContinueItem(
+                id: row.trackID, discourse: disc, seriesInfo: series,
+                position: narrations.position(for: document.id), savedDuration: duration, narration: document
             )
         }
     }
