@@ -7,6 +7,8 @@ import com.agraabhi.oshodiscourses.core.model.VoiceFocusPreset
 import com.agraabhi.oshodiscourses.denoise.dsp.NativeFixtures.waitForActive
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.sin
 import org.junit.Test
@@ -132,5 +134,31 @@ class DeepFilterLifecycleTest {
         val focus = render(VoiceFocusPreset.FOCUS)
         val strong = render(VoiceFocusPreset.STRONG)
         assertThat(Signals.maxDifference(focus, strong)).isGreaterThan(0.001f)
+    }
+
+    @Test
+    fun pollingTheStatusDuringPlaybackNeverBypassesABuffer() {
+        val processor = NativeFixtures.ready(NoiseReductionMode.DEEP_FILTER_NET, channels = 2)
+        val signal = Signals.syllables(8.0, 22_050.0)
+        val chunks = signal.size / 1024
+        val done = AtomicBoolean(false)
+        val render = thread(name = "render") {
+            val block = FloatArray(2048)
+            for (chunk in 0 until chunks) {
+                for (frame in 0 until 1024) {
+                    block[frame * 2] = signal[chunk * 1024 + frame]
+                    block[frame * 2 + 1] = signal[chunk * 1024 + frame] * 0.8f
+                }
+                processor.process(arrayOf(block), intArrayOf(2), 1024)
+            }
+            done.set(true)
+        }
+        while (!done.get()) processor.diagnosticsSnapshot()
+        render.join()
+        val snapshot = processor.diagnosticsSnapshot()
+        assertThat(snapshot.lockContendedBuffers).isEqualTo(0)
+        assertThat(snapshot.resetRequests).isEqualTo(0)
+        assertThat(snapshot.modelBypassedBuffers).isEqualTo(0)
+        assertThat(snapshot.processedBuffers).isEqualTo(chunks.toLong())
     }
 }

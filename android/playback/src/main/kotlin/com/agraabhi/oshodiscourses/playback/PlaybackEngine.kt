@@ -126,6 +126,9 @@ class PlaybackEngine(
     private var autoSaveJob: Job? = null
     private var progressJob: Job? = null
 
+    // Only IDs that leave this set are deletions, so a set that loads late never prunes the queue.
+    private var knownDownloads: Set<String> = downloads.downloadedIDs.value
+
     private val isPlaying: Boolean
         get() = current != null && wantsPlayback && pending == null && !interrupted
 
@@ -731,6 +734,39 @@ class PlaybackEngine(
         publish()
     }
 
+    /**
+     * A deleted file leaves the queue. Deleting the loaded talk stops it as [stop] does, since any
+     * later seek, retry or resume would reopen a file that is gone.
+     */
+    private fun onDownloadsChanged(ids: Set<String>) {
+        val removed = knownDownloads - ids
+        knownDownloads = ids
+        val item = current ?: return
+        if (removed.isEmpty()) return
+        if (item.id in removed) {
+            Log.i(TAG, "outcome=current_deleted queued=${queue.size}")
+            // Progress survives deletion so a re-download resumes; a finished talk's was cleared.
+            if (finishedGeneration != generation) saveCurrentPositionNow()
+            wantsPlayback = false
+            unloadTrack()
+            currentTime = 0.0
+            duration = 0.0
+            publish()
+            return
+        }
+        val gone = queue.indices.filter { queue[it].id in removed }
+        if (gone.isEmpty()) return
+        val goneSet = gone.toSet()
+        queue = queue.filterIndexed { index, _ -> index !in goneSet }
+        currentIndex -= gone.count { it < currentIndex }
+        // Descending, so each index still names the same media item while earlier ones go.
+        gone.asReversed().forEach { exo?.removeMediaItem(it) }
+        Log.i(TAG, "outcome=queue_pruned removed=${gone.size} remaining=${queue.size}")
+        // Readiness compares indices, and a callback during removal may have seen them mid-shift.
+        checkReadiness()
+        publish()
+    }
+
     // endregion
 
     // region Progress and auto-save
@@ -895,6 +931,7 @@ class PlaybackEngine(
         scope.launch { settings.settings.collect(::onSettingsChanged) }
         scope.launch { pipeline.status.collect { publish() } }
         scope.launch { playbackState.state.collect(::onProgressChanged) }
+        scope.launch { downloads.downloadedIDs.collect(::onDownloadsChanged) }
         publish()
     }
 
