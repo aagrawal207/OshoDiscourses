@@ -76,6 +76,21 @@
       "productID": "com.agraabhi.oshodiscourses.tip.patron",
       "referenceName": "Patron tip",
       "type": "Consumable"
+    },
+    {
+      "displayPrice": "100.00",
+      "familyShareable": false,
+      "internalID": "6F1A2B40",
+      "localizations": [
+        {
+          "description": "Support Android app development.",
+          "displayName": "Sponsor tip",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agraabhi.oshodiscourses.tip.sponsor",
+      "referenceName": "Sponsor tip",
+      "type": "Consumable"
     }
   ],
   "settings": {

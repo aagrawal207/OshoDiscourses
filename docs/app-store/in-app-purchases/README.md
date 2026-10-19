@@ -30,6 +30,19 @@ walkthrough with a successful Small tip sandbox purchase. See the
 | Big tip | `com.agraabhi.oshodiscourses.tip.large` | `6812953154` | $10.00 |
 | Grand tip | `com.agraabhi.oshodiscourses.tip.grand` | `6812953066` | $25.00 |
 | Patron tip | `com.agraabhi.oshodiscourses.tip.patron` | `6812953032` | $50.00 |
+| Sponsor tip | `com.agraabhi.oshodiscourses.tip.sponsor` | `6824646478` | $100.00 |
+
+Sponsor tip ("Support Android app development.") was added on 2026-10-19 at the
+owner's request and submitted with 1.17.1 (IAP version
+`5edfdbfd-57d5-4179-bc48-708e44194120`). It uses a manual USA base price, the
+same 175 storefronts as Patron tip, and new territories automatically. Its
+description names another platform by the owner's choice; Guideline 2.3.10 forbids
+that "in your app or metadata", so a rejection means rewording only the
+description here and in App Store Connect. Its review screenshot is
+[`support-development-sponsor.png`](support-development-sponsor.png), 1206 × 2622
+from `TipJarPresentationTests.testSponsorTipIsTheLastOneTimeTipAndPurchasable`
+(review screenshot `00fa6e1c-6bac-441b-8194-a75964b4ca37`, MD5
+`d945ac9d73c4e7d1a33334fcce20e1ec`).
 
 Names and descriptions match
 [`TipJar.storekit`](../../../OshoDiscourses/TipJar.storekit). Each product uses

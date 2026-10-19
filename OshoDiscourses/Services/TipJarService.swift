@@ -27,6 +27,7 @@ final class TipJarService {
         "com.agraabhi.oshodiscourses.tip.large",
         "com.agraabhi.oshodiscourses.tip.grand",
         "com.agraabhi.oshodiscourses.tip.patron",
+        "com.agraabhi.oshodiscourses.tip.sponsor",
     ]
 
     enum PurchaseState: Equatable {

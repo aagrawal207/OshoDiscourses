@@ -21,6 +21,7 @@ final class TipJarPresentationTests: XCTestCase {
             ("support.annual15", "Renews yearly"),
             ("tip.grand", "One-time tip"),
             ("tip.patron", "One-time tip"),
+            ("tip.sponsor", "One-time tip"),
         ]
         for (suffix, billing) in expected {
             let row = app.buttons["com.agraabhi.oshodiscourses.\(suffix)"]
@@ -90,6 +91,24 @@ final class TipJarPresentationTests: XCTestCase {
         }
         reveal(app.buttons["tipJar.manageSubscriptions"], in: app)
         capture(app, "support-current-plan-after-relaunch")
+    }
+
+    @MainActor
+    func testSponsorTipIsTheLastOneTimeTipAndPurchasable() throws {
+        let session = try storeSession()
+        defer { session.clearTransactions() }
+        let app = launch()
+        defer { app.terminate() }
+        let sponsor = app.buttons["com.agraabhi.oshodiscourses.tip.sponsor"]
+        XCTAssertTrue(app.navigationBars["Support Development"].waitForExistence(timeout: 30))
+        for _ in 0..<12 where !(sponsor.exists && sponsor.isHittable) { app.swipeUp() }
+        XCTAssertTrue(sponsor.isHittable, app.debugDescription)
+        XCTAssertTrue(sponsor.label.contains("Sponsor tip"), sponsor.label)
+        XCTAssertTrue(sponsor.label.contains("One-time tip"), sponsor.label)
+        XCTAssertTrue(sponsor.label.contains("Support Android app development."), sponsor.label)
+        XCTAssertTrue(sponsor.label.contains("$100.00"), sponsor.label)
+        XCTAssertTrue(sponsor.isEnabled)
+        capture(app, "support-light-tip.sponsor")
     }
 
     private func storeSession() throws -> SKTestSession {

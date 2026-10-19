@@ -432,6 +432,7 @@ purchase/update/recovery delivery, and handles pending approvals through
 | `com.agraabhi.oshodiscourses.tip.large` | Big tip | US$10 |
 | `com.agraabhi.oshodiscourses.tip.grand` | Grand tip | US$25 |
 | `com.agraabhi.oshodiscourses.tip.patron` | Patron tip | US$50 |
+| `com.agraabhi.oshodiscourses.tip.sponsor` | Sponsor tip | US$100 |
 
 Names, descriptions and localized display prices come from StoreKit products.
 The prices above are configured US base prices, not hardcoded purchase-button labels.

@@ -19,6 +19,17 @@ struct TipJarServiceTests {
         #expect(!TipJarService.isTip(productID: "unrelated.product", type: .consumable))
     }
 
+    @Test func localStoreKitCatalogListsEveryTipInPriceOrder() throws {
+        let url = try #require(Bundle(for: TipJarCatalogBundle.self).url(forResource: "TipJar", withExtension: "storekit"))
+        let document = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let products = try #require(document["products"] as? [[String: Any]])
+        #expect(products.map { $0["productID"] as? String } == TipJarService.productIDs)
+        #expect(products.allSatisfy { $0["type"] as? String == "Consumable" })
+        let prices = products.compactMap { Double($0["displayPrice"] as? String ?? "") }
+        #expect(prices.count == products.count)
+        #expect(prices == prices.sorted())
+    }
+
     @Test func emptyCatalogCanBeRetried() async {
         await withService { tips, _ in
             var loads = 0
@@ -555,3 +566,5 @@ final class TipTestGate {
         for waiter in pending { waiter.resume() }
     }
 }
+
+private final class TipJarCatalogBundle: NSObject {}

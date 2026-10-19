@@ -1,0 +1,11 @@
+Osho Talks remains free to use, with no ads, no account and no sign-in. No demo account is needed.
+
+NEW IN 1.17.1: SPONSOR TIP
+Version 1.17.1 adds one optional consumable tip, "Sponsor tip" (com.agraabhi.oshodiscourses.tip.sponsor), which is included in this submission. Nothing else changes from 1.17.0.
+
+To review it: open Settings, scroll to About and tap Support Development. Sponsor tip is the last option in the list, below Patron tip. Like the other one-time tips, it is a repeatable consumable that unlocks no recordings, translations, features or content. A completed Apple in-app purchase shows a Thank you confirmation.
+
+OPTIONAL SUPPORT (OTHERWISE UNCHANGED)
+Settings > About > Support Development also offers the existing one-time tips and three optional yearly support subscriptions. None unlocks recordings, translations or features.
+
+The app is an independent player for publicly available recordings and is not affiliated with any Osho organisation.

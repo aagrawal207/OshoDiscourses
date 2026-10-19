@@ -1,6 +1,12 @@
 {
  "releases": [
   {
+   "version": "1.17.1",
+   "items": [
+    "A new Sponsor tip in Settings > About > Support Development. Tips are optional and unlock nothing; every part of the app stays free."
+   ]
+  },
+  {
    "version": "1.17.0",
    "items": [
     "Listen to a talk in Hindi, English or another language. Apple Translation translates the transcript on your device, and a system voice reads it.",
