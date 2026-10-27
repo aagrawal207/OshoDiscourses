@@ -133,10 +133,14 @@ struct TranslatedNarrationView: View {
             EscapeKeyHandler(action: close)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
+            if let job = preparation.consentJob(hostID: hostID, discourseID: discourseID) {
+                NarrationConsentTaskHost(job: job).id(job.id)
+            }
         }
         .task(id: "\(discourseID):\(cacheReloadGeneration)") { await loadCachedNarrations() }
         .onAppear {
             isVisible = true
+            if let hostID { preparation.listeningSheetAppeared(presentationOwner, hostID: hostID, discourseID: discourseID) }
             EngagementService.shared.registerNarrationPresentation(owner: presentationOwner)
             originalAudioURL = downloads.localFileURL(for: discourseID)
             if cacheLoaded, readingDocument == nil, languages.isEmpty { refreshLanguages() }
@@ -144,6 +148,7 @@ struct TranslatedNarrationView: View {
         }
         .onDisappear {
             isVisible = false
+            preparation.listeningSheetDisappeared(presentationOwner)
             NarrationVoicePreview.shared.stop(ownerID: presentationOwner)
             availabilityTask?.cancel()
             availabilityRequestID = nil

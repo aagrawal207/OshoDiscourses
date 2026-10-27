@@ -62,7 +62,8 @@ struct NarrationUnfinishedRun: Codable, Equatable, Sendable {
     }
 }
 
-/// The app window owns translation, not the listening sheet. Closing a sheet never retires its session.
+/// The app window owns translation, not the listening sheet, which only asks for Apple's language download.
+/// Once languages are ready, closing the sheet never stops the run.
 @available(macCatalyst 26.0, *)
 @Observable @MainActor
 final class NarrationPreparationController {
@@ -81,6 +82,9 @@ final class NarrationPreparationController {
     private(set) var lifetime: NarrationTranslationLifetime?
     private(set) var hostID: UUID?
     private(set) var unfinished: NarrationUnfinishedRun?
+    /// The job's languages need Apple's download prompt, which only the listening sheet that asked may show.
+    private(set) var awaitingConsent = false
+    @ObservationIgnored private var listeningSheets: [UUID: (hostID: UUID, discourseID: String)] = [:]
     @ObservationIgnored private var startup: Task<Void, Never>?
     @ObservationIgnored private var work: Task<Void, Never>?
     @ObservationIgnored private var owner: UUID?
@@ -182,6 +186,14 @@ final class NarrationPreparationController {
                 let configuration = try NarrationLanguageSupport.configuration(
                     source: selection.sourceLanguage, target: selection.targetLanguage, strategy: support.strategy
                 )
+                // Presented from the window, Apple's prompt replaces its sheets mid-animation; it may only stack on the sheet that asked.
+                let needsConsent = support.status != .installed
+                if needsConsent, automatic || !hasListeningSheet(hostID: hostID, discourseID: discourseID) {
+                    journal?.record("languages need the listener's consent automatic=\(automatic)")
+                    pause(message: "Preparation paused. Your finished audio is saved.", reason: .interrupted)
+                    return
+                }
+                awaitingConsent = needsConsent
                 stage = .preparingLanguages
                 job = NarrationTranslationJob(lifetime: attempt, owner: owner, hostID: hostID,
                                                transcript: transcript, selection: selection, configuration: configuration)
@@ -196,25 +208,57 @@ final class NarrationPreparationController {
         stage = value
     }
 
-    /// Only language consent uses the view-provided session. Installed sessions have no UI lifetime.
-    func languagesReady(for job: NarrationTranslationJob, foregroundSession: TranslationSession) async {
-        guard lifetime?.id == job.id, work == nil else { return }
-        if #available(iOS 26.0, macCatalyst 26.0, *) {
-            work = Task {
-                let source = Locale.Language(identifier: job.selection.sourceLanguage)
-                let target = Locale.Language(identifier: job.selection.targetLanguage)
-                let session: TranslationSession
-                if #available(iOS 26.4, macCatalyst 26.4, *) {
-                    session = TranslationSession(installedSource: source, target: target,
-                                                 preferredStrategy: job.configuration.preferredStrategy)
-                } else {
-                    session = TranslationSession(installedSource: source, target: target)
-                }
-                await render(job, using: session)
+    /// Only the visible listening sheet may ask for Apple's language download, so its prompt stacks on that sheet.
+    func consentJob(hostID: UUID?, discourseID: String) -> NarrationTranslationJob? {
+        guard awaitingConsent, let job, job.hostID == hostID, self.discourseID == discourseID else { return nil }
+        return job
+    }
+
+    func listeningSheetAppeared(_ id: UUID, hostID: UUID, discourseID: String) {
+        listeningSheets[id] = (hostID, discourseID)
+    }
+
+    /// Closing the sheet while Apple's prompt is pending pauses like a cancelled prompt; once languages are ready the window keeps going.
+    func listeningSheetDisappeared(_ id: UUID) {
+        listeningSheets[id] = nil
+        guard awaitingConsent, let job, let discourseID,
+              !hasListeningSheet(hostID: job.hostID, discourseID: discourseID) else { return }
+        journal?.record("listening sheet closed before the languages were allowed")
+        pause(message: "Preparation paused. Your finished audio is saved.", reason: .interrupted)
+    }
+
+    func languagesAllowed(for job: NarrationTranslationJob) {
+        guard lifetime?.id == job.id, awaitingConsent else { return }
+        awaitingConsent = false
+        journal?.record("languages allowed")
+    }
+
+    private func hasListeningSheet(hostID: UUID, discourseID: String) -> Bool {
+        listeningSheets.values.contains { $0.hostID == hostID && $0.discourseID == discourseID }
+    }
+
+    /// Installed-language sessions have no UI and no view lifetime, so the window's host only starts them.
+    @available(iOS 26.0, macCatalyst 26.0, *)
+    func languagesReady(for job: NarrationTranslationJob) {
+        guard lifetime?.id == job.id, !awaitingConsent, work == nil else { return }
+        work = Task {
+            let source = Locale.Language(identifier: job.selection.sourceLanguage)
+            let target = Locale.Language(identifier: job.selection.targetLanguage)
+            let session: TranslationSession
+            if #available(iOS 26.4, macCatalyst 26.4, *) {
+                session = TranslationSession(installedSource: source, target: target,
+                                             preferredStrategy: job.configuration.preferredStrategy)
+            } else {
+                session = TranslationSession(installedSource: source, target: target)
             }
-        } else {
-            await render(job, using: foregroundSession)
+            await render(job, using: session)
         }
+    }
+
+    /// Before iOS 26 only a view-provided session translates; the window provides it once the languages are installed.
+    func languagesReady(for job: NarrationTranslationJob, foregroundSession: TranslationSession) async {
+        guard lifetime?.id == job.id, !awaitingConsent, work == nil else { return }
+        await render(job, using: foregroundSession)
     }
 
     private func render(_ job: NarrationTranslationJob, using session: TranslationSession) async {
@@ -310,6 +354,15 @@ final class NarrationPreparationController {
             Self.log.info("Continue outcome=limitReached attempts=\(run.automaticAttempts, privacy: .public)")
             return
         }
+        // With no sheet asking, Apple's download prompt must not appear; the run stays stopped until the listener continues it.
+        if let support = try? await findSupport(run.selection.sourceLanguage, run.selection.targetLanguage),
+           support.status != .installed {
+            journal?.record("continue waits for the listener; the languages need consent")
+            Self.log.info("Continue outcome=needsConsent")
+            return
+        }
+        guard !Task.isCancelled, !isRunning, !narrations.isPreparing, narrations.preparationOwner == nil,
+              unfinished == run else { return }
         journal?.record("continue automatically after=\(reason.rawValue)")
         start(discourseID: run.discourseID, selection: run.selection, hostID: hostID, player: player, listen: false, automatic: true)
     }
@@ -474,6 +527,7 @@ final class NarrationPreparationController {
         work = nil
         job = nil
         lifetime = nil
+        awaitingConsent = false
         autoplay = nil
     }
 
@@ -508,7 +562,7 @@ struct NarrationPreparationHost: View {
         // Modifiers on an empty view don't run, so the host keeps a placeholder while no job exists.
         ZStack {
             Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
-            if let job = controller.job, job.hostID == hostID {
+            if let job = controller.job, job.hostID == hostID, !controller.awaitingConsent {
                 NarrationTranslationTaskHost(job: job)
                     .id(job.id)
             }
@@ -548,8 +602,36 @@ struct NarrationPreparationHost: View {
     }
 }
 
+/// Runs only for installed languages, so nothing it does can bring up Apple's prompt over the window's sheets.
 @available(macCatalyst 26.0, *)
 private struct NarrationTranslationTaskHost: View {
+    let job: NarrationTranslationJob
+    @State private var started = false
+
+    var body: some View {
+        if #available(iOS 26.0, macCatalyst 26.0, *) {
+            Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                .task { NarrationPreparationController.shared.languagesReady(for: job) }
+        } else {
+            Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                .translationTask(job.configuration) { @MainActor session in
+                    guard !started else { return }
+                    started = true
+                    let controller = NarrationPreparationController.shared
+                    do {
+                        try job.lifetime.check()
+                        await controller.languagesReady(for: job, foregroundSession: session)
+                    } catch {
+                        controller.finish(.failure(error), attempt: job.lifetime)
+                    }
+                }
+        }
+    }
+}
+
+/// Lives in the listening sheet, so Apple's download prompt is presented on top of it.
+@available(macCatalyst 26.0, *)
+struct NarrationConsentTaskHost: View {
     let job: NarrationTranslationJob
     @State private var started = false
 
@@ -560,13 +642,10 @@ private struct NarrationTranslationTaskHost: View {
                 started = true
                 let controller = NarrationPreparationController.shared
                 do {
-                    try job.lifetime.check()
-                    controller.updateStage(.preparingLanguages, attempt: job.lifetime)
                     try await AppleNarrationTranslator.prepare(lifetime: job.lifetime) {
                         try await session.prepareTranslation()
                     }
-                    try job.lifetime.check()
-                    await controller.languagesReady(for: job, foregroundSession: session)
+                    controller.languagesAllowed(for: job)
                 } catch {
                     controller.finish(.failure(error), attempt: job.lifetime)
                 }

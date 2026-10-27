@@ -515,6 +515,161 @@ struct NarrationPreparationControllerTests {
     }
 
     @available(macCatalyst 26.0, *)
+    @Test func installedLanguagesSkipConsentAndClosingTheSheetKeepsTranslating() async throws {
+        try await withFixture { fixture in
+            let sheet = fixture.openSheet()
+            fixture.start()
+            let job = try await readyJob(fixture)
+            #expect(!fixture.controller.awaitingConsent)
+            #expect(fixture.controller.consentJob(hostID: fixture.hostID, discourseID: "source") == nil)
+
+            fixture.controller.listeningSheetDisappeared(sheet)
+            #expect(fixture.controller.job?.id == job.id)
+            #expect(job.lifetime.isActive)
+            #expect(fixture.narrations.preparationOwner == job.owner)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
+    @Test func languagesThatNeedConsentAreAskedForOnlyByTheVisibleSheet() async throws {
+        try await withFixture { fixture in
+            fixture.inputs.support = .init(strategy: .standard, status: .supported)
+            fixture.openSheet("other")
+            fixture.openSheet(hostID: UUID())
+            fixture.openSheet()
+            fixture.start()
+            let job = try await readyJob(fixture)
+            #expect(fixture.controller.awaitingConsent)
+            #expect(fixture.controller.stage == .preparingLanguages)
+            #expect(fixture.controller.consentJob(hostID: fixture.hostID, discourseID: "source")?.id == job.id)
+            #expect(fixture.controller.consentJob(hostID: UUID(), discourseID: "source") == nil)
+            #expect(fixture.controller.consentJob(hostID: nil, discourseID: "source") == nil)
+            #expect(fixture.controller.consentJob(hostID: fixture.hostID, discourseID: "other") == nil)
+
+            fixture.controller.languagesAllowed(for: job)
+            #expect(!fixture.controller.awaitingConsent)
+            #expect(fixture.controller.consentJob(hostID: fixture.hostID, discourseID: "source") == nil)
+            #expect(fixture.controller.job?.id == job.id)
+            #expect(fixture.narrations.preparationOwner == job.owner)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
+    @Test func withNoSheetOpenLanguagesThatNeedConsentPauseInsteadOfAsking() async throws {
+        try await withFixture { fixture in
+            fixture.inputs.support = .init(strategy: .highFidelity, status: .supported)
+            fixture.openSheet("other")
+            fixture.start()
+            let attempt = try #require(fixture.controller.lifetime)
+            try await eventually("the run to pause before asking") { !fixture.controller.isRunning }
+            #expect(!attempt.isActive)
+            #expect(fixture.controller.job == nil)
+            #expect(!fixture.controller.awaitingConsent)
+            #expect(fixture.controller.errorMessage == nil)
+            #expect(fixture.controller.statusMessage == "Preparation paused. Your finished audio is saved.")
+            #expect(fixture.controller.unfinished?.reason == .interrupted)
+            #expect(fixture.narrations.preparationOwner == nil)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
+    @Test func closingTheSheetWhileConsentIsPendingPausesTheRun() async throws {
+        try await withFixture { fixture in
+            fixture.inputs.support = .init(strategy: .standard, status: .supported)
+            let sheet = fixture.openSheet()
+            let otherSheet = fixture.openSheet("other")
+            fixture.start()
+            let job = try await readyJob(fixture)
+            #expect(fixture.controller.awaitingConsent)
+
+            fixture.controller.listeningSheetDisappeared(otherSheet)
+            #expect(fixture.controller.job?.id == job.id)
+            #expect(job.lifetime.isActive)
+
+            fixture.controller.listeningSheetDisappeared(sheet)
+            #expect(!fixture.controller.isRunning)
+            #expect(!job.lifetime.isActive)
+            #expect(fixture.controller.job == nil)
+            #expect(!fixture.controller.awaitingConsent)
+            #expect(fixture.narrations.preparationOwner == nil)
+            #expect(fixture.controller.errorMessage == nil)
+            #expect(fixture.controller.statusMessage == "Preparation paused. Your finished audio is saved.")
+            #expect(fixture.controller.unfinished?.reason == .interrupted)
+
+            // A prompt that returns after the pause can't revive the run.
+            fixture.controller.languagesAllowed(for: job)
+            #expect(!fixture.controller.isRunning)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
+    @Test func closingTheSheetAfterTheLanguagesAreAllowedKeepsTranslating() async throws {
+        try await withFixture { fixture in
+            fixture.inputs.support = .init(strategy: .standard, status: .supported)
+            let sheet = fixture.openSheet()
+            fixture.start()
+            let job = try await readyJob(fixture)
+            fixture.controller.languagesAllowed(for: job)
+            fixture.controller.listeningSheetDisappeared(sheet)
+            #expect(fixture.controller.job?.id == job.id)
+            #expect(job.lifetime.isActive)
+            #expect(fixture.narrations.preparationOwner == job.owner)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
+    @Test func automaticContinueNeverAsksForConsentAndWaitsForTheListener() async throws {
+        try await withFixture { fixture in
+            fixture.start(catalogDiscourse)
+            _ = try await readyJob(fixture)
+            fixture.controller.sceneChanged(.background, hostID: fixture.hostID)
+            let stopped = try #require(fixture.controller.unfinished)
+            #expect(stopped.reason == .leftApp)
+
+            // Languages removed meanwhile; even a visible sheet isn't asked without a tap.
+            fixture.inputs.support = .init(strategy: .standard, status: .supported)
+            fixture.openSheet(catalogDiscourse)
+            fixture.inputs.supportCalls.removeAll()
+            await fixture.controller.continueInterruptedRun(hostID: fixture.hostID, player: fixture.player)
+            #expect(fixture.inputs.supportCalls.count == 1)
+            #expect(!fixture.controller.isRunning)
+            #expect(fixture.controller.job == nil)
+            #expect(fixture.narrations.preparationOwner == nil)
+            #expect(fixture.controller.errorMessage == nil)
+            #expect(fixture.controller.unfinished == stopped)
+            #expect(fixture.controller.stopExplanation(discourseID: catalogDiscourse, selection: fixture.selection)?.reason == .leftApp)
+
+            // The listener's tap in the sheet asks from there.
+            fixture.start(catalogDiscourse)
+            let job = try await readyJob(fixture)
+            #expect(fixture.controller.consentJob(hostID: fixture.hostID, discourseID: catalogDiscourse)?.id == job.id)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
+    @Test func anAutomaticStartThatFindsLanguagesNotInstalledPausesWithoutAsking() async throws {
+        try await withFixture { fixture in
+            fixture.inputs.support = .init(strategy: .standard, status: .supported)
+            fixture.openSheet(catalogDiscourse)
+            fixture.controller.start(
+                discourseID: catalogDiscourse, selection: fixture.selection, hostID: fixture.hostID,
+                player: fixture.player, listen: false, automatic: true
+            )
+            try await eventually("the automatic run to pause") { !fixture.controller.isRunning }
+            #expect(fixture.controller.job == nil)
+            #expect(fixture.controller.consentJob(hostID: fixture.hostID, discourseID: catalogDiscourse) == nil)
+            #expect(fixture.controller.errorMessage == nil)
+            #expect(fixture.controller.unfinished?.reason == .interrupted)
+            #expect(fixture.narrations.preparationOwner == nil)
+
+            // The next automatic check sees the same languages and leaves the run for the listener.
+            await fixture.controller.continueInterruptedRun(hostID: fixture.hostID, player: fixture.player)
+            #expect(!fixture.controller.isRunning)
+            #expect(fixture.controller.unfinished?.reason == .interrupted)
+        }
+    }
+
+    @available(macCatalyst 26.0, *)
     private func withFixture(_ body: @MainActor (PreparationControllerFixture) async throws -> Void) async throws {
         let fixture = try PreparationControllerFixture()
         defer { fixture.remove() }
@@ -606,6 +761,14 @@ private final class PreparationControllerFixture {
             discourseID: discourseID, selection: selection, hostID: hostID ?? self.hostID,
             player: player, listen: false
         )
+    }
+
+    /// A Listen in Translation sheet on screen in a window, as `TranslatedNarrationView` registers itself.
+    @discardableResult
+    func openSheet(_ discourseID: String = "source", hostID: UUID? = nil) -> UUID {
+        let id = UUID()
+        controller.listeningSheetAppeared(id, hostID: hostID ?? self.hostID, discourseID: discourseID)
+        return id
     }
 
     func makeController() -> NarrationPreparationController {
