@@ -12,8 +12,9 @@ Existing translated audio, selections and positions are preserved.
 - The series selector includes all supported target languages. Language choices
   persist per series and voice choices persist per target language/script. Old
   original/translated choices and saved audio identities are preserved.
-- The window owns consent and preparation. iOS 26+ generation uses an independent
-  installed-language TranslationSession after the foreground download/consent.
+- The window owns preparation; the listening sheet that asked owns Apple's language
+  download prompt, so the prompt stacks on it. iOS 26+ generation uses an independent
+  installed-language TranslationSession after the download/consent.
   Closing the listening sheet does not cancel preparation; scene disconnection,
   explicit Pause and unavailable/expired background time do.
 - Removed the unconditional app-background and audio-interruption cancellations.

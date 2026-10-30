@@ -226,9 +226,11 @@ renders offline audio. Synthetic positions never update original listening
 history, bookmarks, statistics or cloud progress. Saved narrations survive deletion
 of the original download. Their library owns deletion. Preparation is reserved
 to one window before preflight/consent, but the listening sheet does not own it.
-The window's translation host handles consent; on iOS 26+ a separately created
-installed-language session owns generation. Closing the listening sheet does not
-cancel it. There is no lock-screen task: leaving the app gets only the short
+Only the listening sheet that asked shows Apple's language download prompt
+(`NarrationConsentTaskHost`), so it stacks on that sheet; automatic continue never
+shows it. Once languages are installed, the window's host starts generation (on
+iOS 26+ a separately created installed-language session). Closing the listening
+sheet then does not cancel it. There is no lock-screen task: leaving the app gets only the short
 `beginBackgroundTask` grace time (`NarrationGraceTime`), except that playing audio
 keeps the app and its translation running. A run iOS stopped continues from its last
 saved passage when the app is on screen again. Finished passages can play while later

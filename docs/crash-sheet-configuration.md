@@ -52,10 +52,11 @@ in 1.17.0.
 ## Status
 
 Not reproduced. The likely trigger is Apple's language prompt presented at the
-root while another root sheet is still animating. A candidate fix is to request
-language consent from the visible Listen in Translation sheet, so the prompt
-stacks on it instead of replacing it. Generation already uses an installed-language
-session with no UI.
+root while another root sheet is still animating. Fixed for 1.17.1: consent is
+requested only from the visible Listen in Translation sheet
+(`NarrationConsentTaskHost`), so the prompt stacks on it, and automatic continue
+never shows the prompt. Generation already uses an installed-language session
+with no UI.
 
 Simulator runtimes cannot show the language prompt. With "On-Device Translation:
 Automatic", `LanguageAvailability()` reports languages as installed when they are
