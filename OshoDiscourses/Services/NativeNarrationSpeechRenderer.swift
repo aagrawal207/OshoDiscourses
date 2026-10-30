@@ -160,7 +160,8 @@ private final class NativeNarrationSynthesisSession {
         utterance.prefersAssistiveTechnologySettings = false
         synthesizer.delegate = delegate
         #if os(iOS)
-        synthesizer.usesApplicationAudioSession = false
+        // A separate speech session makes iOS hide the Lock Screen player while audio plays.
+        synthesizer.usesApplicationAudioSession = true
         #endif
     }
 

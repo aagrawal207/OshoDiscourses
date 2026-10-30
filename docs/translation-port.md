@@ -125,8 +125,9 @@ Live Activity on the Lock Screen and Dynamic Island. The request uses the `.fail
 strategy: if the system will not run it now, preparation still works in the
 foreground and pauses when the app leaves the screen, as before. Expiry, including
 the listener tapping Stop in the system UI, pauses and keeps finished passages.
-Playback and audio interruptions no longer pause preparation; speech rendering does
-not use the app's audio session.
+Playback and audio interruptions no longer pause preparation. Speech rendering uses
+the app's audio session: a separate speech session made iOS hide the Lock Screen and
+Control Center player while a translation was being prepared.
 
 **Partial listening.** Finished passages form a contiguous prefix. `NarrationPreviewPlayback`
 joins their saved files into an `AVMutableComposition` without re-encoding, and

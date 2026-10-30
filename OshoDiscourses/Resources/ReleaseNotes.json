@@ -3,7 +3,8 @@
   {
    "version": "1.17.1",
    "items": [
-    "A new Sponsor tip in Settings > About > Support Development. Tips are optional and unlock nothing; every part of the app stays free."
+    "Fixed a rare crash when Apple asks to download a translation language. The request now opens over Listen in Translation.",
+    "The Lock Screen and Control Center player now show while a translation is being prepared."
    ]
   },
   {
