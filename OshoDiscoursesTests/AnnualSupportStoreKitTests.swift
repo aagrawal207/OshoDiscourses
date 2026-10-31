@@ -23,11 +23,11 @@ struct AnnualSupportStoreKitTests {
         let tips = TipJarService(defaults: UserDefaults(suiteName: "AnnualSupportStoreKitTests.catalog")!)
         await tips.loadProducts()
         #expect(tips.loadError == nil)
-        #expect(tips.products.map(\.price) == [3, 5, 10, 25, 50])
+        #expect(tips.products.map(\.price) == [3, 5, 10, 25, 50, 100])
         #expect(tips.products.allSatisfy { $0.type == .consumable })
         let ordered = TipJarView.orderedProducts(support.products + tips.products)
-        #expect(ordered.map(\.price) == [3, 5, 5, 10, 10, 15, 25, 50])
-        #expect(ordered.map(\.type) == [.consumable, .consumable, .autoRenewable, .consumable, .autoRenewable, .autoRenewable, .consumable, .consumable])
+        #expect(ordered.map(\.price) == [3, 5, 5, 10, 10, 15, 25, 50, 100])
+        #expect(ordered.map(\.type) == [.consumable, .consumable, .autoRenewable, .consumable, .autoRenewable, .autoRenewable, .consumable, .consumable, .consumable])
     }
 
     @Test func purchaseRenewalCancellationExpiryAndRelaunch() async throws {
