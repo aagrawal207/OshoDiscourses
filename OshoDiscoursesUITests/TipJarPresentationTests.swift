@@ -105,7 +105,7 @@ final class TipJarPresentationTests: XCTestCase {
         XCTAssertTrue(sponsor.isHittable, app.debugDescription)
         XCTAssertTrue(sponsor.label.contains("Sponsor tip"), sponsor.label)
         XCTAssertTrue(sponsor.label.contains("One-time tip"), sponsor.label)
-        XCTAssertTrue(sponsor.label.contains("Support Android app development."), sponsor.label)
+        XCTAssertTrue(sponsor.label.contains("Funds a week of work on something new."), sponsor.label)
         XCTAssertTrue(sponsor.label.contains("$100.00"), sponsor.label)
         XCTAssertTrue(sponsor.isEnabled)
         capture(app, "support-light-tip.sponsor")

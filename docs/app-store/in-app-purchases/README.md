@@ -32,17 +32,17 @@ walkthrough with a successful Small tip sandbox purchase. See the
 | Patron tip | `com.agraabhi.oshodiscourses.tip.patron` | `6812953032` | $50.00 |
 | Sponsor tip | `com.agraabhi.oshodiscourses.tip.sponsor` | `6824646478` | $100.00 |
 
-Sponsor tip ("Support Android app development.") was added on 2026-10-19 at the
-owner's request and submitted with 1.17.1 (IAP version
+Sponsor tip ("Funds a week of work on something new.") was added on 2026-10-19
+at the owner's request and submitted with 1.17.1 (IAP version
 `5edfdbfd-57d5-4179-bc48-708e44194120`). It uses a manual USA base price, the
-same 175 storefronts as Patron tip, and new territories automatically. Its
-description names another platform by the owner's choice; Guideline 2.3.10 forbids
-that "in your app or metadata", so a rejection means rewording only the
-description here and in App Store Connect. Its review screenshot is
+same 175 storefronts as Patron tip, and new territories automatically. Its first
+description named another platform; App Review rejected 1.17.1 under Guideline
+2.3.10, so the description was reworded on 2026-11-04. Product text and metadata
+must not name other mobile platforms. Its review screenshot is
 [`support-development-sponsor.png`](support-development-sponsor.png), 1206 × 2622
 from `TipJarPresentationTests.testSponsorTipIsTheLastOneTimeTipAndPurchasable`
-(review screenshot `00fa6e1c-6bac-441b-8194-a75964b4ca37`, MD5
-`d945ac9d73c4e7d1a33334fcce20e1ec`).
+(review screenshot `896802a1-df5f-4f03-b9a9-cd5c4760734e`, MD5
+`5ce030a0a471e7953baecdceba492c65`).
 
 Names and descriptions match
 [`TipJar.storekit`](../../../OshoDiscourses/TipJar.storekit). Each product uses
