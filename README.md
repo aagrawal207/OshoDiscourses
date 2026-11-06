@@ -158,8 +158,9 @@ available recordings from [oshoworld.com](https://www.oshoworld.com/) and an
 [Internet Archive](https://archive.org/) mirror, with transcripts from the matching
 oshoworld.com pages.
 
-All discourses are copyright OSHO International Foundation. Osho Talks is an
-independent app and is not affiliated with or endorsed by the Osho International Foundation.
+Osho Talks is an independent app. It is not affiliated with or endorsed by Osho
+International Foundation, Osho World Foundation or any other Osho organisation.
+Rights in the discourses, transcripts and the Osho name belong to their owners.
 
 ## License
 
