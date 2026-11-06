@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Osho Talks** has no developer-operated servers and includes no analytics, advertising, or tracking SDKs. The developer does not receive your listening data.
+**Osho Talks** has no developer-operated servers and includes no advertising or tracking SDKs. It sends anonymous usage data, described below, which you can turn off. The developer never receives anything that identifies you.
 
 ## What the app does
 
@@ -19,8 +19,17 @@
 - **Downloaded files:** audio files you choose to download, stored in the Documents folder (visible in Files app). These are not included in your iCloud backup, since they can be re-downloaded.
 - **Optional tips:** verified StoreKit transaction IDs and their counted/revoked state, plus a device-local tip count, prevent duplicate counting. Tips unlock no content or features.
 - **Optional yearly support:** the app checks verified subscription status through Apple to show your current plan and avoid duplicate subscriptions. A pending product is remembered locally until approval or until you explicitly clear a declined request. There is no developer-run subscription database. All content and features remain free.
-- **Rating and support reminders:** request dates and your support-reminder choice are stored on this device to limit reminders. They are not sent to the developer.
+- **Rating and support reminders:** request dates and your support-reminder choice are stored on this device to limit reminders. Anonymous usage data may record that a reminder was shown, but not when.
 - **Translated narration:** translated text, completed audio and partial preparation checkpoints stay on your device and are excluded from device backup. Playback positions are separate from the original recordings.
+
+## Anonymous usage data
+
+To learn which features and talks people use, and what to improve, the app sends anonymous usage data to [TelemetryDeck](https://telemetrydeck.com/privacy/), an analytics service based in the European Union.
+
+- **What is sent:** which features are used (for example playback, downloads, Smart Download, Smart Delete, DeNoise and its mode, translation, transcripts, bookmarks, sleep timer, CarPlay and Watch), the app's settings, which series and discourse is played, downloaded or bookmarked, how long a talk is listened to, whether a download or translation succeeded, whether an optional tip or yearly support was bought, and general device details such as device type, system version, app version, language and region settings.
+- **What is never sent:** your name, email, Apple Account, contacts or location; bookmark notes; what you type in search; transcript text; and the audio itself.
+- **No identity:** the app uses a random identifier for this installation, which is hashed on the device before it is sent. The data is not linked to you, is not used to track you across apps or websites, and is not sold or used for advertising.
+- **Turn it off:** Settings > About > Share Anonymous Usage Data. When it is off, the app sends nothing.
 
 ## iCloud sync
 
@@ -32,7 +41,7 @@ use ordinary device settings storage, which can be included in device backup.
 ## Apple Watch, CarPlay and Mac
 
 - **Apple Watch:** the iPhone app talks to the Watch app directly through Apple's WatchConnectivity. When you save a talk to the Watch, a copy of the downloaded audio is sent to the Watch and stays there until you remove it on the Watch. It is excluded from device backup. The Watch sends your listening position back to the iPhone so it can continue where you stopped. This exchange stays between your own devices.
-- **CarPlay:** CarPlay shows the lists and playback controls already on your iPhone. It collects no extra data.
+- **CarPlay:** CarPlay shows the lists and playback controls already on your iPhone. Anonymous usage data may record that CarPlay was used.
 - **Mac:** the Mac version stores the same data as the iPhone app, inside the app's sandbox container on your Mac. Syncing uses the same personal iCloud storage.
 
 ## Network access
@@ -51,7 +60,7 @@ translated text. The developer does not receive the text or generated audio.
 
 ## Third-party services
 
-Oshoworld.com and archive.org host the audio files. Apple's iCloud service handles optional sync between your devices. The app does not include advertising or tracking services.
+Oshoworld.com and archive.org host the audio files. Apple's iCloud service handles optional sync between your devices. TelemetryDeck receives the anonymous usage data described above. The app does not include advertising or tracking services.
 
 Optional tips and yearly support use Apple's StoreKit in-app purchases. Apple
 handles payment, subscription renewals and cancellations. The app records tip
@@ -59,7 +68,7 @@ transactions locally and checks subscription status with Apple; it has no purcha
 
 ## Analytics and tracking
 
-The app has no developer-run analytics or tracking.
+The app uses TelemetryDeck only for the anonymous usage data described above. It does not use advertising identifiers, does not track you across apps or websites, and has no ads.
 
 ## Contact
 
@@ -67,4 +76,4 @@ If you have questions about this privacy policy, open an issue at https://github
 
 ---
 
-Last updated: October 2026
+Last updated: November 2026
