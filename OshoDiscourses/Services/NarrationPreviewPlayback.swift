@@ -147,6 +147,7 @@ final class NarrationPreviewPlayback {
         if let latest, latest.isComplete, document.segments.count >= latest.segments.count {
             // Every passage has been heard; finish like a complete narration rather than replaying it.
             caughtUp = nil
+            TelemetryService.shared.playbackFinished(naturally: true)
             player.stop()
             narrations.savePosition(documentID: document.id, position: 0)
             SleepTimerService.shared.discourseDidFinish()

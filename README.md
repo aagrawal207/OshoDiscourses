@@ -102,9 +102,10 @@ Version 1.16 is in development and not yet on the App Store.
 Every feature and discourse is available without a purchase.
 **Support Development** offers optional, one-time tips that unlock nothing.
 
-Osho Talks has no developer-operated server and includes no analytics or advertising
-SDKs. Downloads and cached transcripts stay on your device. Synced listening data
-uses your own iCloud account. Read the [privacy policy](PRIVACY.md).
+Osho Talks has no developer-operated server and no ads. Downloads and cached
+transcripts stay on your device, and synced listening data uses your own iCloud
+account. Anonymous usage data, which you can turn off in Settings, shows which
+features and talks are used. Read the [privacy policy](PRIVACY.md).
 
 <p align="center">
   <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039"><strong>Download Osho Talks free on the App Store</strong></a>

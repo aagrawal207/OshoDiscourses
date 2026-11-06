@@ -1,5 +1,6 @@
 import Foundation
 import StoreKit
+import Testing
 @testable import OshoDiscourses
 
 /// Records signals instead of sending them. Shared by every telemetry test.
@@ -59,3 +60,9 @@ func withSharedTelemetry(_ body: (RecordingTelemetrySink) async throws -> Void) 
     defer { TelemetryService.shared.removeTestSink() }
     try await body(sink)
 }
+
+/// Parent of every suite that installs the shared sink, so those suites never
+/// run at the same time and swap the sink under each other.
+@Suite(.serialized)
+@MainActor
+struct SharedTelemetrySuites {}
