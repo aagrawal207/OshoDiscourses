@@ -223,20 +223,162 @@ extension SharedTelemetrySuites {
             #expect(service.takeDownloadOrigin(bird1) == .unknown)
         }
 
-        @Test func librarySnapshotIsSentAtMostWeekly() {
+        // MARK: Summary
+
+        @Test func eventsAreCountedNotSent() {
+            let (service, sink, _) = makeService()
+            service.send(.bookmarkAdded, ["discourseID": bird1, "category": "Funny", "hasNote": "true"])
+            service.send(.bookmarkAdded, ["discourseID": bird2, "category": "Funny", "hasNote": "false"])
+            service.send(.seriesOpened, ["seriesID": "english-A_Bird_on_the_Wing__"])
+
+            #expect(sink.sent.isEmpty)
+            #expect(sink.named(.bookmarkAdded).count == 2)
+            #expect(service.pendingCounters["Bookmark.added"] == 2)
+            #expect(service.pendingCounters["Bookmark.added.category.Funny"] == 2)
+            #expect(service.pendingCounters["Bookmark.added.hasNote.true"] == 1)
+            #expect(service.pendingCounters["Series.opened"] == 1)
+            #expect(service.pendingCounters.keys.allSatisfy { !$0.contains(bird1) })
+        }
+
+        @Test func purchasesAreSentAtOnce() {
+            let (service, sink, _) = makeService()
+            service.send(.supportPurchase, ["product": "com.agraabhi.oshodiscourses.tip.small", "outcome": "completed"])
+            #expect(sink.sentNamed(.supportPurchase).count == 1)
+            #expect(service.pendingCounters.isEmpty)
+        }
+
+        @Test func aSummaryCarriesCountsMinutesAndTheTalksHeard() throws {
             var clock = Date(timeIntervalSince1970: 1_800_000_000)
             let (service, sink, _) = makeService(now: { clock })
-            var built = 0
-            let make: () -> [String: String] = { built += 1; return ["downloads": "2-5"] }
+            service.librarySizes = { ["Library.downloads": "2-5"] }
+            service.playbackStarted(bird1, kind: .original, reason: .user, rate: 1)
+            service.addListening(seconds: 900)
+            service.noteListening(.skipForward)
+            service.playbackFinished(naturally: true)
+            service.playbackStarted(bird2, kind: .original, reason: .autoAdvance, rate: 1)
+            service.addListening(seconds: 30)
+            service.flushListening(trigger: .stopped)
+            service.send(.sleepTimerStarted, ["option": "30"])
+            clock += 3600
 
-            service.sendSnapshotIfDue(make)
-            clock += 6 * 24 * 60 * 60
-            service.sendSnapshotIfDue(make)
-            clock += 2 * 24 * 60 * 60
-            service.sendSnapshotIfDue(make)
+            service.sendSummaryIfDue(trigger: .background)
 
-            #expect(sink.named(.librarySnapshot).count == 2)
-            #expect(built == 2)
+            let summary = try #require(sink.sentNamed(.usageSummary).first)
+            #expect(summary.value == 16)
+            #expect(summary.parameters["Listening.minutes"] == "16")
+            #expect(summary.parameters["Listening.original.minutes"] == "16")
+            #expect(summary.parameters["Listening.starts.user"] == "1")
+            #expect(summary.parameters["Listening.starts.autoAdvance"] == "1")
+            #expect(summary.parameters["Listening.completed"] == "1")
+            #expect(summary.parameters["Listening.skipsForward"] == "1")
+            #expect(summary.parameters["SleepTimer.started.option.30"] == "1")
+            #expect(summary.parameters["Library.downloads"] == "2-5")
+            #expect(summary.parameters["trigger"] == "background")
+            #expect(summary.parameters["periodHours"] == "1")
+
+            // The 30-second listen is only in the totals.
+            let talks = sink.sentNamed(.listeningTalk)
+            #expect(talks.count == 1)
+            #expect(talks.first?.parameters["discourseID"] == bird1)
+            #expect(talks.first?.parameters["completed"] == "true")
+            #expect(talks.first?.parameters["starts"] == "1")
+            #expect(talks.first?.value == 900)
+            #expect(sink.sent.count == 2)
+            #expect(service.pendingCounters.isEmpty)
+        }
+
+        @Test func oneTalkHeardInPartsIsOneSignal() {
+            let (service, sink, _) = makeService()
+            service.playbackStarted(bird1, kind: .original, reason: .user, rate: 1)
+            service.addListening(seconds: 40)
+            service.flushListening(trigger: .background, continuing: true)
+            service.addListening(seconds: 40)
+            service.playbackStarted(bird1, kind: .translation(source: "en", target: "hi"), reason: .user, rate: 1)
+            service.addListening(seconds: 120)
+            service.flushListening(trigger: .stopped)
+            service.sendSummaryIfDue(trigger: .background)
+
+            let talks = sink.sentNamed(.listeningTalk)
+            #expect(talks.count == 2)
+            #expect(talks.compactMap(\.value).sorted() == [80, 120])
+            #expect(talks.first { $0.parameters["kind"] == "translation" }?.parameters["targetLanguage"] == "hi")
+            #expect(talks.first { $0.parameters["kind"] == "original" }?.parameters["starts"] == "1")
+        }
+
+        @Test func summariesAreAtLeastTwelveHoursApart() {
+            var clock = Date(timeIntervalSince1970: 1_800_000_000)
+            let (service, sink, _) = makeService(now: { clock })
+            service.sendSummaryIfDue(trigger: .launch)
+            #expect(sink.sent.isEmpty)
+
+            service.send(.seriesOpened)
+            service.sendSummaryIfDue(trigger: .background)
+            service.send(.seriesOpened)
+            clock += 11 * 3600
+            service.sendSummaryIfDue(trigger: .foreground)
+            #expect(sink.sentNamed(.usageSummary).count == 1)
+
+            clock += 2 * 3600
+            service.sendSummaryIfDue(trigger: .launch)
+            let summaries = sink.sentNamed(.usageSummary)
+            #expect(summaries.count == 2)
+            #expect(summaries.last?.parameters["Series.opened"] == "1")
+        }
+
+        @Test func countedUsageSurvivesARelaunch() {
+            let (service, sink, defaults) = makeService()
+            service.send(.bookmarkDeleted)
+            service.setEnabled(false)
+            service.setEnabled(true)
+            #expect(service.pendingCounters.isEmpty, "turning usage data off discards what was counted")
+
+            service.send(.bookmarkDeleted)
+            let relaunched = TelemetryService(sink: sink, defaults: defaults)
+            relaunched.start(enabled: true)
+            #expect(sink.sentNamed(.usageSummary).last?.parameters["Bookmark.deleted"] == "1")
+        }
+
+        @Test func aSummarySendsAtMostTenTalks() {
+            let (service, sink, _) = makeService()
+            for number in 1...12 {
+                service.playbackStarted("english-A_Bird_on_the_Wing__-\(number)", kind: .original, reason: .user, rate: 1)
+                service.addListening(seconds: Double(60 + number))
+            }
+            service.flushListening(trigger: .stopped)
+            service.sendSummaryIfDue(trigger: .background)
+            let talks = sink.sentNamed(.listeningTalk)
+            #expect(talks.count == TelemetryService.maximumTalksPerSummary)
+            #expect(talks.first?.value == 72)
+        }
+
+        @Test func carPlayListeningIsCountedWhileConnected() {
+            let (service, _, _) = makeService()
+            service.playbackStarted(bird1, kind: .original, reason: .user, rate: 1)
+            service.addListening(seconds: 30)
+            service.setCarPlayActive(true)
+            service.addListening(seconds: 120)
+            service.setCarPlayActive(false)
+            service.addListening(seconds: 30)
+            #expect(service.pendingSeconds["CarPlay.listening"] == 120)
+        }
+
+        @Test func contextValuesSurviveSettingsUpdates() throws {
+            let (service, sink, _) = makeService()
+            service.setContextValue("appInstalled", for: "watch")
+            service.updateContext(["Settings.smartDelete": "true"])
+            let defaultParameters = try #require(sink.defaultParameters)
+            let parameters = defaultParameters()
+            #expect(parameters["watch"] == "appInstalled")
+            #expect(parameters["Settings.smartDelete"] == "true")
+        }
+
+        @Test func everyCountedDimensionIsAParameterName() {
+            for signal in TelemetrySignal.allCases {
+                #expect(!signal.countedDimensions.contains { $0.contains(".") }, "\(signal)")
+            }
+            #expect(TelemetryParameters.count(0) == "0")
+            #expect(TelemetryParameters.count(42) == "42")
+            #expect(TelemetryParameters.count(100) == "100+")
         }
 
         // MARK: Parameters
@@ -261,7 +403,7 @@ extension SharedTelemetrySuites {
 
         @Test func settingsContextCoversTheTrackedFeatures() {
             let context = TelemetryParameters.settingsContext(.shared)
-            for key in ["platform", "Settings.noiseReduction", "Settings.noiseReductionMode", "Settings.smartDownload",
+            for key in ["deviceFamily", "Settings.noiseReduction", "Settings.noiseReductionMode", "Settings.smartDownload",
                         "Settings.smartDelete", "Settings.dailyAccentShuffle", "Settings.languageFilter"] {
                 #expect(context[key] != nil, "missing \(key)")
             }

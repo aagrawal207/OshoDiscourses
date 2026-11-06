@@ -26,8 +26,9 @@
 
 To learn which features and talks people use, and what to improve, the app sends anonymous usage data to [TelemetryDeck](https://telemetrydeck.com/privacy/), an analytics service based in the European Union.
 
-- **What is sent:** which features are used (for example playback, downloads, Smart Download, Smart Delete, DeNoise and its mode, translation, transcripts, bookmarks, sleep timer, CarPlay and Watch), the app's settings, which series and discourse is played, downloaded or bookmarked, how long a talk is listened to, whether a download or translation succeeded, whether an optional tip or yearly support was bought, and general device details such as device type, system version, app version, language and region settings.
+- **What is sent:** which features are used (for example playback, downloads, Smart Download, Smart Delete, DeNoise and its mode, translation, transcripts, bookmarks, sleep timer, CarPlay and Apple Watch), whether a paired Apple Watch has the app, the app's settings, which series and discourse is played, downloaded or bookmarked, how long a talk is listened to, whether a download or translation succeeded, whether an optional tip or yearly support was bought, and general device details such as device type, system version, app version, language and region settings.
 - **What is never sent:** your name, email, Apple Account, contacts or location; bookmark notes; what you type in search; transcript text; and the audio itself.
+- **How it is sent:** most use is counted on your device and sent as a summary about once a day, together with the talks you listened to.
 - **No identity:** the app uses a random identifier for this installation, which is hashed on the device before it is sent. The data is not linked to you, is not used to track you across apps or websites, and is not sold or used for advertising.
 - **Turn it off:** Settings > About > Share Anonymous Usage Data. When it is off, the app sends nothing.
 

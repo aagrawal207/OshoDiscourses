@@ -1,9 +1,14 @@
 import Foundation
 import UIKit
 
-/// Every signal the app sends. Names follow TelemetryDeck's `Area.event` style.
+/// Every event the app records. Names follow TelemetryDeck's `Area.event` style.
+/// Only `usageSummary`, `listeningTalk` and `TelemetryService.immediateSignals`
+/// are sent as signals; the rest are counted into the summary.
 enum TelemetrySignal: String, CaseIterable, Sendable {
-    // Listening: one signal per talk segment, carrying seconds as its value.
+    case usageSummary = "Usage.summary"
+    case listeningTalk = "Listening.talk"
+
+    // One event per talk segment, counted into the summary and that talk's total.
     case listeningSession = "Listening.session"
     case speedChanged = "Playback.speedChanged"
     case playbackFailed = "Playback.failed"
@@ -32,7 +37,6 @@ enum TelemetrySignal: String, CaseIterable, Sendable {
     case librarySearched = "Library.searched"
     case libraryFilterSelected = "Library.filterSelected"
     case seriesOpened = "Series.opened"
-    case librarySnapshot = "Library.snapshot"
 
     case supportSheetOpened = "Support.sheetOpened"
     case supportPurchase = "Support.purchase"
@@ -42,12 +46,66 @@ enum TelemetrySignal: String, CaseIterable, Sendable {
     case carPlayConnected = "CarPlay.connected"
     case watchCommand = "Watch.command"
     case watchTransfer = "Watch.transfer"
+    /// A position the Watch reports back after listening without the phone.
+    case watchOfflineListening = "Watch.offlineListening"
     case whatsNewShown = "WhatsNew.shown"
+
+    /// Parameters whose values get their own counter in the summary, as
+    /// `Signal.parameter.value`. Every value must come from a closed set.
+    var countedDimensions: [String] {
+        switch self {
+        case .usageSummary, .listeningTalk, .listeningSession: return []
+        case .speedChanged, .sleepTimerCancelled, .downloadAllRequested, .translationDeleted,
+             .bookmarkDeleted, .transcriptSearched, .seriesOpened, .supportSheetOpened,
+             .reviewRequested, .whatsNewShown, .supportPurchase:
+            return []
+        case .playbackFailed: return ["category"]
+        case .sleepTimerStarted: return ["option"]
+        case .downloadCompleted: return ["origin", "source", "fallback"]
+        case .downloadFailed: return ["origin", "category"]
+        case .downloadDeleted: return ["reason", "scope"]
+        case .translationStarted: return ["targetLanguage", "automatic", "resumed"]
+        case .translationConsent: return ["result"]
+        case .translationFinished: return ["outcome", "stage", "reason", "targetLanguage"]
+        case .bookmarkAdded: return ["hasNote", "category"]
+        case .bookmarkOpened: return ["from"]
+        case .transcriptOpened: return ["presentation", "outcome"]
+        case .transcriptAction: return ["action"]
+        case .settingChanged: return ["setting"]
+        case .librarySearched: return ["results"]
+        case .libraryFilterSelected: return ["filter"]
+        case .supportPrompt: return ["action"]
+        case .carPlayConnected: return ["layout"]
+        case .watchCommand: return ["command"]
+        case .watchTransfer: return ["outcome"]
+        case .watchOfflineListening: return ["finished"]
+        }
+    }
+
+    /// The event's value is seconds, summed into `<name>.minutes` in the summary.
+    var valueIsSeconds: Bool {
+        self == .translationFinished || self == .watchOfflineListening
+    }
 }
 
 enum PlaybackKind: Equatable, Sendable {
     case original
     case translation(source: String, target: String)
+
+    var name: String {
+        if case .translation = self { return "translation" }
+        return "original"
+    }
+
+    var sourceLanguage: String? {
+        if case let .translation(source, _) = self { return source }
+        return nil
+    }
+
+    var targetLanguage: String? {
+        if case let .translation(_, target) = self { return target }
+        return nil
+    }
 
     var parameters: [String: String] {
         switch self {
@@ -126,6 +184,11 @@ enum TelemetryParameters {
         }
     }
 
+    /// Counts in the summary: exact up to 99, so totals can be added up.
+    static func count(_ count: Int) -> String {
+        count >= 100 ? "100+" : String(max(count, 0))
+    }
+
     static func minutesBucket(_ seconds: Double) -> String {
         switch seconds / 60 {
         case ..<1: return "<1"
@@ -144,7 +207,7 @@ enum TelemetryParameters {
     static func flag(_ value: Bool) -> String { value ? "true" : "false" }
 
     @MainActor
-    static var platform: String {
+    static var deviceFamily: String {
         #if targetEnvironment(macCatalyst)
         return "mac"
         #else
@@ -156,7 +219,7 @@ enum TelemetryParameters {
     @MainActor
     static func settingsContext(_ settings: UserSettings) -> [String: String] {
         [
-            "platform": platform,
+            "deviceFamily": deviceFamily,
             "Settings.noiseReduction": flag(settings.noiseReduction),
             "Settings.noiseReductionMode": settings.noiseReductionMode.rawValue,
             "Settings.denoiseStrength": settings.denoiseStrength,

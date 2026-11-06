@@ -3,7 +3,8 @@ import StoreKit
 import Testing
 @testable import OshoDiscourses
 
-/// Records signals instead of sending them. Shared by every telemetry test.
+/// Records events and the signals that would be sent. `signals` holds every
+/// recorded event; `sent` holds only what reaches TelemetryDeck.
 final class RecordingTelemetrySink: TelemetrySink {
     struct Signal: Equatable {
         let name: String
@@ -13,6 +14,7 @@ final class RecordingTelemetrySink: TelemetrySink {
 
     let isTestSink: Bool
     private(set) var signals: [Signal] = []
+    private(set) var sent: [Signal] = []
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var namespace: String?
@@ -31,6 +33,10 @@ final class RecordingTelemetrySink: TelemetrySink {
     func stop() { stopCount += 1 }
 
     func send(_ name: String, parameters: [String: String], floatValue: Double?) {
+        sent.append(Signal(name: name, parameters: parameters, value: floatValue))
+    }
+
+    func noteEvent(_ name: String, parameters: [String: String], floatValue: Double?) {
         signals.append(Signal(name: name, parameters: parameters, value: floatValue))
     }
 
@@ -40,6 +46,10 @@ final class RecordingTelemetrySink: TelemetrySink {
 
     func named(_ signal: TelemetrySignal) -> [Signal] {
         signals.filter { $0.name == signal.rawValue }
+    }
+
+    func sentNamed(_ signal: TelemetrySignal) -> [Signal] {
+        sent.filter { $0.name == signal.rawValue }
     }
 }
 

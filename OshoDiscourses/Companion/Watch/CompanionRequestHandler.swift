@@ -250,12 +250,12 @@ final class CompanionRequestHandler {
         Logger.watchSession.info("request \(Self.kind(action), privacy: .public) \(outcome, privacy: .public)")
     }
 
-    /// Transport actions arrive on every tap and already show in the listen, so only these are sent.
-    static let reportedCommands: Set<String> = ["browse", "playItem", "sendToWatch"]
+    /// Snapshots are the Watch refreshing itself, not the listener acting.
+    static let unreportedCommands: Set<String> = ["snapshot"]
 
     private func reportCommand(_ action: CompanionAction, outcome: String) {
         let kind = Self.kind(action)
-        guard Self.reportedCommands.contains(kind) else { return }
+        guard !Self.unreportedCommands.contains(kind) else { return }
         TelemetryService.shared.send(.watchCommand, ["command": kind, "outcome": outcome])
     }
 

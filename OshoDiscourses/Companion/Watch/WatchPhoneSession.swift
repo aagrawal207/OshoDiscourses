@@ -102,6 +102,7 @@ final class WatchPhoneSession {
         switch event {
         case .stateChanged(let state):
             Logger.watchSession.info("link \(state.logLabel, privacy: .public)")
+            if let label = state.telemetryLabel { TelemetryService.shared.setContextValue(label, for: "watch") }
             transfers?.refresh()
             if !state.canPublish {
                 cancelTrailingPublication()

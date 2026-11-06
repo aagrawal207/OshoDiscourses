@@ -47,6 +47,18 @@ enum WatchLinkState: Equatable, Sendable {
             return reachable ? "reachable" : "unreachable"
         }
     }
+
+    /// Whether the listener has a Watch with the app, for usage data. Transient
+    /// states return nil so the last known answer stays.
+    var telemetryLabel: String? {
+        switch self {
+        case .unsupported: return "unsupported"
+        case .activating, .inactive, .failed: return nil
+        case .ready(let paired, let installed, _):
+            if !paired { return "notPaired" }
+            return installed ? "appInstalled" : "notInstalled"
+        }
+    }
 }
 
 enum WatchTransportEvent: Sendable {

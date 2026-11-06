@@ -11,6 +11,12 @@ protocol TelemetrySink: AnyObject {
     func stop()
     func send(_ name: String, parameters: [String: String], floatValue: Double?)
     func purchaseCompleted(_ transaction: Transaction, parameters: [String: String])
+    /// Every recorded event, before counting. Only test sinks look at it.
+    func noteEvent(_ name: String, parameters: [String: String], floatValue: Double?)
+}
+
+extension TelemetrySink {
+    func noteEvent(_ name: String, parameters: [String: String], floatValue: Double?) {}
 }
 
 final class TelemetryDeckSink: TelemetrySink {
@@ -19,6 +25,8 @@ final class TelemetryDeckSink: TelemetrySink {
     func start(appID: String, namespace: String, defaultParameters: @escaping @Sendable () -> [String: String]) {
         let config = TelemetryDeck.Config(appID: appID, namespace: namespace)
         config.defaultParameters = defaultParameters
+        // A signal on every foreground would cost more than the daily summary it duplicates.
+        config.sendNewSessionBeganSignal = false
         TelemetryDeck.initialize(config: config)
     }
 

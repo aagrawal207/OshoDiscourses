@@ -320,7 +320,7 @@ extension SharedTelemetrySuites {
         #endif
 
         #if canImport(WatchConnectivity) && !targetEnvironment(macCatalyst)
-        @Test func onlyLowFrequencyWatchCommandsAreSent() {
+        @Test func everyWatchCommandButSnapshotsIsCounted() {
             withSharedTelemetry { sink in
                 let surface = FakeWatchSurface()
                 surface.currentDiscourseID = "a"
@@ -335,11 +335,27 @@ extension SharedTelemetrySuites {
                 _ = handler.handle(play)
                 _ = handler.handle(WatchFixture.request(.sendToWatch(discourseID: bird1)))
 
-                #expect(sink.named(.watchCommand).map(\.parameters) == [
-                    ["command": "browse", "outcome": "ok"],
-                    ["command": "playItem", "outcome": "ok"],
-                    ["command": "sendToWatch", "outcome": "transfer.unavailable"],
+                let commands = sink.named(.watchCommand).compactMap { $0.parameters["command"] }
+                #expect(commands == [
+                    "setPlaying", "skipForward", "skipBackward", "nextDiscourse", "previousDiscourse", "setRate",
+                    "browse", "playItem", "sendToWatch",
                 ])
+                #expect(sink.named(.watchCommand).last?.parameters["outcome"] == "transfer.unavailable")
+                #expect(TelemetryService.shared.pendingCounters["Watch.command.command.skipForward"] == 1)
+                #expect(sink.sent.isEmpty)
+            }
+        }
+
+        @Test func offlineWatchListeningCountsOnlyForwardProgress() {
+            withSharedTelemetry { sink in
+                WatchPositionMerger.reportOfflineListening(bird1, from: 600, to: 1500, finished: false)
+                WatchPositionMerger.reportOfflineListening(bird1, from: 1500, to: 200, finished: false)
+                WatchPositionMerger.reportOfflineListening(bird1, from: 0, to: 6 * 60 * 60, finished: true)
+
+                #expect(sink.named(.watchOfflineListening).map(\.value) == [900, 0, 0])
+                #expect(sink.named(.watchOfflineListening).last?.parameters["finished"] == "true")
+                #expect(TelemetryService.shared.pendingSeconds["Watch.offlineListening"] == 900)
+                #expect(TelemetryService.shared.pendingCounters["Watch.offlineListening"] == 3)
             }
         }
 

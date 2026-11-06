@@ -90,6 +90,7 @@ final class WatchPositionMerger {
         }
 
         let outcome: Outcome
+        let previousPosition = playbackState.getPosition(discourseId: id)
         if report.finished {
             // Mirrors a natural finish on the phone: completed, and dropped from Continue Listening.
             playbackState.markListenedComplete(discourseId: id)
@@ -105,12 +106,28 @@ final class WatchPositionMerger {
             if loadedHere != nil { moveLoadedPlayer(report.position) }
             outcome = .applied
         }
+        Self.reportOfflineListening(id, from: previousPosition, to: report.finished ? report.duration : report.position,
+                                    finished: report.finished)
         remember(id, report.recordedAt)
         playbackState.onProgressSaved?()
         return log(outcome)
     }
 
     func lastApplied(for discourseID: String) -> Date? { applied[discourseID] }
+
+    /// The Watch reports only where it stopped, so the time heard there is the
+    /// forward distance from the phone's last position. Jumps back count as zero.
+    static func reportOfflineListening(_ discourseID: String, from previous: TimeInterval, to position: TimeInterval,
+                                       finished: Bool) {
+        let heard = position - previous
+        let seconds = heard > 0 && heard <= offlineListeningLimit ? heard : 0
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["finished"] = TelemetryParameters.flag(finished)
+        TelemetryService.shared.send(.watchOfflineListening, parameters, value: seconds.rounded())
+    }
+
+    /// Longer forward jumps are seeks or stale phone positions, not listening.
+    static let offlineListeningLimit: TimeInterval = 4 * 60 * 60
 
     /// Listening on the phone right now normally wins. The exception is a stretch
     /// that only just resumed from an older point than the Watch reached.

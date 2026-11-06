@@ -76,6 +76,7 @@ final class CarPlaySessionController: NSObject, CPInterfaceControllerDelegate, C
         rootTemplate = root
         log.info("event=connect tabs=\(self.rootLists.count, privacy: .public)")
         TelemetryService.shared.send(.carPlayConnected, ["layout": rootLists.count > 1 ? "tabs" : "menu"])
+        TelemetryService.shared.setCarPlayActive(true)
         navigator.installRoot(root) { [weak self] message in
             guard let self, self.isCurrent(connected) else { return }
             self.log.error("event=root_template_failed")
@@ -92,6 +93,7 @@ final class CarPlaySessionController: NSObject, CPInterfaceControllerDelegate, C
     func disconnect() {
         let wasConnected = isConnected
         isConnected = false
+        TelemetryService.shared.setCarPlayActive(false)
         connection = UUID()
         refreshTask?.cancel()
         progressTask?.cancel()

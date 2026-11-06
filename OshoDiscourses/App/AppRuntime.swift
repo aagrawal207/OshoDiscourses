@@ -45,6 +45,7 @@ final class AppRuntime {
 
         let telemetry = TelemetryService.shared
         telemetry.updateContext(TelemetryParameters.settingsContext(.shared))
+        telemetry.librarySizes = { Self.librarySizes(downloads: downloadService, playbackState: playbackState) }
         telemetry.start(enabled: UserSettings.shared.shareUsageData)
         // Prewarm the ArchiveCatalog JSON decode off the main thread so the first
         // thumbnail render doesn't pay it (static let init is thread-safe).
@@ -79,23 +80,22 @@ final class AppRuntime {
                 downloadedIDs: Array(downloadService.downloadedIDs),
                 allowsCellular: UserSettings.shared.allowCellularDownloads
             )
-            telemetry.sendSnapshotIfDue { Self.librarySnapshot(downloads: downloadService, playbackState: playbackState) }
         }
     }
 
-    /// Library sizes for the weekly telemetry snapshot, bucketed.
-    private static func librarySnapshot(downloads: DownloadService, playbackState: PlaybackStateService) -> [String: String] {
+    /// Library sizes sent with each usage summary, bucketed.
+    private static func librarySizes(downloads: DownloadService, playbackState: PlaybackStateService) -> [String: String] {
         var parameters = [
-            "downloads": TelemetryParameters.bucket(downloads.downloadedIDs.count),
-            "bookmarks": TelemetryParameters.bucket(BookmarkService.shared.bookmarks.count),
-            "completed": TelemetryParameters.bucket(playbackState.completedDiscourseIDs.count),
-            "played": TelemetryParameters.bucket(playbackState.allPlayedDiscourseIDs.count),
-            "tips": TelemetryParameters.bucket(TipJarService.shared.tipCount),
-            "yearlySupport": AnnualSupportService.shared.currentProductID ?? "none",
-            "iCloud": TelemetryParameters.flag(FileManager.default.ubiquityIdentityToken != nil),
+            "Library.downloads": TelemetryParameters.bucket(downloads.downloadedIDs.count),
+            "Library.bookmarks": TelemetryParameters.bucket(BookmarkService.shared.bookmarks.count),
+            "Library.completed": TelemetryParameters.bucket(playbackState.completedDiscourseIDs.count),
+            "Library.played": TelemetryParameters.bucket(playbackState.allPlayedDiscourseIDs.count),
+            "Library.tips": TelemetryParameters.bucket(TipJarService.shared.tipCount),
+            "Library.yearlySupport": AnnualSupportService.shared.currentProductID ?? "none",
+            "Library.iCloud": TelemetryParameters.flag(FileManager.default.ubiquityIdentityToken != nil),
         ]
         #if TRANSLATED_NARRATION
-        parameters["savedTranslations"] = TelemetryParameters.bucket(NarrationService.shared.documents.count)
+        parameters["Library.savedTranslations"] = TelemetryParameters.bucket(NarrationService.shared.documents.count)
         #endif
         return parameters
     }
@@ -104,7 +104,10 @@ final class AppRuntime {
         audioPlayer.handleBackgroundEntry()
         NarrationService.shared.pauseIfBackgroundTimeNotGranted(audioKeepsAppRunning: audioPlayer.isPlaying)
         ScreenAwakeService.shared.removeAllRequests()
-        // iOS may end the process from here on, so the open listen is sent now.
-        TelemetryService.shared.flushListening(trigger: .background, continuing: audioPlayer.isPlaying)
+        // iOS may end the process from here on, so the open listen is counted and saved now.
+        let telemetry = TelemetryService.shared
+        telemetry.flushListening(trigger: .background, continuing: audioPlayer.isPlaying)
+        telemetry.savePending()
+        telemetry.sendSummaryIfDue(trigger: .background)
     }
 }
