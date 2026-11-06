@@ -237,6 +237,14 @@ saved passage when the app is on screen again. Finished passages can play while 
 ones are prepared. See [the listening redesign](docs/translation-listening-redesign.md)
 for implementation and device verification status.
 
+### Usage telemetry
+
+From 1.17.2 the app sends anonymous TelemetryDeck signals, on by default with a
+switch in Settings > About. Only `TelemetryService` calls the SDK; never send free
+text (notes, searches, transcript text, error messages) or per-tick signals. Every
+signal carries the settings context, so feature adoption is a dashboard filter. The
+signal list, parameters and dashboard queries are in [docs/telemetry.md](docs/telemetry.md).
+
 ### What's New screen
 
 After an update, existing listeners see What's New once: the installed version's
