@@ -27,6 +27,14 @@ final class AudioPlayerService {
     /// Set by a caller just before it starts playback, for the telemetry listen
     /// it opens (for example `.bookmark`). Consumed by the next start.
     var telemetryStartReason: PlaybackStartReason?
+    /// The listen the loaded item opens at its first play; nil afterwards, so later plays are resumes.
+    @ObservationIgnored private var pendingListen: ListenStart?
+
+    private enum ListenStart {
+        case new(PlaybackStartReason)
+        /// Keeps the open listen of the same item; opens one with this reason only when none is open.
+        case resumed(PlaybackStartReason)
+    }
 
     // MARK: - Queue
 
@@ -349,6 +357,8 @@ final class AudioPlayerService {
     private let loadAudioTrack: @MainActor (AVPlayerItem) async throws -> AVAssetTrack?
     private let makeAudioMix: @MainActor (NoiseReductionProcessor, AVAssetTrack, UInt64) -> AVAudioMix?
     private let activateAudioSession: @MainActor () throws -> Void
+    private let injectedTelemetry: TelemetryService?
+    private var telemetry: TelemetryService { injectedTelemetry ?? .shared }
     private static let log = Logger(subsystem: "com.agraabhi.oshodiscourses", category: "AudioProcessing")
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
@@ -403,10 +413,12 @@ final class AudioPlayerService {
         makeAudioMix: @escaping @MainActor (NoiseReductionProcessor, AVAssetTrack, UInt64) -> AVAudioMix? = {
             processor, track, generation in processor.createAudioMix(for: track, generation: generation)
         },
-        activateAudioSession: (@MainActor () throws -> Void)? = nil
+        activateAudioSession: (@MainActor () throws -> Void)? = nil,
+        telemetry: TelemetryService? = nil
     ) {
         self.settings = settings
         self.connectsToSystem = connectsToSystem
+        self.injectedTelemetry = telemetry
         self.narrationService = narrationService
         self.originalPlaybackActions = originalPlaybackActions
         self.noiseProcessor = noiseProcessor
@@ -466,7 +478,7 @@ final class AudioPlayerService {
             id: Self.narrationTrackID(for: document.id), url: url,
             title: source.discourse.displayTitle, series: source.series.name, narration: document
         )
-        guard loadAndPlay(item: item) else { return }
+        guard loadAndPlay(item: item, listen: continuedListen(of: document)) else { return }
         queue = [item]
         currentIndex = 0
     }
@@ -487,12 +499,17 @@ final class AudioPlayerService {
             id: Self.narrationTrackID(for: document.id), url: firstSegmentURL,
             title: source.discourse.displayTitle, series: source.series.name, narration: document
         )
-        guard loadAndPlay(item: item, resumeAt: position) else {
+        guard loadAndPlay(item: item, resumeAt: position, listen: continuedListen(of: document)) else {
             narrationPreviewAsset = previous
             return
         }
         queue = [item]
         currentIndex = 0
+    }
+
+    /// Newly prepared passages reload the same translation; its listen goes on rather than starting anew.
+    private func continuedListen(of document: NarrationDocument) -> ListenStart {
+        currentNarration?.id == document.id ? .resumed(.continued) : .new(.user)
     }
 
     /// `resumeAt` overrides the saved position of the starting item, e.g. for a bookmark.
@@ -587,7 +604,10 @@ final class AudioPlayerService {
                 detachCurrentItem()
                 self.player = nil
             }
-            loadAndPlay(item: queue[currentIndex], resumeAt: position, restoreOriginalEndpoint: restoreOriginalEndpoint)
+            loadAndPlay(
+                item: queue[currentIndex], resumeAt: position, restoreOriginalEndpoint: restoreOriginalEndpoint,
+                listen: pendingListen ?? .resumed(.recovered)
+            )
             return
         }
         guard player.currentItem?.status == .readyToPlay else { return }
@@ -618,6 +638,7 @@ final class AudioPlayerService {
         }
         isPlaying = true
         if isPlayingNarration { narrationPlaybackFailure = nil }
+        reportListenStart()
         if let id = playRecordPendingID {
             playRecordPendingID = nil
             if id == currentTrackId {
@@ -712,6 +733,7 @@ final class AudioPlayerService {
     }
 
     func seekWithHistory(to time: TimeInterval) {
+        telemetry.noteListening(.seek)
         if Self.isNearEndSeek(target: time, duration: duration) {
             didManuallySeekNearEnd = true
         }
@@ -809,6 +831,7 @@ final class AudioPlayerService {
     }
 
     func skipForward(_ seconds: TimeInterval = 30) {
+        telemetry.noteListening(.skipForward)
         switch Self.skipForwardOutcome(anchor: skipAnchor, seconds: seconds, duration: duration) {
         case .finish:
             finishCurrentTrack(naturally: false)
@@ -818,12 +841,17 @@ final class AudioPlayerService {
     }
 
     func skipBackward(_ seconds: TimeInterval = 15) {
+        telemetry.noteListening(.skipBack)
         seek(to: Self.skipBackwardTarget(anchor: skipAnchor, seconds: seconds))
     }
 
     func skipToNext() {
+        advanceToNext(listen: .new(.next))
+    }
+
+    private func advanceToNext(listen: ListenStart) {
         guard hasNext else { return }
-        guard loadAndPlay(item: queue[currentIndex + 1]) else { return }
+        guard loadAndPlay(item: queue[currentIndex + 1], listen: listen) else { return }
         currentIndex += 1
     }
 
@@ -831,7 +859,7 @@ final class AudioPlayerService {
     /// is out of range or already playing.
     func playQueueItem(at index: Int) {
         guard queue.indices.contains(index), index != currentIndex else { return }
-        guard loadAndPlay(item: queue[index]) else { return }
+        guard loadAndPlay(item: queue[index], listen: .new(.queueItem)) else { return }
         currentIndex = index
     }
 
@@ -845,7 +873,7 @@ final class AudioPlayerService {
             seek(to: 0)
             return
         }
-        guard loadAndPlay(item: queue[currentIndex - 1]) else { return }
+        guard loadAndPlay(item: queue[currentIndex - 1], listen: .new(.previous)) else { return }
         currentIndex -= 1
     }
 
@@ -864,6 +892,8 @@ final class AudioPlayerService {
             onNarrationPreviewEnd?(narration)
             return
         }
+        // Sent before auto-advance opens the next talk's listen.
+        telemetry.playbackFinished(naturally: naturally)
         if let narration = currentNarration {
             stop()
             narrationStore.savePosition(documentID: narration.id, position: 0)
@@ -894,14 +924,14 @@ final class AudioPlayerService {
         }
         if autoNext, hasNext {
             playbackContinues = true
-            skipToNext()
+            advanceToNext(listen: .new(.autoAdvance))
         } else if autoNext,
                   let completedTrackId,
                   let next = nextDownloadedItem(after: completedTrackId) {
             playbackContinues = true
             queue.append(next)
             currentIndex = queue.count - 1
-            loadAndPlay(item: next)
+            loadAndPlay(item: next, listen: .new(.autoAdvance))
         } else {
             isPlaying = false
             wantsPlayback = false
@@ -956,7 +986,7 @@ final class AudioPlayerService {
         }
         guard settings?.smartDelete == true else { return }
         guard let downloadService, downloadService.isDownloaded(completedDiscourseId) else { return }
-        try? downloadService.deleteDownload(discourseID: completedDiscourseId)
+        try? downloadService.deleteDownload(discourseID: completedDiscourseId, reason: .smartDelete)
     }
 
     private func performSmartDownload(afterDiscourseId: String) {
@@ -978,6 +1008,10 @@ final class AudioPlayerService {
         let remaining = allInSeries.suffix(from: allInSeries.index(after: completedIndex))
         guard let nextToDownload = remaining.first(where: { !downloadService.isDownloaded($0.id) }) else { return }
 
+        // A transfer already running keeps the origin of whoever asked first.
+        if !downloadService.isDownloading(nextToDownload.id) {
+            telemetry.noteDownloadOrigin(nextToDownload.id, .smartDownload)
+        }
         Task {
             _ = try? await downloadService.download(nextToDownload)
         }
@@ -1017,6 +1051,7 @@ final class AudioPlayerService {
 
     func setRate(_ rate: Float) {
         let clamped = PlaybackSpeed.normalized(rate)
+        if clamped != playbackRate { telemetry.playbackRateChanged(Double(clamped)) }
         playbackRate = clamped
         // Persist so the chosen speed survives relaunch. The in-player picker is
         // the single source of truth — no separate "remember speed" toggle.
@@ -1044,6 +1079,8 @@ final class AudioPlayerService {
     }
 
     func stop() {
+        telemetry.flushListening(trigger: .stopped)
+        pendingListen = nil
         saveNarrationPosition()
         if isPlayingNarration { clearPositionHistory() }
         wantsPlayback = false
@@ -1071,14 +1108,21 @@ final class AudioPlayerService {
     @discardableResult
     private func loadAndPlay(
         item: QueueItem, resumeAt position: TimeInterval? = nil, restoreOriginalEndpoint: Bool = false,
-        startsPlayback: Bool = true
+        startsPlayback: Bool = true, listen: ListenStart = .new(.user)
     ) -> Bool {
+        // Consumed by any load, so a reason set before a rejected start cannot tag a later one.
+        let callerReason = telemetryStartReason
+        telemetryStartReason = nil
         if let narration = item.narration {
             guard validateNarration(narration, url: item.url) else { return false }
         } else if Self.isNarrationTrackID(item.id) {
             rejectNarration(.incomplete)
             return false
         }
+        let start = startsPlayback ? (callerReason.map(ListenStart.new) ?? listen) : ListenStart.new(.restored)
+        // The outgoing talk's listen ends here, even if the new item never plays.
+        if case .new = start { telemetry.flushListening(trigger: .switched) }
+        pendingListen = start
         let previewAsset = item.narration.flatMap { document in
             narrationPreviewAsset.flatMap { !document.isComplete && $0.matches(document) ? $0 : nil }
         }
@@ -1151,6 +1195,7 @@ final class AudioPlayerService {
               ObjectIdentifier(item) == itemID,
               let trackID = currentTrackId else { return }
         if item.status == .failed {
+            reportPlaybackFailure(item.error)
             pausePlayback()
             removeAudioMix()
             audioMixFailure = .playback
@@ -1244,6 +1289,58 @@ final class AudioPlayerService {
     private func rejectNarration(_ failure: NarrationPlaybackFailure) {
         narrationPlaybackFailure = failure
         Self.log.error("outcome=narration_rejected reason=\(failure.rawValue, privacy: .public)")
+    }
+
+    // MARK: - Private: Telemetry
+
+    private var telemetryKind: PlaybackKind {
+        guard let selection = currentNarration?.selection else { return .original }
+        return .translation(source: selection.sourceLanguage, target: selection.targetLanguage)
+    }
+
+    private func reportListenStart() {
+        guard let discourseID = currentDiscourseID else { return }
+        let rate = Double(playbackRate)
+        switch pendingListen {
+        case .new(let reason):
+            telemetry.playbackStarted(discourseID, kind: telemetryKind, reason: reason, rate: rate)
+        case .resumed(let reason):
+            telemetry.playbackResumed(discourseID, kind: telemetryKind, rate: rate, reason: reason)
+        case nil:
+            telemetry.playbackResumed(discourseID, kind: telemetryKind, rate: rate)
+        }
+        pendingListen = nil
+    }
+
+    private func reportPlaybackFailure(_ error: Error?) {
+        guard let discourseID = currentDiscourseID else { return }
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters.merge(telemetryKind.parameters) { $1 }
+        parameters["category"] = Self.playbackFailureCategory(error)
+        telemetry.send(.playbackFailed, parameters)
+    }
+
+    /// A closed set of failure kinds; the error's own text can carry file paths.
+    nonisolated static func playbackFailureCategory(_ error: Error?) -> String {
+        var current = error.map { $0 as NSError }
+        while let nsError = current {
+            switch (nsError.domain, nsError.code) {
+            case (NSURLErrorDomain, _):
+                return "network"
+            case (NSCocoaErrorDomain, NSFileNoSuchFileError), (NSCocoaErrorDomain, NSFileReadNoSuchFileError),
+                 (NSPOSIXErrorDomain, Int(ENOENT)):
+                return "notFound"
+            case (AVFoundationErrorDomain, AVError.Code.mediaServicesWereReset.rawValue):
+                return "mediaServices"
+            case (AVFoundationErrorDomain, AVError.Code.decodeFailed.rawValue),
+                 (AVFoundationErrorDomain, AVError.Code.fileFormatNotRecognized.rawValue),
+                 (AVFoundationErrorDomain, AVError.Code.fileFailedToParse.rawValue):
+                return "decode"
+            default:
+                current = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+            }
+        }
+        return "unknown"
     }
 
     private func detachCurrentItem() {
@@ -1424,7 +1521,10 @@ final class AudioPlayerService {
         }
         Self.log.info("outcome=media_services_reset")
         if resume, currentTrackId != nil, queue.indices.contains(currentIndex) {
-            loadAndPlay(item: queue[currentIndex], resumeAt: position, restoreOriginalEndpoint: restoreOriginalEndpoint)
+            loadAndPlay(
+                item: queue[currentIndex], resumeAt: position, restoreOriginalEndpoint: restoreOriginalEndpoint,
+                listen: pendingListen ?? .resumed(.recovered)
+            )
         }
         refreshAudioProcessingStatus()
         updateNowPlayingInfo()

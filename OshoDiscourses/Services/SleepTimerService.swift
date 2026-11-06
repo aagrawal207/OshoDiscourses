@@ -41,12 +41,16 @@ final class SleepTimerService {
     }
 
     private var timerTask: Task<Void, Never>?
+    /// The choice that armed the timer, sent with a cancellation.
+    @ObservationIgnored private var telemetryOption: String?
 
     private init() {}
 
     func start(minutes: Int) {
         cancel()
         mode = .countdown
+        telemetryOption = String(minutes)
+        TelemetryService.shared.send(.sleepTimerStarted, ["option": String(minutes)])
         let duration = TimeInterval(minutes * 60)
         remainingTime = duration
         // Count against an absolute deadline rather than decrementing per tick:
@@ -75,7 +79,11 @@ final class SleepTimerService {
     func startUntilEndOfDiscourse() {
         cancel()
         mode = .endOfDiscourse
+        telemetryOption = Self.endOfDiscourseOption
+        TelemetryService.shared.send(.sleepTimerStarted, ["option": Self.endOfDiscourseOption])
     }
+
+    private static let endOfDiscourseOption = "endOfDiscourse"
 
     /// Called by the player when a track plays through to the end. Fires the
     /// expire action if (and only if) end-of-discourse mode is armed.
@@ -84,11 +92,19 @@ final class SleepTimerService {
         fire()
     }
 
+    /// The listener turned the timer off. `cancel()` also runs on expiry and restarts, which are not signals.
+    func cancelByListener() {
+        guard isActive else { return }
+        TelemetryService.shared.send(.sleepTimerCancelled, ["option": telemetryOption ?? "unknown"])
+        cancel()
+    }
+
     func cancel() {
         timerTask?.cancel()
         timerTask = nil
         remainingTime = 0
         mode = .off
+        telemetryOption = nil
     }
 
     /// Run the expire action and reset to off. Snapshots the callback before

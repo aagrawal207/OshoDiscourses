@@ -373,6 +373,7 @@ final class PlaybackStateService {
             let delta = player.currentTime - lastRecordedTime
             if wasPlaying && Self.isContinuousListening(delta: delta, rate: player.playbackRate) {
                 recordListeningTime(delta)
+                TelemetryService.shared.addListening(seconds: delta)
             }
             lastRecordedTime = player.currentTime
             wasPlaying = true

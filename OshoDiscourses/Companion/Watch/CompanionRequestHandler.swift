@@ -156,9 +156,11 @@ final class CompanionRequestHandler {
             let page = try perform(request)
             response = bounded(CompanionResponse(requestID: request.id, snapshot: snapshot(), page: page))
             log(request.action, "ok")
+            reportCommand(request.action, outcome: "ok")
         } catch {
             response = rejection(request, error.message)
             log(request.action, error.logLabel)
+            reportCommand(request.action, outcome: error.logLabel)
         }
         receipts[request.id] = Receipt(action: request.action, expectedDiscourseID: request.expectedDiscourseID, response: response)
         receiptOrder.append(request.id)
@@ -246,6 +248,15 @@ final class CompanionRequestHandler {
 
     private func log(_ action: CompanionAction, _ outcome: String) {
         Logger.watchSession.info("request \(Self.kind(action), privacy: .public) \(outcome, privacy: .public)")
+    }
+
+    /// Transport actions arrive on every tap and already show in the listen, so only these are sent.
+    static let reportedCommands: Set<String> = ["browse", "playItem", "sendToWatch"]
+
+    private func reportCommand(_ action: CompanionAction, outcome: String) {
+        let kind = Self.kind(action)
+        guard Self.reportedCommands.contains(kind) else { return }
+        TelemetryService.shared.send(.watchCommand, ["command": kind, "outcome": outcome])
     }
 
     static func kind(_ action: CompanionAction) -> String {

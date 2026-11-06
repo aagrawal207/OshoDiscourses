@@ -91,7 +91,7 @@ struct AppCommands: Commands {
             Menu("Sleep Timer") {
                 Toggle("End of Discourse", isOn: Binding(
                     get: { state.sleepMode == .endOfDiscourse },
-                    set: { $0 ? sleepTimer.startUntilEndOfDiscourse() : sleepTimer.cancel() }
+                    set: { $0 ? sleepTimer.startUntilEndOfDiscourse() : sleepTimer.cancelByListener() }
                 ))
                 Divider()
                 ForEach(Self.sleepMinutes, id: \.self) { minutes in
@@ -99,7 +99,7 @@ struct AppCommands: Commands {
                 }
                 if state.sleepMode != .off {
                     Divider()
-                    Button("Turn Off Sleep Timer") { sleepTimer.cancel() }
+                    Button("Turn Off Sleep Timer") { sleepTimer.cancelByListener() }
                 }
             }
             .disabled(!hasTrack)

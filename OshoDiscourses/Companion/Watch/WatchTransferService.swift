@@ -173,6 +173,10 @@ final class WatchTransferService {
         guard let discourseID else { return }
         sending.remove(discourseID)
         queuedThisLaunch.remove(discourseID)
+        // A transfer that never queued is counted by the Watch command that asked for it.
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["outcome"] = succeeded ? "completed" : "failed"
+        TelemetryService.shared.send(.watchTransfer, parameters)
         if succeeded {
             // Optimistic until the Watch's next inventory, which is authoritative.
             if !inventory.contains(discourseID) { updateInventory(inventory + [discourseID]) }

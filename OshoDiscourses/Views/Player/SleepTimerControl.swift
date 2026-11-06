@@ -54,7 +54,7 @@ struct SleepTimerControl: View {
                 Divider()
 
                 Button {
-                    sleepTimer.cancel()
+                    sleepTimer.cancelByListener()
                     dismiss()
                 } label: {
                     Text("Cancel")

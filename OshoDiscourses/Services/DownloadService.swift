@@ -374,8 +374,10 @@ final class DownloadService {
         do {
             _ = try commitDownload(lookup.discourse, from: stagedURL)
             activeDownloads[id] = DownloadProgress(progress: 1, status: .complete)
+            reportDownloadCompleted(id, source: nil, fallback: false)
         } catch {
             activeDownloads[id] = DownloadProgress(status: .failed(error.localizedDescription))
+            reportDownloadFailed(id, error: error)
         }
         activeTasks.removeValue(forKey: id)
     }
@@ -411,6 +413,7 @@ final class DownloadService {
         } else {
             activeDownloads[id]?.status = .failed(error.localizedDescription)
         }
+        reportDownloadFailed(id, error: error)
     }
 
     // MARK: - Stall Watchdog
@@ -566,6 +569,7 @@ final class DownloadService {
             saveManifest()
             recordDownloaded(discourse.id)
             activeDownloads[discourse.id] = DownloadProgress(progress: 1, status: .complete)
+            _ = TelemetryService.shared.takeDownloadOrigin(discourse.id)
             return destination
         }
 
@@ -617,6 +621,7 @@ final class DownloadService {
                 pendingQueue.removeAll { $0 == discourse.id }
                 activeDownloads.removeValue(forKey: discourse.id)
                 advanceQueue()
+                _ = TelemetryService.shared.takeDownloadOrigin(discourse.id)
                 throw CancellationError()
             }
             // Resumed normally, but cancelDownload may have run between the
@@ -626,6 +631,7 @@ final class DownloadService {
                 pendingQueue.removeAll { $0 == discourse.id }
                 activeDownloads.removeValue(forKey: discourse.id)
                 advanceQueue()
+                _ = TelemetryService.shared.takeDownloadOrigin(discourse.id)
                 throw CancellationError()
             }
         }
@@ -640,6 +646,7 @@ final class DownloadService {
             saveManifest()
             recordDownloaded(discourse.id)
             activeDownloads[discourse.id] = DownloadProgress(progress: 1, status: .complete)
+            _ = TelemetryService.shared.takeDownloadOrigin(discourse.id)
             return destination
         }
         activeDownloads[discourse.id] = DownloadProgress(status: .downloading)
@@ -654,6 +661,8 @@ final class DownloadService {
             guard !sources.isEmpty else { throw URLError(.badURL) }
 
             var localURL: URL?
+            var usedSource: DownloadSource?
+            var usedFallback = false
             for (index, (source, url)) in sources.enumerated() {
                 // A cancel can land in the gap between one attempt failing and
                 // the next starting (its continuation resumes in an earlier
@@ -669,6 +678,8 @@ final class DownloadService {
                         url: url, discourseID: discourse.id, hasFallback: index < sources.count - 1
                     )
                     localURL = staged
+                    usedSource = source
+                    usedFallback = index > 0
                     recordSpeed(of: source, file: staged, started: started)
                     Self.log.info("source=\(source.rawValue, privacy: .public) position=\(index, privacy: .public) outcome=completed")
                     break
@@ -701,6 +712,7 @@ final class DownloadService {
             let savedURL = try commitDownload(discourse, from: localURL)
             activeDownloads[discourse.id]?.status = .complete
             activeDownloads[discourse.id]?.progress = 1
+            reportDownloadCompleted(discourse.id, source: usedSource, fallback: usedFallback)
             return savedURL
         } catch {
             // Cancellation isn't a failure the row should display — drop the
@@ -711,6 +723,7 @@ final class DownloadService {
             } else {
                 activeDownloads[discourse.id]?.status = .failed(error.localizedDescription)
             }
+            reportDownloadFailed(discourse.id, error: error)
             throw error
         }
     }
@@ -746,6 +759,41 @@ final class DownloadService {
         return destination
     }
 
+    /// `source` is nil for a transfer committed after a relaunch, which no longer knows its server.
+    func reportDownloadCompleted(_ discourseID: String, source: DownloadSource?, fallback: Bool) {
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["origin"] = TelemetryService.shared.takeDownloadOrigin(discourseID).rawValue
+        parameters["source"] = source?.rawValue ?? "unknown"
+        parameters["fallback"] = TelemetryParameters.flag(fallback)
+        TelemetryService.shared.send(.downloadCompleted, parameters)
+    }
+
+    /// A cancellation only drops the recorded origin; it is not a failure.
+    func reportDownloadFailed(_ discourseID: String, error: Error) {
+        let origin = TelemetryService.shared.takeDownloadOrigin(discourseID)
+        guard let category = Self.failureCategory(error) else { return }
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["origin"] = origin.rawValue
+        parameters["category"] = category
+        TelemetryService.shared.send(.downloadFailed, parameters)
+    }
+
+    /// Case names only: messages and transport errors can carry URLs.
+    nonisolated static func failureCategory(_ error: Error) -> String? {
+        if error is CancellationError || (error as? URLError)?.code == .cancelled { return nil }
+        guard let error = error as? DownloadError else { return "transport" }
+        switch error {
+        case .wifiOnly: return "wifiOnly"
+        case .notFound: return "notFound"
+        case .serverError: return "serverError"
+        case .notAudio: return "notAudio"
+        case .offline: return "offline"
+        case .diskFull: return "diskFull"
+        case .saveFailed: return "saveFailed"
+        case .stalled: return "stalled"
+        }
+    }
+
     /// Fire-and-forget download for UI call sites. Owns the Task, clears a
     /// previous failed state so retry works, and swallows the error — the row
     /// UI reads failure state from `activeDownloads`, so throwing to the view
@@ -755,10 +803,28 @@ final class DownloadService {
         if case .failed = activeDownloads[discourse.id]?.status {
             activeDownloads[discourse.id] = nil
         }
+        // A transfer already running keeps the origin of whoever asked first.
+        if !isDownloading(discourse.id) {
+            TelemetryService.shared.noteDownloadOrigin(discourse.id, .user)
+        }
         Task { _ = try? await download(discourse) }
     }
 
-    func deleteDownload(discourseID: String) throws {
+    enum DeleteReason: String, Sendable {
+        case user
+        case smartDelete
+    }
+
+    func deleteDownload(discourseID: String, reason: DeleteReason = .user) throws {
+        let wasDownloaded = downloadedIDs.contains(discourseID)
+        try removeDownload(discourseID: discourseID)
+        guard wasDownloaded else { return }
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["reason"] = reason.rawValue
+        TelemetryService.shared.send(.downloadDeleted, parameters)
+    }
+
+    private func removeDownload(discourseID: String) throws {
         if let url = localFileURL(for: discourseID) {
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
@@ -780,17 +846,31 @@ final class DownloadService {
 
     /// Delete a specific set of downloaded discourses (multi-select / per-series).
     func deleteDownloads(ids: [String]) {
-        for id in ids {
-            try? deleteDownload(discourseID: id)
-        }
+        deleteBatch(ids, scope: "selection")
     }
 
-    /// Delete every downloaded discourse. Iterates a snapshot since
-    /// `deleteDownload` mutates `downloadedIDs` as it goes.
+    /// Delete every downloaded discourse. Iterates a snapshot since deleting
+    /// mutates `downloadedIDs` as it goes.
     func deleteAllDownloads() {
-        for id in Array(downloadedIDs) {
-            try? deleteDownload(discourseID: id)
+        deleteBatch(Array(downloadedIDs), scope: "all")
+    }
+
+    /// One signal per batch, so clearing a library does not spend hundreds of signals.
+    private func deleteBatch(_ ids: [String], scope: String) {
+        var removed: [String] = []
+        for id in ids {
+            let wasDownloaded = downloadedIDs.contains(id)
+            if (try? removeDownload(discourseID: id)) != nil, wasDownloaded { removed.append(id) }
         }
+        guard !removed.isEmpty else { return }
+        var parameters = [
+            "reason": DeleteReason.user.rawValue, "scope": scope, "count": TelemetryParameters.bucket(removed.count),
+        ]
+        let series = Set(removed.compactMap { Catalog.discourseLookup[$0]?.series.id })
+        if series.count == 1, let entry = removed.first.flatMap({ Catalog.discourseLookup[$0] }) {
+            parameters.merge(TelemetryParameters.series(entry.series)) { $1 }
+        }
+        TelemetryService.shared.send(.downloadDeleted, parameters, value: Double(removed.count))
     }
 
     func isDownloaded(_ discourseID: String) -> Bool {
@@ -1007,7 +1087,7 @@ final class DownloadService {
         }
     }
 
-    private func fileURL(for discourse: CatalogDiscourse) -> URL {
+    func fileURL(for discourse: CatalogDiscourse) -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent(relativePath(for: discourse))
     }

@@ -121,9 +121,11 @@ final class TelemetryService {
 
     /// Playback resumed. Opens a segment when the last one was already sent, for
     /// example a talk paused before the app went to the background.
-    func playbackResumed(_ discourseID: String, kind: PlaybackKind, rate: Double) {
+    func playbackResumed(
+        _ discourseID: String, kind: PlaybackKind, rate: Double, reason: PlaybackStartReason = .continued
+    ) {
         guard isRunning, listening == nil else { return }
-        listening = ListeningSegment(discourseID: discourseID, kind: kind, reason: .continued, rate: rate)
+        listening = ListeningSegment(discourseID: discourseID, kind: kind, reason: reason, rate: rate)
     }
 
     func addListening(seconds: Double) {

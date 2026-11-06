@@ -67,6 +67,7 @@ final class PlaybackLauncher {
             return
         }
         let queue = try seriesQueue(startingAt: bookmark.discourseID)
+        player.telemetryStartReason = .bookmark
         player.playQueue(items: queue.items, startIndex: queue.start, resumeAt: bookmark.timestamp)
     }
 
