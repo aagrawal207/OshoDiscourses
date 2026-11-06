@@ -1,6 +1,12 @@
 {
  "releases": [
   {
+   "version": "1.17.2",
+   "items": [
+    "Anonymous usage data now shows which features and talks people use, so I know what to improve. It is not linked to you, and you can turn it off in Settings > About."
+   ]
+  },
+  {
    "version": "1.17.1",
    "items": [
     "Fixed a rare crash when Apple asks to download a translation language. The request now opens over Listen in Translation.",

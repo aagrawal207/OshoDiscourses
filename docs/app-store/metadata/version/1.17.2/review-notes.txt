@@ -1,0 +1,9 @@
+Osho Talks remains free to use, with no ads, no account and no sign-in. No demo account is needed.
+
+NEW IN 1.17.2: ANONYMOUS USAGE DATA
+Version 1.17.2 adds anonymous usage analytics through TelemetryDeck. It records which features, settings and catalog talks are used. It is not linked to the user's identity and is not used for tracking, so the app shows no App Tracking Transparency prompt. It never sends names, accounts, bookmark notes, search text or transcript text. Settings > About > Share Anonymous Usage Data turns it off, and the App Privacy details and privacy policy describe it. Nothing else changes from 1.17.1.
+
+OPTIONAL SUPPORT (UNCHANGED)
+Settings > About > Support Development also offers the existing one-time tips and three optional yearly support subscriptions. None unlocks recordings, translations or features.
+
+The app is an independent player for publicly available recordings and is not affiliated with any Osho organisation.
