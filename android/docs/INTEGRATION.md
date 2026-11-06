@@ -26,7 +26,7 @@ Emulator checks use the debug-only `DebugCommandReceiver`, for example
 - [x] Settings Sync row calls `requestAuthorization()`; decide whether `disconnect()` joins the `SyncController` contract. — `disconnect()` joined the contract (default signs out); Settings calls `requestAuthorization()` to sign in and `disconnect()` for Stop Syncing.
 - [x] Add catalog alias `androidx-activity` and replace the string coordinate in `sync/build.gradle.kts`.
 - [x] R8 keep rules for kotlinx serialization (`CloudSnapshot`) and Play services in release. — libraries ship consumer rules; only a `-dontwarn` for review-ktx was needed. Release ran on the emulator; Drive itself is untested (no OAuth client).
-- [x] `PRIVACY.md`: add an Android paragraph on Drive app-data sync.
+- [x] Android privacy policy with Drive app-data sync: `android/PRIVACY.md` (the root `PRIVACY.md` is the iOS policy).
 - [ ] Human: Google Cloud project, Drive API, consent screen, three Android OAuth clients (`android/docs/google-drive-sync.md`).
 
 ## A3 Persistence

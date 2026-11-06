@@ -3,7 +3,8 @@
 A native Android port of the iOS app in this repository. The Swift sources in
 `../OshoDiscourses/` are the source of truth for behaviour, copy and layout.
 The plan and task ledger are in [`docs/PLAN.md`](docs/PLAN.md); the visual spec
-is [`docs/spec/ui-style.md`](docs/spec/ui-style.md).
+is [`docs/spec/ui-style.md`](docs/spec/ui-style.md). Releasing to Google Play is in
+[`docs/play-release.md`](docs/play-release.md).
 
 ## Requirements
 

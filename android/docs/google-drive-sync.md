@@ -64,7 +64,7 @@ and release.
    **APIs & Services > OAuth consent screen**).
    1. **Branding:** app name `Osho Talks`, a user support email, and a developer contact
       email. Add the privacy policy URL
-      (`https://github.com/aagrawal207/OshoDiscourses/blob/main/PRIVACY.md`) and the home
+      (`https://github.com/aagrawal207/OshoDiscourses/blob/main/android/PRIVACY.md`) and the home
       page if you have them.
    2. **Audience:** user type **External**.
    3. **Data access:** select **Add or remove scopes**, and add

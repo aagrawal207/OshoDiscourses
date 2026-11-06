@@ -57,7 +57,7 @@ import com.agraabhi.oshodiscourses.core.ui.theme.Osho
 import com.agraabhi.oshodiscourses.core.ui.theme.monospacedDigits
 import com.agraabhi.oshodiscourses.feature.settings.ui.IosAlert
 
-internal const val PRIVACY_POLICY_URL = "https://github.com/aagrawal207/OshoDiscourses/blob/main/PRIVACY.md"
+internal const val PRIVACY_POLICY_URL = "https://github.com/aagrawal207/OshoDiscourses/blob/main/android/PRIVACY.md"
 
 /** iOS links Apple's standard EULA; Play purchases fall under the Google Play Terms of Service. */
 internal const val TERMS_OF_USE_URL = "https://play.google.com/about/play-terms/"

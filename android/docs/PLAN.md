@@ -8,8 +8,8 @@ layout. Read the root `CLAUDE.md` for the iOS architecture and key decisions.
 
 1. **Phone app (v1, this milestone).** Every iPhone feature except the ones
    listed under Later.
-2. **Later milestones.** Tablet layouts, Android Auto, Wear OS, Chromecast,
-   on-device speech alignment fallback.
+2. **Later milestones.** Listen in Translation, the What's New screen, tablet
+   layouts, Android Auto, Wear OS, Chromecast, on-device speech alignment fallback.
 
 ## Parity rules
 
