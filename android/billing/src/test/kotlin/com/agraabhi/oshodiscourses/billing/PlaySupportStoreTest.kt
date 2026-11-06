@@ -75,7 +75,7 @@ class PlaySupportStoreTest {
         val store = store()
         store.loadTipProducts()
         assertThat(store.tipJar.value.products.map { it.name })
-            .containsExactly("Small tip", "Generous tip", "Big tip", "Grand tip", "Patron tip").inOrder()
+            .containsExactly("Small tip", "Generous tip", "Big tip", "Grand tip", "Patron tip", "Sponsor tip").inOrder()
         gateway.launch = { FlowResult.Purchased(listOf(purchase(it.id, order = "GPA.buy"))) }
         store.purchaseTip("com.agraabhi.oshodiscourses.tip.grand")
         assertThat(store.tipJar.value.state).isEqualTo(PurchaseState.Thanked)

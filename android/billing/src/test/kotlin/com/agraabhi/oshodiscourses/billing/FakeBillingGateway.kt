@@ -58,6 +58,7 @@ internal class FakeBillingGateway : BillingGateway {
             "com.agraabhi.oshodiscourses.tip.large" to ("Big tip" to 10),
             "com.agraabhi.oshodiscourses.tip.grand" to ("Grand tip" to 25),
             "com.agraabhi.oshodiscourses.tip.patron" to ("Patron tip" to 50),
+            "com.agraabhi.oshodiscourses.tip.sponsor" to ("Sponsor tip" to 100),
         )
         private val annualPrices = mapOf(
             "oshodiscourses.support.annual5" to ("Small yearly support" to 5),

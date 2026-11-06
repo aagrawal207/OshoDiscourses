@@ -29,6 +29,7 @@ internal object IosProducts {
         SupportProduct("${ID}tip.large", "Big tip", "Funds an afternoon on a new feature.", "$9.99"),
         SupportProduct("${ID}tip.grand", "Grand tip", "You are keeping this app alive.", "$24.99"),
         SupportProduct("${ID}tip.patron", "Patron tip", "Helps fund more improvements to the app.", "$49.99"),
+        SupportProduct("${ID}tip.sponsor", "Sponsor tip", "Funds a week of work on something new.", "$99.99"),
     )
     val annual = listOf(
         SupportProduct("${ID}support.annual15", "Extra yearly support", "Optional support for ongoing app development.", "$14.99"),

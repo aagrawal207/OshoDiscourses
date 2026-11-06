@@ -953,7 +953,7 @@ Sheet. Inline title "Support Development", leading "Done". Grouped list,
 3. Section "Yearly support":
    - If a request is pending: "A yearly support request is awaiting approval. Another subscription can't be started until it is resolved." + "Check Pending Request" + "Request Was Declined".
    - If subscribed: `heart` "Thank you for your yearly support" + "Your Apple Account has a yearly support plan. You can change the amount, check its status, or cancel through Apple."
-   - Always: "Manage Subscriptions", "Restore Subscription" ("Restoring…" while busy). Status error + "Check Subscription Status". Restore message. Links "Terms of Use", "Privacy Policy" (`https://github.com/aagrawal207/OshoDiscourses/blob/main/PRIVACY.md`).
+   - Always: "Manage Subscriptions", "Restore Subscription" ("Restoring…" while busy). Status error + "Check Subscription Status". Restore message. Links "Terms of Use", "Privacy Policy" (`https://github.com/aagrawal207/OshoDiscourses/blob/main/android/PRIVACY.md`).
    - Footer: "Yearly support is an auto-renewing subscription charged once a year unless cancelled at least 24 hours before renewal. Manage or cancel it in your App Store account. One-time tips do not renew. Neither option unlocks features or content."
 4. Pending bar (bottom, regularMaterial): `clock` "Purchase pending" (headline) + "Your purchase is pending with the App Store. It may need approval, such as Ask to Buy. You don't need to try again." + "Got It".
 5. Alert ("OK"):
@@ -975,6 +975,7 @@ Products (`OshoDiscourses/TipJar.storekit`):
 | support.annual15 | Extra yearly support | Optional support for ongoing app development. | $15 / year |
 | tip.grand | Grand tip | You are keeping this app alive. | $25 |
 | tip.patron | Patron tip | Helps fund more improvements to the app. | $50 |
+| tip.sponsor | Sponsor tip | Funds a week of work on something new. | $100 |
 
 Service messages:
 - Tips (`Services/TipJarService.swift`): "Tips aren't available in the App Store right now. Please try again later." · "Some tips aren't available right now. You can choose an available tip or try again." · "Loading was interrupted. Please try again." · "Couldn't load tips from the App Store. Check your connection and try again." · "This tip is not available. Please reload the tip jar." · "In-app purchases aren't allowed on this device." · "This tip is currently unavailable in the App Store. Please try again later." · "This purchase was refunded or revoked. No tip was recorded."

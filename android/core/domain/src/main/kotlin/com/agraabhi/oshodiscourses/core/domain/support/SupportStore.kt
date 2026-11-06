@@ -43,6 +43,7 @@ interface SupportStore {
             SupportProductInfo("com.agraabhi.oshodiscourses.tip.large", "Big tip", "US$10"),
             SupportProductInfo("com.agraabhi.oshodiscourses.tip.grand", "Grand tip", "US$25"),
             SupportProductInfo("com.agraabhi.oshodiscourses.tip.patron", "Patron tip", "US$50"),
+            SupportProductInfo("com.agraabhi.oshodiscourses.tip.sponsor", "Sponsor tip", "US$100"),
         )
 
         val ANNUAL_PRODUCT_IDS: List<String> = listOf(

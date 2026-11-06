@@ -22,6 +22,7 @@ Play limits subscription IDs to 40 characters, and the iOS yearly IDs are 43 or
 | `com.agraabhi.oshodiscourses.tip.large` | `com.agraabhi.oshodiscourses.tip.large` |
 | `com.agraabhi.oshodiscourses.tip.grand` | `com.agraabhi.oshodiscourses.tip.grand` |
 | `com.agraabhi.oshodiscourses.tip.patron` | `com.agraabhi.oshodiscourses.tip.patron` |
+| `com.agraabhi.oshodiscourses.tip.sponsor` | `com.agraabhi.oshodiscourses.tip.sponsor` |
 | `com.agraabhi.oshodiscourses.support.annual5` | `oshodiscourses.support.annual5` |
 | `com.agraabhi.oshodiscourses.support.annual10` | `oshodiscourses.support.annual10` |
 | `com.agraabhi.oshodiscourses.support.annual15` | `oshodiscourses.support.annual15` |
@@ -33,7 +34,7 @@ product. Copy the IDs exactly.
 
 USD prices are the iOS US base prices. INR prices are the India App Store
 prices for the same products, read from the public India listing on
-2026-10-17. Set both by hand in Play Console. Let Play convert the remaining
+2026-10-17 (Sponsor tip from App Store Connect on 2026-11-05). Set both by hand in Play Console. Let Play convert the remaining
 countries from the USD price, then review the rounding.
 
 ## One-time products (tips)
@@ -50,6 +51,7 @@ tip after it records it, so the same tip can be bought again.
 | `com.agraabhi.oshodiscourses.tip.large` | Big tip | Funds an afternoon on a new feature. | 10.00 | 999 |
 | `com.agraabhi.oshodiscourses.tip.grand` | Grand tip | You are keeping this app alive. | 25.00 | 2,499 |
 | `com.agraabhi.oshodiscourses.tip.patron` | Patron tip | Helps fund more improvements to the app. | 50.00 | 4,999 |
+| `com.agraabhi.oshodiscourses.tip.sponsor` | Sponsor tip | Funds a week of work on something new. | 100.00 | 9,900 |
 
 Use the purchase option ID `buy` for each tip. Make every product available in
 all the app's countries, and turn on availability in new countries.
@@ -143,7 +145,7 @@ Check these cases:
 
 | Case | Steps | Expected |
 | --- | --- | --- |
-| Catalog | Open the support sheet | Five tips and three yearly plans, ordered by price, with Play's local prices |
+| Catalog | Open the support sheet | Six tips and three yearly plans, ordered by price, with Play's local prices |
 | Tip | Buy Small tip with the always-approves card | Thank-you message; the tip count goes up by one; buy it again and the count goes up again |
 | Declined tip | Buy with the always-declines card | A failure message; no count change |
 | Pending tip | Buy with the slow approving card, close the sheet, wait | Pending message, then the count goes up once Play approves it |

@@ -38,6 +38,7 @@ class TipJarTest {
             "com.agraabhi.oshodiscourses.tip.large",
             "com.agraabhi.oshodiscourses.tip.grand",
             "com.agraabhi.oshodiscourses.tip.patron",
+            "com.agraabhi.oshodiscourses.tip.sponsor",
         )
         assertThat(SupportProducts.tipIDs).containsExactlyElementsIn(ids).inOrder()
         for (id in ids) {
@@ -52,13 +53,13 @@ class TipJarTest {
     fun productsAreSortedByPriceAndPartialCatalogsExplainThemselves() = runTest {
         gateway.products = { kind, ids -> FakeBillingGateway.catalog(kind, ids.reversed().drop(1)) }
         val tips = loadedTipJar()
-        assertThat(tips.state.value.products.map { it.displayPrice }).containsExactly("$3.00", "$5.00", "$10.00", "$25.00").inOrder()
+        assertThat(tips.state.value.products.map { it.displayPrice }).containsExactly("$3.00", "$5.00", "$10.00", "$25.00", "$50.00").inOrder()
         assertThat(tips.state.value.loadError)
             .isEqualTo("Some tips aren't available right now. You can choose an available tip or try again.")
 
         gateway.products = FakeBillingGateway::catalog
         tips.loadProducts()
-        assertThat(tips.state.value.products).hasSize(5)
+        assertThat(tips.state.value.products).hasSize(6)
         assertThat(tips.state.value.loadError).isNull()
     }
 

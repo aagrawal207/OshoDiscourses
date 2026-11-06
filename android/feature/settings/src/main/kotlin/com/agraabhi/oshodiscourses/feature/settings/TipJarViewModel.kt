@@ -83,7 +83,7 @@ internal data class TipJarUiState(
          * Play keeps regional prices in the same order as the US ones.
          */
         private val PRICE_ORDER = listOf(
-            "tip.small", "tip.medium", "support.annual5", "tip.large", "support.annual10", "support.annual15", "tip.grand", "tip.patron",
+            "tip.small", "tip.medium", "support.annual5", "tip.large", "support.annual10", "support.annual15", "tip.grand", "tip.patron", "tip.sponsor",
         ).map { "com.agraabhi.oshodiscourses.$it" }
 
         /** iOS sorts by price with tips first at an equal price; unknown products go last. */
