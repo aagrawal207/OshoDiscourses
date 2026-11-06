@@ -96,6 +96,7 @@ enum ReviewRequestService {
         // StoreKit may suppress the dialog; the attempt still consumes both gates.
         defaults.set(currentVersion, forKey: lastPromptedVersionKey)
         request()
+        TelemetryService.shared.send(.reviewRequested, ["activeDays": TelemetryParameters.bucket(activeDays)])
         return true
     }
 }

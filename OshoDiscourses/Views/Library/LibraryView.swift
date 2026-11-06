@@ -19,6 +19,18 @@ enum SeriesFilter: Hashable {
         case .theme(let name): return name.capitalized
         }
     }
+
+    /// Themes come from the static catalog metadata, so the values stay bounded.
+    var telemetryParameters: [String: String] {
+        switch self {
+        case .all: return ["filter": "all"]
+        case .english: return ["filter": "english"]
+        case .hindi: return ["filter": "hindi"]
+        case .downloaded: return ["filter": "downloaded"]
+        case .translated: return ["filter": "translated"]
+        case .theme(let name): return ["filter": "theme", "theme": name]
+        }
+    }
 }
 
 enum SeriesSortField: String, CaseIterable {
@@ -209,6 +221,9 @@ struct LibraryView: View {
                 SeriesDetailView(seriesInfo: series)
             }
             .onAppear { resetFilterIfUnavailable() }
+            .onChange(of: searchText) {
+                TelemetryService.shared.librarySearchChanged(queryLength: searchText.count, resultCount: filteredSeries.count)
+            }
             .onChange(of: settings.languageFilter) { resetFilterIfUnavailable() }
             .onChange(of: downloads.downloadedIDs) { resetFilterIfUnavailable() }
         }
@@ -238,6 +253,7 @@ struct LibraryView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             activeFilter = activeFilter == filter ? .all : filter
                         }
+                        TelemetryService.shared.send(.libraryFilterSelected, activeFilter.telemetryParameters)
                     } label: {
                         Text(filter.label)
                             .font(.caption.weight(.medium))

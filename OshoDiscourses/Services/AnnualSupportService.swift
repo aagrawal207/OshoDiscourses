@@ -213,14 +213,20 @@ final class AnnualSupportService {
         default: outcome = "failed"
         }
         Self.log.info("Purchase outcome=\(outcome, privacy: .public)")
+        TelemetryService.shared.send(.supportPurchase, ["product": productID, "kind": "yearly", "outcome": outcome])
     }
 
     func purchaseState<T: TipJarTransaction>(for result: VerificationResult<T>, productID: String) async -> PurchaseState {
         let confirmed = await finish(result, expectedProductID: productID)
         await refreshStatus()
-        return confirmed && statusIsCurrent && currentProductID != nil
-            ? .thanked
-            : .failed("Couldn't verify your subscription. Check your App Store subscriptions before trying again.")
+        guard confirmed && statusIsCurrent && currentProductID != nil else {
+            return .failed("Couldn't verify your subscription. Check your App Store subscriptions before trying again.")
+        }
+        // Renewals arrive through updates and are not counted as new purchases.
+        if case .verified(let transaction) = result, let storeTransaction = transaction as? StoreKit.Transaction {
+            TelemetryService.shared.purchaseCompleted(storeTransaction, parameters: ["kind": "yearly"])
+        }
+        return .thanked
     }
 
     func handleUpdate<T: TipJarTransaction>(_ result: VerificationResult<T>) async {
@@ -261,12 +267,22 @@ final class AnnualSupportService {
                 restoreMessage = currentProductID == nil ? "No current yearly support subscription was found." : "Your yearly support subscription is restored. Thank you."
             }
             Self.log.info("Restore outcome=completed")
+            let outcome = !statusIsCurrent ? "restoreFailed" : currentProductID == nil ? "nothingToRestore" : "restored"
+            sendRestore(outcome)
         } catch StoreKitError.userCancelled {
             Self.log.info("Restore outcome=cancelled")
+            sendRestore("restoreCancelled")
         } catch {
             state = .failed("Couldn't restore your subscription. Please try again later.")
             Self.log.error("Restore outcome=failed")
+            sendRestore("restoreFailed")
         }
+    }
+
+    private func sendRestore(_ outcome: String) {
+        var parameters = ["kind": "yearly", "outcome": outcome]
+        if let currentProductID { parameters["product"] = currentProductID }
+        TelemetryService.shared.send(.supportPurchase, parameters)
     }
 
     func dismissMessage() {

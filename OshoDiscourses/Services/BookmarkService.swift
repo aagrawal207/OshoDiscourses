@@ -95,13 +95,19 @@ final class BookmarkService {
     /// by `mergeSyncedBookmarks` — that's already reconciling cloud data.
     var onBookmarksChanged: (() -> Void)?
 
-    private let fileURL: URL = {
+    private let fileURL: URL
+    private let defaults: UserDefaults
+
+    static var defaultFileURL: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("bookmarks.json")
-    }()
+    }
 
-    private init() {
-        deletedBookmarkIDs = UserDefaults.standard.stringArray(forKey: tombstonesKey) ?? []
+    /// Tests pass their own file and defaults so they never touch the listener's bookmarks.
+    init(fileURL: URL = BookmarkService.defaultFileURL, defaults: UserDefaults = .standard) {
+        self.fileURL = fileURL
+        self.defaults = defaults
+        deletedBookmarkIDs = defaults.stringArray(forKey: tombstonesKey) ?? []
         load()
     }
 
@@ -126,13 +132,24 @@ final class BookmarkService {
         bookmarks.insert(bookmark, at: 0)
         save()
         onBookmarksChanged?()
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["hasNote"] = TelemetryParameters.flag(!note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        // A custom category's name is the listener's own text; only the enum case is sent.
+        parameters["category"] = category.rawValue
+        TelemetryService.shared.send(.bookmarkAdded, parameters)
     }
 
     func remove(id: String) {
+        let removed = bookmarks.first { $0.id == id }
         bookmarks.removeAll { $0.id == id }
         recordTombstone(id)
         save()
         onBookmarksChanged?()
+        if let removed {
+            var parameters = TelemetryParameters.discourse(removed.discourseID)
+            parameters["category"] = removed.category.rawValue
+            TelemetryService.shared.send(.bookmarkDeleted, parameters)
+        }
     }
 
     private func recordTombstone(_ id: String) {
@@ -141,7 +158,7 @@ final class BookmarkService {
         if deletedBookmarkIDs.count > Self.maxTombstones {
             deletedBookmarkIDs = Array(deletedBookmarkIDs.suffix(Self.maxTombstones))
         }
-        UserDefaults.standard.set(deletedBookmarkIDs, forKey: tombstonesKey)
+        defaults.set(deletedBookmarkIDs, forKey: tombstonesKey)
     }
 
     func bookmarks(for discourseID: String) -> [Bookmark] {
@@ -161,7 +178,7 @@ final class BookmarkService {
         let mergedTombstones = Self.mergeList(local: deletedBookmarkIDs, incoming: deletedIDs, cap: Self.maxTombstones)
         if mergedTombstones != deletedBookmarkIDs {
             deletedBookmarkIDs = mergedTombstones
-            UserDefaults.standard.set(deletedBookmarkIDs, forKey: tombstonesKey)
+            defaults.set(deletedBookmarkIDs, forKey: tombstonesKey)
         }
         let merged = Self.mergeBookmarks(local: bookmarks, incoming: incoming, deleted: Set(deletedBookmarkIDs))
         guard merged != bookmarks else { return false }

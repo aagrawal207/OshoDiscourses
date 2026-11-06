@@ -148,6 +148,7 @@ final class TipJarService {
         isPurchasing = true
         state = .purchasing(productID)
         defer { isPurchasing = false }
+        var failure: String?
         do {
             state = try await operation()
         } catch StoreKitError.userCancelled {
@@ -158,13 +159,29 @@ final class TipJarService {
             Self.log.info("Purchase outcome=interrupted")
         } catch Product.PurchaseError.purchaseNotAllowed {
             state = .failed("In-app purchases aren't allowed on this device.")
+            failure = "restricted"
             Self.log.info("Purchase outcome=restricted")
         } catch Product.PurchaseError.productUnavailable {
             state = .failed("This tip is currently unavailable in the App Store. Please try again later.")
+            failure = "unavailable"
             Self.log.info("Purchase outcome=unavailable")
         } catch {
             state = .failed(Self.confirmationMessage)
+            failure = "error"
             Self.log.error("Purchase outcome=failed")
+        }
+        var parameters = ["product": productID, "kind": "tip", "outcome": Self.telemetryOutcome(state)]
+        if let failure { parameters["failure"] = failure }
+        TelemetryService.shared.send(.supportPurchase, parameters)
+    }
+
+    /// The settled purchase state as a bounded name; failure messages are never sent.
+    static func telemetryOutcome(_ state: PurchaseState) -> String {
+        switch state {
+        case .thanked: "completed"
+        case .pending: "pending"
+        case .failed: "failed"
+        case .idle, .purchasing: "cancelled"
         }
     }
 
@@ -240,6 +257,10 @@ final class TipJarService {
         // Persist before awaiting finish: purchase, updates, and recovery can overlap.
         defaults.set(recordedTips, forKey: Self.recordedTipsKey)
         Self.log.info("Transaction source=\(source.rawValue, privacy: .public) outcome=\(outcome.rawValue, privacy: .public)")
+        // The ledger makes `.completed` once per transaction, so an approved Ask to Buy counts and replays do not.
+        if outcome == .completed, let storeTransaction = transaction as? StoreKit.Transaction {
+            TelemetryService.shared.purchaseCompleted(storeTransaction, parameters: ["kind": "tip", "source": source.rawValue])
+        }
 
         // A background approval must not replace another purchase's progress or result.
         if source != .purchase, !isPurchasing {

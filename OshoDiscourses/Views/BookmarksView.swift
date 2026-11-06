@@ -199,10 +199,15 @@ private struct BookmarkRow: View {
 
     private func playBookmark() {
         guard let url = downloads.localFileURL(for: bookmark.discourseID) else { return }
+        var parameters = TelemetryParameters.discourse(bookmark.discourseID)
+        parameters["from"] = "bookmarks"
+        parameters["sameTalk"] = TelemetryParameters.flag(player.currentTrackId == bookmark.discourseID)
+        TelemetryService.shared.send(.bookmarkOpened, parameters)
 
         if player.currentTrackId == bookmark.discourseID {
             player.seekWithHistory(to: bookmark.timestamp)
         } else {
+            player.telemetryStartReason = .bookmark
             player.play(
                 localURL: url,
                 id: bookmark.discourseID,

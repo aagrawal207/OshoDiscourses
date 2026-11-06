@@ -10,6 +10,7 @@ struct SeriesDetailView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let seriesInfo: SeriesInfo
     @State private var showDownloadAllConfirm = false
+    @State private var reportedSeriesID: String?
     /// Listening through translation: rows open or play the narration instead of the recording.
     @State private var listensTranslated = false
     @State private var translationDiscourse: CatalogDiscourse?
@@ -86,6 +87,14 @@ struct SeriesDetailView: View {
                 }
                 .accessibilityLabel("More options")
             }
+        }
+        // Once per visit: coming back from a pushed screen or sheet is not a new open.
+        .onAppear {
+            guard reportedSeriesID != seriesInfo.id else { return }
+            reportedSeriesID = seriesInfo.id
+            var parameters = TelemetryParameters.series(seriesInfo)
+            parameters["downloaded"] = TelemetryParameters.bucket(discourses.count - remainingCount)
+            TelemetryService.shared.send(.seriesOpened, parameters)
         }
         #if TRANSLATED_NARRATION
         .onAppear { refreshListeningPreferences() }
@@ -433,8 +442,12 @@ struct SeriesDetailView: View {
             titleVisibility: .visible
         ) {
             Button("Download \(remainingCount) (\(estimatedTotalSize))") {
+                var parameters = TelemetryParameters.series(seriesInfo)
+                parameters["count"] = TelemetryParameters.bucket(remainingCount)
+                TelemetryService.shared.send(.downloadAllRequested, parameters)
                 Task {
                     for discourse in discourses where !downloads.isDownloaded(discourse.id) {
+                        TelemetryService.shared.noteDownloadOrigin(discourse.id, .downloadAll)
                         _ = try? await downloads.download(discourse)
                     }
                 }

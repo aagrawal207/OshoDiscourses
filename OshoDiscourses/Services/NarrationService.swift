@@ -584,6 +584,7 @@ final class NarrationService {
         guard !deletingIDs.contains(id) else { throw NarrationPreparationError.busy }
         deletingIDs.insert(id)
         if active?.documentID == id { cancel() }
+        let removed = documents.first { $0.id == id }
         forget(id)
         revision &+= 1
         let started = revision
@@ -592,6 +593,7 @@ final class NarrationService {
             try await cache.remove(id)
             storageRevision &+= 1
             Self.log.info("stage=delete outcome=removed")
+            if let removed { sendDeleted(removed) }
         } catch {
             if revision == started { errorMessage = "The translation couldn't be removed. Please try again." }
             Self.log.error("stage=delete outcome=failed")
@@ -869,6 +871,19 @@ final class NarrationService {
         ready[id] = nil
         defaults.removeObject(forKey: Self.positionPrefix + id)
         dismissFromRecent(documentID: id)
+    }
+
+    private func sendDeleted(_ document: NarrationDocument) {
+        TelemetryService.shared.send(.translationDeleted, Self.deletedTelemetryParameters(document))
+    }
+
+    static func deletedTelemetryParameters(_ document: NarrationDocument) -> [String: String] {
+        var parameters = TelemetryParameters.discourse(document.discourseID)
+        parameters["sourceLanguage"] = document.selection.sourceLanguage
+        parameters["targetLanguage"] = document.selection.targetLanguage
+        parameters["complete"] = TelemetryParameters.flag(document.isComplete)
+        parameters["minutes"] = TelemetryParameters.minutesBucket(document.duration)
+        return parameters
     }
 
     private static func mostRecent(_ lhs: NarrationDocument, _ rhs: NarrationDocument) -> Bool {

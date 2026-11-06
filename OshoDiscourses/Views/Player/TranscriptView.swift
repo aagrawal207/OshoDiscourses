@@ -77,6 +77,7 @@ struct TranscriptView: View {
     @State private var isSearching = false
     @State private var searchText = ""
     @State private var searchCursor = 0
+    @State private var searchReported = false
     @State private var toast: String?
     @FocusState private var searchFocused: Bool
 
@@ -148,7 +149,10 @@ struct TranscriptView: View {
         // timer would dim the page mid-paragraph. Held only while this
         // discourse is actually playing; pausing or closing hands it back.
         .onAppear { updateIdleTimer() }
-        .onDisappear { ScreenAwakeService.shared.setAwake(false, owner: screenAwakeOwner) }
+        .onDisappear {
+            ScreenAwakeService.shared.setAwake(false, owner: screenAwakeOwner)
+            reportSearchIfNeeded()
+        }
         .onChange(of: player.isPlaying) { _, _ in updateIdleTimer() }
         .onChange(of: player.currentTrackId) { _, _ in updateIdleTimer() }
         .onChange(of: scenePhase) { _, _ in updateIdleTimer() }
@@ -459,6 +463,7 @@ struct TranscriptView: View {
                         if !player.isPlaying { player.togglePlayPause() }
                         resumeFollowing()
                         withAnimation { selectedBlock = nil }
+                        sendAction("playFromHere")
                     }
                     actionChip("Audio is here", systemImage: "scope") {
                         anchor(block)
@@ -494,6 +499,7 @@ struct TranscriptView: View {
         guard !passages.isEmpty else { return }
         UIPasteboard.general.string = TranscriptPassages.text(for: passages)
         showToast(passages.count == 1 ? "Copied" : "Copied \(passages.count) passages")
+        sendAction("copy", passages: passages.count)
         withAnimation {
             selectedBlock = nil
             stopSelecting()
@@ -504,9 +510,11 @@ struct TranscriptView: View {
         guard !passages.isEmpty else { return }
         let text = TranscriptPassages.text(for: passages)
         textSelection = .init(text: text, shareText: shareText(text))
+        sendAction("selectText", passages: passages.count)
     }
 
     private func startSelecting(with block: Block?) {
+        sendAction("selectPassages")
         withAnimation(.easeInOut(duration: 0.2)) {
             selectedBlock = nil
             // Picking passages while the page scrolls under the finger is impossible.
@@ -621,6 +629,28 @@ struct TranscriptView: View {
         withAnimation { selectedBlock = nil }
         resumeFollowing()
         showToast(settings.transcriptSentenceLayout ? "Synced to this sentence" : "Synced to this paragraph")
+        sendAction("anchor")
+    }
+
+    /// Counts features of the reader, never its text.
+    private func sendAction(_ action: String, passages: Int? = nil, extra: [String: String] = [:]) {
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters.merge(extra) { $1 }
+        parameters["action"] = action
+        if let passages { parameters["passages"] = TelemetryParameters.bucket(passages) }
+        TelemetryService.shared.send(.transcriptAction, parameters)
+    }
+
+    /// One search signal per reader session, sent when the listener first steps
+    /// through matches or closes search, so typing never sends.
+    private func reportSearchIfNeeded() {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard isSearching, !searchReported, query.count >= 2 else { return }
+        searchReported = true
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["matches"] = TelemetryParameters.bucket(searchMatches.count)
+        parameters["queryLength"] = TelemetryParameters.bucket(query.count)
+        TelemetryService.shared.send(.transcriptSearched, parameters)
     }
 
     // MARK: - Following
@@ -692,9 +722,13 @@ struct TranscriptView: View {
         selectedBlock = nil
         stopSelecting()
         blocks = []
+        searchReported = false
         guard transcripts.availability(for: discourseID) != .unavailable else { return }
         isLoading = true
         defer { isLoading = false }
+        var opened = TelemetryParameters.discourse(discourseID)
+        opened["presentation"] = presentation == .sheet ? "sheet" : "embedded"
+        opened["playing"] = TelemetryParameters.flag(isPlayingThis)
         do {
             let loaded = try await transcripts.transcript(for: discourseID)
             // First access parses the whole catalog; keep it off the main thread.
@@ -703,6 +737,9 @@ struct TranscriptView: View {
             transcript = loaded
             blocks = Self.blocks(for: loaded, sentences: settings.transcriptSentenceLayout)
             shippedAlignment = shipped?.paragraphCount == loaded.paragraphs.count ? shipped : nil
+            opened["outcome"] = "loaded"
+            opened["shippedTiming"] = TelemetryParameters.flag(shippedAlignment != nil)
+            TelemetryService.shared.send(.transcriptOpened, opened)
             rebuildModel()
             // Land where the reader left off, or on the audio.
             let state = stateService.state(for: discourseID, paragraphCount: loaded.paragraphs.count)
@@ -717,6 +754,10 @@ struct TranscriptView: View {
             applyDebugArguments()
         } catch {
             loadError = error
+            if !(error is CancellationError) {
+                opened["outcome"] = "failed"
+                TelemetryService.shared.send(.transcriptOpened, opened)
+            }
         }
     }
 
@@ -805,6 +846,7 @@ struct TranscriptView: View {
 
     private var searchToggleButton: some View {
         Button {
+            if isSearching { reportSearchIfNeeded() }
             withAnimation { isSearching.toggle() }
             if isSearching { searchFocused = true } else { searchText = "" }
         } label: {
@@ -861,6 +903,7 @@ struct TranscriptView: View {
                             Button(role: .destructive) {
                                 stateService.clearAlignment(discourseID: discourseID)
                                 if settings.transcriptSpeechSync, let transcript { startAlignmentIfWanted(transcript) }
+                                sendAction("speechSyncRedo")
                             } label: { Label("Redo speech sync", systemImage: "arrow.clockwise") }
                         }
                     } else {
@@ -870,6 +913,7 @@ struct TranscriptView: View {
                         Button(role: .destructive) {
                             stateService.clearAnchors(discourseID: discourseID)
                             rebuildModel()
+                            sendAction("clearAnchors", extra: ["anchors": TelemetryParameters.bucket(anchors.count)])
                         } label: { Label("Clear \(anchors.count) sync anchor\(anchors.count == 1 ? "" : "s")", systemImage: "scope") }
                     }
                 }
@@ -929,6 +973,7 @@ struct TranscriptView: View {
                 Text("0/0").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
             }
             Button("Cancel") {
+                reportSearchIfNeeded()
                 withAnimation { isSearching = false }
                 searchText = ""
                 searchFocused = false
@@ -946,6 +991,7 @@ struct TranscriptView: View {
     }
 
     private func jumpToMatch(offset: Int) {
+        reportSearchIfNeeded()
         let matches = searchMatches
         guard !matches.isEmpty else { return }
         searchCursor = ((searchCursor + offset) % matches.count + matches.count) % matches.count
