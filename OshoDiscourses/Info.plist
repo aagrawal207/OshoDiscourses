@@ -27,7 +27,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Osho Talks can listen to a downloaded discourse on this device to line its transcript up with the audio. Nothing is sent anywhere.</string>
+	<string>Osho Talks can listen to a downloaded discourse on this device to line its transcript up with the audio. The audio is not sent anywhere.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

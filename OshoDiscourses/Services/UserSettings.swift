@@ -98,10 +98,16 @@ final class UserSettings {
     static let shared = UserSettings()
 
     var appearance: Appearance {
-        didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
+        didSet {
+            defaults.set(appearance.rawValue, forKey: Keys.appearance)
+            if oldValue != appearance { changed("appearance", appearance.rawValue) }
+        }
     }
     var accentTheme: AccentTheme {
-        didSet { defaults.set(accentTheme.rawValue, forKey: Keys.accentTheme) }
+        didSet {
+            defaults.set(accentTheme.rawValue, forKey: Keys.accentTheme)
+            if oldValue != accentTheme { changed("accentTheme", accentTheme.rawValue) }
+        }
     }
     /// When on, the accent color advances to a new palette color each day.
     /// Picking a color manually in Settings turns this off and pins that color.
@@ -109,6 +115,7 @@ final class UserSettings {
         didSet {
             defaults.set(dailyAccentShuffle, forKey: Keys.dailyAccentShuffle)
             refreshShuffledTheme()  // flip the observable color the moment it toggles
+            if oldValue != dailyAccentShuffle { changed("dailyAccentShuffle", TelemetryParameters.flag(dailyAccentShuffle)) }
         }
     }
 
@@ -118,62 +125,114 @@ final class UserSettings {
     /// at launch and on foreground via `refreshShuffledTheme()`.
     private(set) var shuffledThemeToday: AccentTheme = .blue
     var languageFilter: LanguageFilter {
-        didSet { defaults.set(languageFilter.rawValue, forKey: Keys.languageFilter) }
+        didSet {
+            defaults.set(languageFilter.rawValue, forKey: Keys.languageFilter)
+            if oldValue != languageFilter { changed("languageFilter", languageFilter.rawValue) }
+        }
     }
     var smartDownload: Bool {
-        didSet { defaults.set(smartDownload, forKey: Keys.smartDownload) }
+        didSet {
+            defaults.set(smartDownload, forKey: Keys.smartDownload)
+            if oldValue != smartDownload { changed("smartDownload", TelemetryParameters.flag(smartDownload)) }
+        }
     }
     var smartDelete: Bool {
-        didSet { defaults.set(smartDelete, forKey: Keys.smartDelete) }
+        didSet {
+            defaults.set(smartDelete, forKey: Keys.smartDelete)
+            if oldValue != smartDelete { changed("smartDelete", TelemetryParameters.flag(smartDelete)) }
+        }
     }
     var autoPlayNext: Bool {
-        didSet { defaults.set(autoPlayNext, forKey: Keys.autoPlayNext) }
+        didSet {
+            defaults.set(autoPlayNext, forKey: Keys.autoPlayNext)
+            if oldValue != autoPlayNext { changed("autoPlayNext", TelemetryParameters.flag(autoPlayNext)) }
+        }
     }
     /// When false (default), downloads only run on Wi-Fi. Guards against Smart
     /// Download silently pulling ~20–30 MB discourses over cellular.
     var allowCellularDownloads: Bool {
-        didSet { defaults.set(allowCellularDownloads, forKey: Keys.allowCellularDownloads) }
+        didSet {
+            defaults.set(allowCellularDownloads, forKey: Keys.allowCellularDownloads)
+            if oldValue != allowCellularDownloads { changed("allowCellularDownloads", TelemetryParameters.flag(allowCellularDownloads)) }
+        }
     }
     var noiseReduction: Bool {
-        didSet { defaults.set(noiseReduction, forKey: Keys.noiseReduction) }
+        didSet {
+            defaults.set(noiseReduction, forKey: Keys.noiseReduction)
+            if oldValue != noiseReduction { changed("noiseReduction", TelemetryParameters.flag(noiseReduction)) }
+        }
     }
     var denoiseStrength: String {
-        didSet { defaults.set(denoiseStrength, forKey: Keys.denoiseStrength) }
+        didSet {
+            defaults.set(denoiseStrength, forKey: Keys.denoiseStrength)
+            if oldValue != denoiseStrength { changed("denoiseStrength", denoiseStrength) }
+        }
     }
     var noiseReductionMode: NoiseReductionMode {
-        didSet { defaults.set(noiseReductionMode.rawValue, forKey: Keys.noiseReductionMode) }
+        didSet {
+            defaults.set(noiseReductionMode.rawValue, forKey: Keys.noiseReductionMode)
+            if oldValue != noiseReductionMode { changed("noiseReductionMode", noiseReductionMode.rawValue) }
+        }
     }
     /// Which voice-forward variant DeepFilterNet uses. Persisted so an A/B
     /// comparison across discourses survives relaunches.
     var voiceFocusPreset: VoiceFocusPreset {
-        didSet { defaults.set(voiceFocusPreset.rawValue, forKey: Keys.voiceFocusPreset) }
+        didSet {
+            defaults.set(voiceFocusPreset.rawValue, forKey: Keys.voiceFocusPreset)
+            if oldValue != voiceFocusPreset { changed("voiceFocusPreset", voiceFocusPreset.rawValue) }
+        }
     }
     /// Preferred playback speed (0.5–2.0). Persisted so the player honors the
     /// listener's chosen speed across launches instead of resetting to 1.0.
     /// The in-player speed picker writes back here via AudioPlayerService.setRate.
     var defaultPlaybackRate: Double {
-        didSet { defaults.set(defaultPlaybackRate, forKey: Keys.defaultPlaybackRate) }
+        didSet {
+            defaults.set(defaultPlaybackRate, forKey: Keys.defaultPlaybackRate)
+            if oldValue != defaultPlaybackRate { changed("defaultPlaybackRate", TelemetryParameters.rate(defaultPlaybackRate), signals: false) }
+        }
     }
     /// Output gain selected by the Boost control. New installs start at 2x, but
     /// turning Boost off persists so louder recordings are not forced back on.
     var volumeBoost: Double {
-        didSet { defaults.set(volumeBoost, forKey: Keys.volumeBoost) }
+        didSet {
+            defaults.set(volumeBoost, forKey: Keys.volumeBoost)
+            if oldValue != volumeBoost { changed("volumeBoost", String(format: "%.1f", volumeBoost)) }
+        }
     }
     /// Point size of transcript body text, stepped from the reader.
     /// Show each sentence of a transcript on its own line (lyrics style) so the
     /// highlight and anchors point at one sentence; off shows paragraph blocks.
     var transcriptSentenceLayout: Bool {
-        didSet { defaults.set(transcriptSentenceLayout, forKey: Keys.transcriptSentenceLayout) }
+        didSet {
+            defaults.set(transcriptSentenceLayout, forKey: Keys.transcriptSentenceLayout)
+            if oldValue != transcriptSentenceLayout { changed("transcriptSentenceLayout", TelemetryParameters.flag(transcriptSentenceLayout)) }
+        }
     }
 
     var transcriptFontSize: Double {
-        didSet { defaults.set(transcriptFontSize, forKey: Keys.transcriptFontSize) }
+        didSet {
+            defaults.set(transcriptFontSize, forKey: Keys.transcriptFontSize)
+            if oldValue != transcriptFontSize { changed("transcriptFontSize", String(Int(transcriptFontSize))) }
+        }
     }
     /// Experimental: derive paragraph timings from on-device speech recognition
     /// instead of the text-fraction estimate. English only (Apple ships no
     /// on-device Hindi recogniser).
     var transcriptSpeechSync: Bool {
-        didSet { defaults.set(transcriptSpeechSync, forKey: Keys.transcriptSpeechSync) }
+        didSet {
+            defaults.set(transcriptSpeechSync, forKey: Keys.transcriptSpeechSync)
+            if oldValue != transcriptSpeechSync { changed("transcriptSpeechSync", TelemetryParameters.flag(transcriptSpeechSync)) }
+        }
+    }
+
+    /// Anonymous usage signals (TelemetryService). On by default; Settings > About turns it off.
+    var shareUsageData: Bool {
+        didSet {
+            defaults.set(shareUsageData, forKey: Keys.shareUsageData)
+            guard oldValue != shareUsageData else { return }
+            TelemetryService.shared.setEnabled(shareUsageData)
+            if shareUsageData { changed("shareUsageData", "true") }
+        }
     }
 
     static let transcriptFontSizes: [Double] = [15, 17, 19, 21, 24, 28]
@@ -220,6 +279,14 @@ final class UserSettings {
 
     private let defaults = UserDefaults.standard
 
+    /// Refreshes the settings sent with every signal and, unless `signals` is false,
+    /// reports the change. Stored values set in `init` do not pass through here.
+    private func changed(_ setting: String, _ value: String, signals: Bool = true) {
+        let telemetry = TelemetryService.shared
+        telemetry.updateContext(TelemetryParameters.settingsContext(self))
+        if signals { telemetry.send(.settingChanged, ["setting": setting, "value": value]) }
+    }
+
     private enum Keys {
         static let appearance = "settings.appearance"
         static let accentTheme = "settings.accentTheme"
@@ -238,6 +305,7 @@ final class UserSettings {
         static let transcriptFontSize = "settings.transcriptFontSize"
         static let transcriptSentenceLayout = "settings.transcriptSentenceLayout"
         static let transcriptSpeechSync = "settings.transcriptSpeechSync"
+        static let shareUsageData = "settings.shareUsageData"
     }
 
     private init() {
@@ -258,6 +326,7 @@ final class UserSettings {
             Keys.transcriptFontSize: Self.defaultTranscriptFontSize,
             Keys.transcriptSentenceLayout: true,
             Keys.transcriptSpeechSync: false,
+            Keys.shareUsageData: true,
         ])
 
         // Default to light on first launch; a stored value always wins.
@@ -282,6 +351,7 @@ final class UserSettings {
         self.transcriptFontSize = d.double(forKey: Keys.transcriptFontSize)
         self.transcriptSentenceLayout = d.bool(forKey: Keys.transcriptSentenceLayout)
         self.transcriptSpeechSync = d.bool(forKey: Keys.transcriptSpeechSync)
+        self.shareUsageData = d.bool(forKey: Keys.shareUsageData)
 
         // Seed today's shuffled color now that all stored props are set.
         self.shuffledThemeToday = Self.shuffledTheme(forDaysSinceEpoch: Self.daysSinceEpoch())

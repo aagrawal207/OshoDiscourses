@@ -43,6 +43,9 @@ final class AppRuntime {
         let downloadService = downloadService
         let playbackState = playbackState
 
+        let telemetry = TelemetryService.shared
+        telemetry.updateContext(TelemetryParameters.settingsContext(.shared))
+        telemetry.start(enabled: UserSettings.shared.shareUsageData)
         // Prewarm the ArchiveCatalog JSON decode off the main thread so the first
         // thumbnail render doesn't pay it (static let init is thread-safe).
         Task.detached(priority: .utility) { _ = ArchiveCatalog.mappedSeriesCount }
@@ -76,12 +79,32 @@ final class AppRuntime {
                 downloadedIDs: Array(downloadService.downloadedIDs),
                 allowsCellular: UserSettings.shared.allowCellularDownloads
             )
+            telemetry.sendSnapshotIfDue { Self.librarySnapshot(downloads: downloadService, playbackState: playbackState) }
         }
+    }
+
+    /// Library sizes for the weekly telemetry snapshot, bucketed.
+    private static func librarySnapshot(downloads: DownloadService, playbackState: PlaybackStateService) -> [String: String] {
+        var parameters = [
+            "downloads": TelemetryParameters.bucket(downloads.downloadedIDs.count),
+            "bookmarks": TelemetryParameters.bucket(BookmarkService.shared.bookmarks.count),
+            "completed": TelemetryParameters.bucket(playbackState.completedDiscourseIDs.count),
+            "played": TelemetryParameters.bucket(playbackState.allPlayedDiscourseIDs.count),
+            "tips": TelemetryParameters.bucket(TipJarService.shared.tipCount),
+            "yearlySupport": AnnualSupportService.shared.currentProductID ?? "none",
+            "iCloud": TelemetryParameters.flag(FileManager.default.ubiquityIdentityToken != nil),
+        ]
+        #if TRANSLATED_NARRATION
+        parameters["savedTranslations"] = TelemetryParameters.bucket(NarrationService.shared.documents.count)
+        #endif
+        return parameters
     }
 
     func enteredBackground() {
         audioPlayer.handleBackgroundEntry()
         NarrationService.shared.pauseIfBackgroundTimeNotGranted(audioKeepsAppRunning: audioPlayer.isPlaying)
         ScreenAwakeService.shared.removeAllRequests()
+        // iOS may end the process from here on, so the open listen is sent now.
+        TelemetryService.shared.flushListening(trigger: .background, continuing: audioPlayer.isPlaying)
     }
 }

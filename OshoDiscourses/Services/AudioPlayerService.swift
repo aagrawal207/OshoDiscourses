@@ -24,6 +24,9 @@ final class AudioPlayerService {
     var currentSeries: String = ""
     var playbackRate: Float = 1.0
     var volume: Float = 1.0
+    /// Set by a caller just before it starts playback, for the telemetry listen
+    /// it opens (for example `.bookmark`). Consumed by the next start.
+    var telemetryStartReason: PlaybackStartReason?
 
     // MARK: - Queue
 

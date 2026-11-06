@@ -27,7 +27,7 @@ struct TipJarView: View {
                         Image(systemName: "cup.and.saucer.fill")
                             .font(.system(size: 40))
                             .foregroundStyle(accent)
-                        Text("Osho Talks is free and has no ads or tracking. If it has become part of your days, an optional tip helps me keep improving it.")
+                        Text("Osho Talks is free and has no ads. If it has become part of your days, an optional tip helps me keep improving it.")
                         Text("Choose a one-time tip or yearly support through Apple. Every feature stays free for everyone.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)

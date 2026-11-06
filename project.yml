@@ -13,6 +13,10 @@ options:
     iOS: "18.0"
     watchOS: "11.0"
   createIntermediateGroups: true
+packages:
+  TelemetryDeck:
+    url: https://github.com/TelemetryDeck/SwiftSDK
+    exactVersion: 2.14.2
 schemes:
   OshoDiscourses:
     build:
@@ -133,6 +137,8 @@ targets:
         platformFilter: iOS
       - sdk: WatchConnectivity.framework
         platformFilter: iOS
+      - package: TelemetryDeck
+        product: TelemetryDeck
       - target: OshoDiscoursesWatch
         embed: true
         link: false
@@ -155,7 +161,7 @@ targets:
         # Transcript speech sync (iOS 26, for discourses without shipped timing)
         # runs Apple's on-device recogniser over downloaded audio; nothing
         # leaves the device.
-        NSSpeechRecognitionUsageDescription: Osho Talks can listen to a downloaded discourse on this device to line its transcript up with the audio. Nothing is sent anywhere.
+        NSSpeechRecognitionUsageDescription: Osho Talks can listen to a downloaded discourse on this device to line its transcript up with the audio. The audio is not sent anywhere.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           UISceneConfigurations:

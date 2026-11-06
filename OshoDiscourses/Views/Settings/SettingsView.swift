@@ -294,14 +294,19 @@ struct SettingsView: View {
             Link(destination: URL(string: "mailto:aagrawal207@gmail.com?subject=Osho%20Talks%20Feedback")!) {
                 linkRow("Send Feedback", icon: "envelope")
             }
+
+            Toggle("Share Anonymous Usage Data", isOn: $settings.shareUsageData)
+                .font(.subheadline)
+                .accessibilityIdentifier("settings.shareUsageData")
         } header: {
             Text("About")
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
+                Text("Usage data shows which features and talks people use, so I know what to improve. It never includes your name, account, notes or searches, and it is not linked to you.")
                 Text("Acknowledgements: Audio and transcripts come from oshoworld.com and an Internet Archive mirror. Rights in the discourses, transcripts and the Osho name belong to their owners.")
                 Text("Noise reduction uses RNNoise (Xiph.Org, BSD 3-Clause) and DeepFilterNet by Hendrik Schröter (MIT/Apache-2.0).")
                 Text("Osho Talks is an independent player for publicly available recordings. It is not affiliated with or endorsed by Osho International Foundation, Osho World Foundation or any other Osho organisation.")
-                Text("Your listening progress, bookmarks, and stats sync between your devices through your own iCloud. Everything else stays on your phone. There are no accounts, no servers, and no tracking of any kind.")
+                Text("Your listening progress, bookmarks, and stats sync between your devices through your own iCloud. There are no accounts and no ads.")
             }
             .padding(.top, 8)
         }
