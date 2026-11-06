@@ -128,7 +128,10 @@ struct TipJarView: View {
                 if phase == .active { Task { await annualSupport.refreshStatus() } }
             }
             .manageSubscriptionsSheet(isPresented: $showingManageSubscriptions)
-            .onAppear { EngagementService.shared.registerSupportSheet(owner: engagementOwner) }
+            .onAppear {
+                EngagementService.shared.registerSupportSheet(owner: engagementOwner)
+                TelemetryService.shared.send(.supportSheetOpened, ["hasTipped": TelemetryParameters.flag(tips.tipCount > 0)])
+            }
             .onDisappear { EngagementService.shared.unregisterSupportSheet(owner: engagementOwner) }
             .confirmationDialog("Clear the pending request?", isPresented: $confirmingDeclinedRequest, titleVisibility: .visible) {
                 Button("Clear Declined Request", role: .destructive) { annualSupport.clearDeclinedRequest() }

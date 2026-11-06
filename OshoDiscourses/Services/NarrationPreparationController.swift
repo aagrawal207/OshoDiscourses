@@ -100,6 +100,7 @@ final class NarrationPreparationController {
     @ObservationIgnored private var joining: (owner: UUID, documentID: String, task: Task<Void, Never>)?
     /// Joining is tried once per launch, so a lasting failure can't repeat on every return to the app.
     @ObservationIgnored private var joinAttempts: Set<String> = []
+    @ObservationIgnored private var startedAt: Date?
 
     init(
         narrations: NarrationService = .shared,
@@ -173,6 +174,12 @@ final class NarrationPreparationController {
         persist()
         journal?.record("start discourse=\(discourseID) target=\(selection.targetLanguage) voice=\(selection.voice.id) pace=\(selection.pace.rawValue) passages=\(passages) automatic=\(automatic)")
         Self.log.info("Preparation outcome=started automatic=\(automatic, privacy: .public)")
+        startedAt = now()
+        var parameters = Self.telemetryParameters(discourseID: discourseID, selection: selection)
+        parameters["automatic"] = TelemetryParameters.flag(automatic)
+        parameters["listen"] = TelemetryParameters.flag(listen)
+        parameters["resumed"] = TelemetryParameters.flag(passages > 0)
+        TelemetryService.shared.send(.translationStarted, parameters)
         startup = Task {
             do {
                 try attempt.check()
@@ -190,10 +197,12 @@ final class NarrationPreparationController {
                 let needsConsent = support.status != .installed
                 if needsConsent, automatic || !hasListeningSheet(hostID: hostID, discourseID: discourseID) {
                     journal?.record("languages need the listener's consent automatic=\(automatic)")
+                    sendConsent("notAsked")
                     pause(message: "Preparation paused. Your finished audio is saved.", reason: .interrupted)
                     return
                 }
                 awaitingConsent = needsConsent
+                if needsConsent { sendConsent("shown") }
                 stage = .preparingLanguages
                 job = NarrationTranslationJob(lifetime: attempt, owner: owner, hostID: hostID,
                                                transcript: transcript, selection: selection, configuration: configuration)
@@ -224,6 +233,7 @@ final class NarrationPreparationController {
         guard awaitingConsent, let job, let discourseID,
               !hasListeningSheet(hostID: job.hostID, discourseID: discourseID) else { return }
         journal?.record("listening sheet closed before the languages were allowed")
+        sendConsent("sheetClosed")
         pause(message: "Preparation paused. Your finished audio is saved.", reason: .interrupted)
     }
 
@@ -231,6 +241,7 @@ final class NarrationPreparationController {
         guard lifetime?.id == job.id, awaitingConsent else { return }
         awaitingConsent = false
         journal?.record("languages allowed")
+        sendConsent("accepted")
     }
 
     private func hasListeningSheet(hostID: UUID, discourseID: String) -> Bool {
@@ -288,23 +299,29 @@ final class NarrationPreparationController {
 
     func finish(_ result: Result<NarrationDocument, Error>, attempt: NarrationTranslationLifetime) {
         guard lifetime?.id == attempt.id else { return }
+        // Only the consent host fails a run while Apple's prompt is pending.
+        if awaitingConsent, case .failure = result { sendConsent("declined") }
         switch result {
-        case .success:
+        case .success(let document):
             playWhenReady()
             statusMessage = "Ready to listen."
             unfinished = nil
             persist()
             journal?.record("finished")
             Self.log.info("Preparation outcome=ready")
+            sendFinished("ready", ["audioMinutes": TelemetryParameters.minutesBucket(document.duration)])
         case .failure(let error):
             if error is CancellationError {
                 statusMessage = "Preparation paused. Your finished audio is saved."
-                markStopped(Self.reason(for: narrations.backgroundStatus))
+                let reason = Self.reason(for: narrations.backgroundStatus)
+                markStopped(reason)
                 Self.log.info("Preparation outcome=paused")
+                sendFinished("cancelled", ["reason": reason.rawValue])
             } else {
                 errorMessage = failureMessage(error)
                 markStopped(.failed, detail: "stage=\(stage.rawValue) error=\(NarrationJournal.describe(error))")
                 Self.log.error("Preparation outcome=failed stage=\(self.stage.rawValue, privacy: .public)")
+                sendFinished("failed", ["stage": stage.rawValue])
             }
         }
         retire()
@@ -315,6 +332,7 @@ final class NarrationPreparationController {
         statusMessage = message
         errorMessage = nil
         markStopped(reason)
+        sendFinished("paused", ["reason": reason.rawValue, "stage": stage.rawValue])
         retire()
         Self.log.info("Preparation outcome=paused reason=\(reason.rawValue, privacy: .public)")
     }
@@ -537,6 +555,40 @@ final class NarrationPreparationController {
         if let error = error as? NativeNarrationSpeechError { return error.localizedDescription }
         if stage == .fetchingTranscript { return "Couldn't load the transcript. Check your connection and try again." }
         return narrations.errorMessage ?? "Couldn't prepare the audio. Your finished passages are saved. Try again."
+    }
+
+    // MARK: - Telemetry
+
+    /// Voice identifiers can name a listener's Personal Voice, so only the voice quality is sent.
+    static func telemetryParameters(discourseID: String, selection: NarrationSelection) -> [String: String] {
+        var parameters = TelemetryParameters.discourse(discourseID)
+        parameters["sourceLanguage"] = selection.sourceLanguage
+        parameters["targetLanguage"] = selection.targetLanguage
+        parameters["pace"] = selection.pace.rawValue
+        parameters["voiceQuality"] = String(selection.voice.quality)
+        return parameters
+    }
+
+    private func sendConsent(_ result: String) {
+        guard let discourseID, let selection else { return }
+        var parameters = Self.telemetryParameters(discourseID: discourseID, selection: selection)
+        parameters["result"] = result
+        TelemetryService.shared.send(.translationConsent, parameters)
+    }
+
+    /// One outcome per run; `finish` and `pause` both retire the run right after.
+    private func sendFinished(_ outcome: String, _ extra: [String: String] = [:]) {
+        guard let discourseID, let selection else { return }
+        var parameters = Self.telemetryParameters(discourseID: discourseID, selection: selection)
+        parameters.merge(extra) { $1 }
+        parameters["outcome"] = outcome
+        var seconds: Double?
+        if let startedAt {
+            seconds = max(0, now().timeIntervalSince(startedAt))
+            parameters["minutes"] = TelemetryParameters.minutesBucket(seconds ?? 0)
+        }
+        startedAt = nil
+        TelemetryService.shared.send(.translationFinished, parameters, value: seconds?.rounded())
     }
 }
 

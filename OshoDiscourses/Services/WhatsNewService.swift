@@ -168,6 +168,10 @@ final class WhatsNewService {
         }
         presentingOwner = owner
         Self.log.info("outcome=presented")
+        TelemetryService.shared.send(.whatsNewShown, [
+            "version": installedVersion,
+            "skippedReleases": TelemetryParameters.bucket(updateContent?.sinceLastSeen.count ?? 0),
+        ])
         return true
     }
 

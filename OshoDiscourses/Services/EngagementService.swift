@@ -156,6 +156,7 @@ final class EngagementService {
         history.lastSupportExposure = date
         exposedOwner = owner
         Self.log.info("Support outcome=shown")
+        TelemetryService.shared.send(.supportPrompt, ["action": "shown"])
         return true
     }
 
@@ -177,6 +178,7 @@ final class EngagementService {
             history.supportSnoozedAt = date
             Self.log.info("Support outcome=snoozed")
         }
+        TelemetryService.shared.send(.supportPrompt, ["action": permanently ? "dontAskAgain" : "notNow"])
         endSupportPresentation(owner: owner)
     }
 
@@ -185,6 +187,7 @@ final class EngagementService {
         guard recordSupportExposure(owner: owner, context: context) else { return false }
         supportSheetOwner = owner
         Self.log.info("Support outcome=opened")
+        TelemetryService.shared.send(.supportPrompt, ["action": "accepted"])
         endSupportPresentation(owner: owner)
         return true
     }
