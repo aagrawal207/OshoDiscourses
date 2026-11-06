@@ -9,10 +9,23 @@ android {
     defaultConfig {
         applicationId = "com.agraabhi.oshodiscourses"
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         // Play Console > Monetization setup > Licensing. Release builds must pass -Posho.playLicenseKey.
         val licenseKey = providers.gradleProperty("osho.playLicenseKey").orElse("").get()
         buildConfigField("String", "PLAY_LICENSE_KEY", "\"$licenseKey\"")
+    }
+
+    // The upload key and its passwords live outside the repo, in ~/.gradle/gradle.properties.
+    val uploadStoreFile = providers.gradleProperty("osho.uploadStoreFile").orNull
+    signingConfigs {
+        if (uploadStoreFile != null) {
+            create("upload") {
+                storeFile = file(uploadStoreFile)
+                storePassword = providers.gradleProperty("osho.uploadStorePassword").get()
+                keyAlias = providers.gradleProperty("osho.uploadKeyAlias").get()
+                keyPassword = providers.gradleProperty("osho.uploadKeyPassword").get()
+            }
+        }
     }
 
     buildTypes {
@@ -21,8 +34,10 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Local R8 checks only (-Posho.debugSignRelease=true); Play builds sign with the upload key.
-            if (providers.gradleProperty("osho.debugSignRelease").orNull == "true") {
-                signingConfig = signingConfigs.getByName("debug")
+            signingConfig = when {
+                providers.gradleProperty("osho.debugSignRelease").orNull == "true" -> signingConfigs.getByName("debug")
+                uploadStoreFile != null -> signingConfigs.getByName("upload")
+                else -> null
             }
         }
     }
@@ -74,3 +89,14 @@ dependencies {
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
+
+// A Play bundle must verify purchase signatures and be signed with the upload key.
+val checkPlayRelease = tasks.register("checkPlayRelease") {
+    val licenseKey = providers.gradleProperty("osho.playLicenseKey").orElse("")
+    val uploadStore = providers.gradleProperty("osho.uploadStoreFile").orElse("")
+    doLast {
+        check(licenseKey.get().isNotBlank()) { "Pass -Posho.playLicenseKey (Play Console > Monetization setup > Licensing)." }
+        check(uploadStore.get().isNotBlank()) { "Set osho.uploadStoreFile and its passwords in ~/.gradle/gradle.properties." }
+    }
+}
+tasks.matching { it.name == "bundleRelease" }.configureEach { dependsOn(checkPlayRelease) }
