@@ -17,7 +17,6 @@
 - **Listening stats:** how long you listen each day, used for the in-app stats and streak
 - **Downloaded files:** audio files you choose to download. They are excluded from Android backup, because they can be downloaded again.
 - **Optional tips:** Google Play order IDs and a device-local tip count prevent counting a tip twice. Tips unlock no content or features.
-- **Optional yearly support:** the app checks your subscription status with Google Play to show your current plan and avoid a second subscription. There is no developer-run subscription database. All content and features remain free.
 - **Rating and support reminders:** request dates and your reminder choice are stored on this device to limit reminders. Anonymous usage data may record that a reminder was shown, but not when.
 
 Settings, bookmarks, progress and stats can be included in your device's Android backup, which Google stores in your Google account under Android's backup settings. Downloaded audio is not included.
@@ -26,7 +25,7 @@ Settings, bookmarks, progress and stats can be included in your device's Android
 
 To learn which features and talks people use, and what to improve, the app sends anonymous usage data to [TelemetryDeck](https://telemetrydeck.com/privacy/), an analytics service based in the European Union.
 
-- **What is sent:** which features are used (for example playback, downloads, Smart Download, Smart Delete, DeNoise and its mode, transcripts, bookmarks and the sleep timer), the app's settings, which series and discourse is played, how long a talk is listened to, whether a download succeeded and how fast it was, whether an optional tip or yearly support was bought, and general device details such as device model, screen size, system version, app version, language, region and time zone, accessibility settings such as text size, and whether the app was installed from Google Play.
+- **What is sent:** which features are used (for example playback, downloads, Smart Download, Smart Delete, DeNoise and its mode, transcripts, bookmarks and the sleep timer), the app's settings, which series and discourse is played, how long a talk is listened to, whether a download succeeded and how fast it was, whether an optional tip was bought, and general device details such as device model, screen size, system version, app version, language, region and time zone, accessibility settings such as text size, and whether the app was installed from Google Play.
 - **What is never sent:** your name, email, Google account, contacts or location; bookmark notes; what you type in search; transcript text; and the audio itself.
 - **How it is sent:** most use is counted on your device and sent as a summary about once a day, together with the talks you listened to.
 - **No identity:** the app uses a random identifier for this installation, which is hashed on the device before it is sent. The data is not linked to you, is not used to track you across apps or websites, and is not sold or used for advertising.
@@ -42,13 +41,13 @@ To stop syncing, use Settings > Sync in the app. To delete the file, open Google
 
 ## Network access
 
-The app connects to oshoworld.com and archive.org to download audio and transcripts, to TelemetryDeck for the anonymous usage data, to Google Drive when sync is on, and to Google Play for tips, yearly support and ratings.
+The app connects to oshoworld.com and archive.org to download audio and transcripts, to TelemetryDeck for the anonymous usage data, to Google Drive when sync is on, and to Google Play for tips and ratings.
 
 ## Third-party services
 
 - Oshoworld.com and archive.org host the audio files and transcripts.
 - Google Drive stores the optional sync file in your own account.
-- Google Play Billing handles optional tips and yearly support: payment, renewals and cancellations. The app records tips locally and checks subscription status with Google Play; it has no purchase server.
+- Google Play Billing handles payment for optional tips. The app records tips locally; it has no purchase server.
 - Google Play In-App Review may show a rating card. Google decides when it appears.
 - TelemetryDeck receives the anonymous usage data described above.
 
