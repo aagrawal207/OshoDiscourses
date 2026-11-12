@@ -1,0 +1,130 @@
+# Osho Talks
+
+<p align="center">
+  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039">
+    <img src="docs/screenshots/osho-talks-hero.jpg" width="1100" alt="Osho Talks: 5,481 discourses in English and Hindi, with the audio player and highlighted read-along transcript">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039">
+    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" width="180" alt="Download on the App Store">
+  </a>
+</p>
+
+<p align="center">
+  <strong>Free for iPhone and iPad</strong> · English &amp; Hindi · iOS 18+
+  <br>
+  No ads. No app account. No subscriptions.
+</p>
+
+Explore **5,481 Osho discourses across 351 series**, from Zen and Tantra to Tao
+and the Upanishads. Download a talk for a walk or a quiet evening, follow its
+transcript, and continue from your saved position next time.
+
+<p align="center">
+  <a href="#read-as-you-listen">Read along</a> ·
+  <a href="#a-library-for-everyday-listening">Explore &amp; download</a> ·
+  <a href="#keep-your-place-and-your-notes">Bookmarks &amp; stats</a> ·
+  <a href="SUPPORT.md">Support</a>
+</p>
+
+<sub>Screenshots show the released 1.15.0 interface with demonstration listening history.</sub>
+
+## Read as you listen
+
+Open a transcript beside the player and follow the highlighted text. Original-language
+transcripts are available for **4,946 discourses in English and Hindi**.
+Search for a passage, change the text size, or tap a sentence to play from that point.
+
+<p align="center">
+  <img src="docs/screenshots/listen-and-read.jpg" width="1100" alt="The full audio player, an English transcript with the current passage highlighted, and a Hindi transcript in light appearance">
+</p>
+
+The reader remembers your place. If a recording's timing drifts, **Audio is here**
+lets you line the text up with what you hear.
+
+## A library for everyday listening
+
+Find a series by name or topic, filter by language, or start with the **Popular**
+and **Beginner Friendly** collections. Keep a few talks downloaded so your next
+listen is ready without a connection.
+
+<p align="center">
+  <img src="docs/screenshots/explore-and-offline.jpg" width="1100" alt="Library search and language filters, the shared DeNoise controls, and downloaded talks with storage usage">
+</p>
+
+- **Tune older recordings.** DeNoise brings noise reduction, volume boost and
+  quiet-speech controls together. Choose Best Quality, Balanced or Gentle Cleanup,
+  and compare with the original sound. Results vary by recording.
+- **Download in the background.** Downloads continue when you switch apps or
+  lock the screen. Manage talks by series and see how much storage they use.
+- **Plan the next listen.** Optional Smart Download prepares the next discourse;
+  Smart Delete can clear finished recordings.
+
+## Keep your place and your notes
+
+Save a timestamped bookmark with a note and category, then return directly to that
+moment. Listening stats show your daily totals, streak and completed discourses.
+For an evening listen, set a countdown or stop at the end of the talk.
+
+<p align="center">
+  <img src="docs/screenshots/bookmarks-and-routine.jpg" width="1100" alt="Bookmarks with personal notes, the sleep timer's countdown and end-of-discourse options, and a listening-stats dashboard">
+</p>
+
+### More ways to make listening comfortable
+
+| Feature | What it does |
+| --- | --- |
+| Continue Listening | Saves your position in each discourse and links you back to its series |
+| Background playback | Keeps audio playing with the screen locked, with Lock Screen, Control Center and AirPods controls |
+| Playback speed | Choose a pace from 0.5× to 2×, with quick back and forward controls |
+| AirPlay | Listen through a compatible speaker or other AirPlay device |
+| iCloud sync | Carries progress, bookmarks, listening stats and transcript reading state between your devices |
+| Appearance | Light, dark or system appearance, with eight accent colors |
+| Files access | Find downloaded recordings in the iOS Files app |
+
+### In the next update
+
+Version 1.16 is in development and not yet on the App Store.
+
+- **Apple Watch:** control the iPhone player and browse your downloads from your
+  wrist. Save a talk to the Watch to listen with Bluetooth headphones while the
+  iPhone stays home.
+- **iPad:** a sidebar, a player with the transcript beside it, keyboard shortcuts
+  and multiple windows.
+- **Mac:** a native Mac version with the menu bar, keyboard controls and DeNoise.
+- **CarPlay:** support is built, and it will ship only after Apple approves it for
+  the app.
+
+## Free to listen. Personal by design.
+
+Every feature and discourse is available without a purchase.
+**Support Development** offers optional, one-time tips that unlock nothing.
+
+Osho Talks has no developer-operated server and no ads. Downloads and cached
+transcripts stay on your device, and synced listening data uses your own iCloud
+account. Anonymous usage data, which you can turn off in Settings, shows which
+features and talks are used. Read the [privacy policy](PRIVACY.md).
+
+<p align="center">
+  <a href="https://apps.apple.com/us/app/osho-talks-audio-discourses/id6774409039"><strong>Download Osho Talks free on the App Store</strong></a>
+  <br>
+  iPhone and iPad · iOS 18 or later
+</p>
+
+## Questions or feedback?
+
+See [Support](SUPPORT.md) for help with the app, missing discourses or purchases.
+You can also [report a problem on GitHub](https://github.com/aagrawal207/OshoDiscourses/issues).
+
+## Audio and affiliation
+
+The app does not bundle discourse audio or transcripts. It accesses publicly
+available recordings from [oshoworld.com](https://www.oshoworld.com/) and an
+[Internet Archive](https://archive.org/) mirror, with transcripts from the matching
+oshoworld.com pages.
+
+Osho Talks is an independent app. It is not affiliated with or endorsed by Osho
+International Foundation, Osho World Foundation or any other Osho organisation.
+Rights in the discourses, transcripts and the Osho name belong to their owners.
