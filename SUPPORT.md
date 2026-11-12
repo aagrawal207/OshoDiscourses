@@ -26,9 +26,13 @@ Tips are optional, one-time purchases through Apple. They support app developmen
 and unlock no features or content.
 
 Yearly support is an optional subscription that renews automatically once a year.
-It also unlocks no features or content. In **Settings > About > Support Development**,
-choose **Manage Subscriptions** to check, change or cancel a plan, or
-**Restore Subscription** to find an existing plan on your Apple Account.
+It also unlocks no features or content. From version 1.17.4 the app no longer
+offers new yearly plans. A plan you already have continues until you cancel it.
+
+To check, change or cancel a plan, open **Settings > About > Support Development**
+and choose **Manage Subscriptions**. From version 1.17.4 the app shows this only
+when it finds a plan on your Apple Account. You can also manage a plan under
+**Subscriptions** in your Apple Account settings on the device.
 Cancelling stops future renewals; it does not remove access to any app feature.
 
 For a missing support option or an in-app error, contact the support email above.

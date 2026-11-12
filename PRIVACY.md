@@ -18,7 +18,7 @@
 - **Listening stats:** how long you listen each day, used for the in-app stats and streak
 - **Downloaded files:** audio files you choose to download, stored in the Documents folder (visible in Files app). These are not included in your iCloud backup, since they can be re-downloaded.
 - **Optional tips:** verified StoreKit transaction IDs and their counted/revoked state, plus a device-local tip count, prevent duplicate counting. Tips unlock no content or features.
-- **Optional yearly support:** the app checks verified subscription status through Apple to show your current plan and avoid duplicate subscriptions. A pending product is remembered locally until approval or until you explicitly clear a declined request. There is no developer-run subscription database. All content and features remain free.
+- **Optional yearly support:** the app checks verified subscription status through Apple to show your current plan and avoid duplicate subscriptions. A pending product is remembered locally until approval or until you explicitly clear a declined request, and the app remembers on this device whether the last check found a plan. There is no developer-run subscription database. All content and features remain free.
 - **Rating and support reminders:** request dates and your support-reminder choice are stored on this device to limit reminders. Anonymous usage data may record that a reminder was shown, but not when.
 - **Translated narration:** translated text, completed audio and partial preparation checkpoints stay on your device and are excluded from device backup. Playback positions are separate from the original recordings.
 
