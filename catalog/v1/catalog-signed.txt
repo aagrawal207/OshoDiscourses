@@ -1,7 +1,7 @@
-MEUCIQDvIgOIIEMwQvJoBVcmxImjoZnOOCuAlb1i1ut/Mf/ANwIgOD3PQSctjNB9yUu1fhZepEtXpsznARQZXu7xMlT9E4g=
+MEYCIQC/mYr0pz+Qla7hxjN0p6r8xtaaWly6yN5yHrGbQAwyLwIhAJ9YxAWFtb58b7tgvzEMsertOQzhmsGB8LQYACFOe9Qa
 {
 "format": 1,
-"revision": 1,
+"revision": 2,
 "updated": "2026-11-12",
 "lists": {
   "beginnerEnglish": ["english-A_Bird_on_the_Wing__","english-Ancient_Music_In_The_Pines","english-A_Sudden_Clash_of_Thunder","english-Come_Come_Yet_Again_Come","english-Be_Still_and_Know","english-The_Hidden_Harmony","english-Ah_This","english-And_the_Flowers_Showerd"],
@@ -864,7 +864,7 @@ MEUCIQDvIgOIIEMwQvJoBVcmxImjoZnOOCuAlb1i1ut/Mf/ANwIgOD3PQSctjNB9yUu1fhZepEtXpszn
     {"number":8,"audio":{"archive":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/The%20Original%20Man%2001-09%20%E2%80%93%20Osho%20World/OSHO-The_Original_Man_08.mp3","oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/the-original-man-series/The%20Original%20Man%2008.mp3"}},
     {"number":9,"audio":{"archive":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/The%20Original%20Man%2001-09%20%E2%80%93%20Osho%20World/OSHO-The_Original_Man_09.mp3","oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/the-original-man-series/The%20Original%20Man%2009.mp3"}}
   ]},
-  {"id":"english-Turning_In","name":"Turning In","language":"english","talks":[
+  {"id":"english-Turning_In","name":"Turning In","language":"english","cover":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/Turning%20In%2001-08%20%E2%80%93%20Osho%20World/OSHO-Turning_In_01.png","talks":[
     {"number":1,"audio":{"oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/turning-in-series/Turning%20In%2001.mp3"}},
     {"number":2,"audio":{"oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/turning-in-series/Turning%20In%2002.mp3"}},
     {"number":3,"audio":{"oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/turning-in-series/Turning%20In%2003.mp3"}},
