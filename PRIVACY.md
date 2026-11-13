@@ -6,6 +6,7 @@
 
 - Downloads audio files from oshoworld.com or an Internet Archive mirror to your device
 - Fetches discourse transcripts from oshoworld.com and caches them on your device
+- Checks about once a day for a newer list of talks and downloads it from GitHub, or from the jsDelivr CDN when GitHub cannot be reached
 - Optionally translates a transcript on your device with Apple Translation and creates narration using a system voice
 - Stores your settings, bookmarks, and playback progress on your device
 - Syncs your playback progress, bookmarks, and listening stats across your own devices through your personal iCloud (Apple's iCloud Key-Value storage). This data goes only to your iCloud account. The developer has no server and never receives it. There is no account to create and no sign-in.
@@ -17,6 +18,7 @@
 - **Playback position:** which discourse you were listening to and where you stopped
 - **Listening stats:** how long you listen each day, used for the in-app stats and streak
 - **Downloaded files:** audio files you choose to download, stored in the Documents folder (visible in Files app). These are not included in your iCloud backup, since they can be re-downloaded.
+- **List of talks:** the newest list the app has downloaded, with the time of its next check. It is not included in device backup, since it can be downloaded again.
 - **Optional tips:** verified StoreKit transaction IDs and their counted/revoked state, plus a device-local tip count, prevent duplicate counting. Tips unlock no content or features.
 - **Optional yearly support:** the app checks verified subscription status through Apple to show your current plan and avoid duplicate subscriptions. A pending product is remembered locally until approval or until you explicitly clear a declined request, and the app remembers on this device whether the last check found a plan. There is no developer-run subscription database. All content and features remain free.
 - **Rating and support reminders:** request dates and your support-reminder choice are stored on this device to limit reminders. Anonymous usage data may record that a reminder was shown, but not when.
@@ -48,6 +50,8 @@ use ordinary device settings storage, which can be included in device backup.
 ## Network access
 
 The app connects to oshoworld.com and archive.org to download audio discourse files and transcripts. iCloud sync is handled by the operating system.
+
+About once a day the app fetches the list of talks from GitHub (raw.githubusercontent.com), or from the jsDelivr CDN (cdn.jsdelivr.net) when GitHub cannot be reached. The request carries nothing about you or your listening: no cookie and no identifier. Like any web request, it shows that server your IP address and the version of the app. The developer does not receive it.
 
 For recordings without matching bundled transcript timing, optional speech sync on
 iOS 26 processes downloaded English or Hindi audio using Apple's on-device speech

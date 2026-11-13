@@ -6,6 +6,7 @@
 
 - Downloads audio files from oshoworld.com or an Internet Archive mirror to your device
 - Fetches discourse transcripts from oshoworld.com and caches them on your device
+- Checks about once a day for a newer list of talks and downloads it from GitHub, or from the jsDelivr CDN when GitHub cannot be reached
 - Stores your settings, bookmarks and playback progress on your device
 - If you turn it on, syncs your playback progress, bookmarks and listening stats across your own devices through a hidden app folder in your own Google Drive. The developer has no server and never receives this data.
 
@@ -16,6 +17,7 @@
 - **Playback position:** which discourse you were listening to and where you stopped
 - **Listening stats:** how long you listen each day, used for the in-app stats and streak
 - **Downloaded files:** audio files you choose to download. They are excluded from Android backup, because they can be downloaded again.
+- **List of talks:** the newest list the app has downloaded, with the time of its next check. It is excluded from Android backup, because it can be downloaded again.
 - **Optional tips:** Google Play order IDs and a device-local tip count prevent counting a tip twice. Tips unlock no content or features.
 - **Rating and support reminders:** request dates and your reminder choice are stored on this device to limit reminders. Anonymous usage data may record that a reminder was shown, but not when.
 
@@ -43,9 +45,12 @@ To stop syncing, use Settings > Sync in the app. To delete the file, open Google
 
 The app connects to oshoworld.com and archive.org to download audio and transcripts, to TelemetryDeck for the anonymous usage data, to Google Drive when sync is on, and to Google Play for tips and ratings.
 
+About once a day the app fetches the list of talks from GitHub (raw.githubusercontent.com), or from the jsDelivr CDN (cdn.jsdelivr.net) when GitHub cannot be reached. The request carries nothing about you or your listening: no cookie and no identifier. Like any web request, it shows that server your IP address. The developer does not receive it.
+
 ## Third-party services
 
 - Oshoworld.com and archive.org host the audio files and transcripts.
+- GitHub and jsDelivr host the list of talks.
 - Google Drive stores the optional sync file in your own account.
 - Google Play Billing handles payment for optional tips. The app records tips locally; it has no purchase server.
 - Google Play In-App Review may show a rating card. Google decides when it appears.
