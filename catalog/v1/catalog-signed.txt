@@ -1,7 +1,7 @@
-MEYCIQDsi3cREwN5yLZKx6FEyxqq+LvgjmkCk0naMT82ngd4mwIhAJNLmuTWyboF9Jvif0aB6SjKbHPe2oM0KBR6fgjI02Q8
+MEQCIBm4gaJ+9zEBsBZxAf5Y5mW8rreqeGXsKy9dEXE0/ktcAiAd8LQ9H4bCjrPkIz0+ieOq1x3TIafV4oS9uhbfGSMk9A==
 {
 "format": 1,
-"revision": 3,
+"revision": 4,
 "updated": "2026-11-13",
 "lists": {
   "beginnerEnglish": ["english-A_Bird_on_the_Wing__","english-Ancient_Music_In_The_Pines","english-A_Sudden_Clash_of_Thunder","english-Come_Come_Yet_Again_Come","english-Be_Still_and_Know","english-The_Hidden_Harmony","english-Ah_This","english-And_the_Flowers_Showerd"],
@@ -10,7 +10,7 @@ MEYCIQDsi3cREwN5yLZKx6FEyxqq+LvgjmkCk0naMT82ngd4mwIhAJNLmuTWyboF9Jvif0aB6SjKbHPe
   "popularHindi": ["hindi-Maha_Geeta","hindi-Geeta_Darshan_Vol_1-2","hindi-Tao_Upanishad","hindi-Bhakti_Sutra","hindi-Athato_Bhakti_Jigyasa","hindi-Sahaj_Yog","hindi-Shiv_Sutra"]
 },
 "series": [
-  {"id":"english-A_Bird_on_the_Wing__","name":"A Bird on the Wing","language":"english","cover":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/A%20Bird%20on%20the%20Wing%2001-11%20%E2%80%93%20Osho%20World/OSHO-A_Bird_on_the_Wing_01.png","about":{"text":"Eleven Zen stories. Each one is a koan that refuses to make rational sense, and that's the point: awakening comes as a jolt, not a conclusion. [Catalog test 3]","year":"1974","location":"Mumbai","themes":["Zen","koans","stories","awakening","paradox","beginner friendly"]},"talks":[
+  {"id":"english-A_Bird_on_the_Wing__","name":"A Bird on the Wing","language":"english","cover":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/A%20Bird%20on%20the%20Wing%2001-11%20%E2%80%93%20Osho%20World/OSHO-A_Bird_on_the_Wing_01.png","about":{"text":"Eleven Zen stories. Each one is a koan that refuses to make rational sense, and that's the point: awakening comes as a jolt, not a conclusion.","year":"1974","location":"Mumbai","themes":["Zen","koans","stories","awakening","paradox","beginner friendly"]},"talks":[
     {"number":1,"audio":{"archive":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/A%20Bird%20on%20the%20Wing%2001-11%20%E2%80%93%20Osho%20World/OSHO-A_Bird_on_the_Wing_01.mp3","oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/A_Bird_on_the_Wing_(11)/A_Bird_on_the_Wing__01.mp3"}},
     {"number":2,"audio":{"archive":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/A%20Bird%20on%20the%20Wing%2001-11%20%E2%80%93%20Osho%20World/OSHO-A_Bird_on_the_Wing_02.mp3","oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/A_Bird_on_the_Wing_(11)/A_Bird_on_the_Wing__02.mp3"}},
     {"number":3,"audio":{"archive":"https://archive.org/download/osho-audio-discourses-collection/OSHO_WORLD/English/A%20Bird%20on%20the%20Wing%2001-11%20%E2%80%93%20Osho%20World/OSHO-A_Bird_on_the_Wing_03.mp3","oshoworld":"https://www.oshoworld.com/wp-content/uploads/newAudios/A_Bird_on_the_Wing_(11)/A_Bird_on_the_Wing__03.mp3"}},
