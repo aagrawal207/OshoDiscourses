@@ -84,18 +84,18 @@ For an evening listen, set a countdown or stop at the end of the talk.
 | Appearance | Light, dark or system appearance, with eight accent colors |
 | Files access | Find downloaded recordings in the iOS Files app |
 
-### In the next update
-
-Version 1.16 is in development and not yet on the App Store.
+### On Apple Watch, iPad and CarPlay
 
 - **Apple Watch:** control the iPhone player and browse your downloads from your
   wrist. Save a talk to the Watch to listen with Bluetooth headphones while the
   iPhone stays home.
 - **iPad:** a sidebar, a player with the transcript beside it, keyboard shortcuts
   and multiple windows.
+- **CarPlay:** Continue Listening, Downloads and Bookmarks on the car's screen.
+
+### In development
+
 - **Mac:** a native Mac version with the menu bar, keyboard controls and DeNoise.
-- **CarPlay:** support is built, and it will ship only after Apple approves it for
-  the app.
 
 ## Free to listen. Personal by design.
 
