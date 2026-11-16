@@ -16,7 +16,7 @@
 - **Settings:** your preferences (theme, language, playback options) stored in UserDefaults
 - **Bookmarks:** timestamps and notes you create, stored as a JSON file in the app's Documents folder
 - **Playback position:** which discourse you were listening to and where you stopped
-- **Listening stats:** how long you listen each day, used for the in-app stats and streak
+- **Listening stats:** how long you listen each day, used for the in-app stats and streak. From version 1.19.0 the app also keeps, only on this device, which talks you listened to on each day and at which hours of the day. It is used for your own listening summaries.
 - **Downloaded files:** audio files you choose to download, stored in the Documents folder (visible in Files app). These are not included in your iCloud backup, since they can be re-downloaded.
 - **List of talks:** the newest list the app has downloaded, with the time of its next check. It is not included in device backup, since it can be downloaded again.
 - **Optional tips:** verified StoreKit transaction IDs and their counted/revoked state, plus a device-local tip count, prevent duplicate counting. Tips unlock no content or features.
