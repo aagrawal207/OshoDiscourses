@@ -122,8 +122,9 @@ You can also [report a problem on GitHub](https://github.com/aagrawal207/OshoDis
 
 The app does not bundle discourse audio or transcripts. It accesses publicly
 available recordings from [oshoworld.com](https://www.oshoworld.com/) and an
-[Internet Archive](https://archive.org/) mirror, with transcripts from the matching
-oshoworld.com pages.
+[Internet Archive](https://archive.org/) mirror. Its transcripts come from
+oshoworld.com, OSHO SATSANG (oshostsang.wordpress.com) and oshosearch.net, and the
+app fetches them from our own copies on GitHub.
 
 Osho Talks is an independent app. It is not affiliated with or endorsed by Osho
 International Foundation, Osho World Foundation or any other Osho organisation.
