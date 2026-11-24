@@ -34,7 +34,7 @@ transcript, and continue from your saved position next time.
 ## Read as you listen
 
 Open a transcript beside the player and follow the highlighted text. Original-language
-transcripts are available for **4,946 discourses in English and Hindi**.
+transcripts are available for **5,366 discourses in English and Hindi**.
 Search for a passage, change the text size, or tap a sentence to play from that point.
 
 <p align="center">

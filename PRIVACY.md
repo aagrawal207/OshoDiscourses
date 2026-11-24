@@ -5,7 +5,7 @@
 ## What the app does
 
 - Downloads audio files from oshoworld.com or an Internet Archive mirror to your device
-- Fetches discourse transcripts from oshoworld.com and caches them on your device
+- Fetches discourse transcripts from GitHub, or from the jsDelivr CDN when GitHub cannot be reached, and caches them on your device
 - Checks about once a day for a newer list of talks and downloads it from GitHub, or from the jsDelivr CDN when GitHub cannot be reached
 - Optionally translates a transcript on your device with Apple Translation and creates narration using a system voice
 - Stores your settings, bookmarks, and playback progress on your device
@@ -49,7 +49,7 @@ use ordinary device settings storage, which can be included in device backup.
 
 ## Network access
 
-The app connects to oshoworld.com and archive.org to download audio discourse files and transcripts. iCloud sync is handled by the operating system.
+The app connects to oshoworld.com and archive.org to download audio discourse files. It fetches transcripts from GitHub (raw.githubusercontent.com), or from the jsDelivr CDN (cdn.jsdelivr.net) when GitHub cannot be reached. That request names the transcript's file and carries nothing else about you: no cookie and no identifier. iCloud sync is handled by the operating system.
 
 About once a day the app fetches the list of talks from GitHub (raw.githubusercontent.com), or from the jsDelivr CDN (cdn.jsdelivr.net) when GitHub cannot be reached. The request carries nothing about you or your listening: no cookie and no identifier. Like any web request, it shows that server your IP address and the version of the app. The developer does not receive it.
 
@@ -65,7 +65,7 @@ translated text. The developer does not receive the text or generated audio.
 
 ## Third-party services
 
-Oshoworld.com and archive.org host the audio files. Apple's iCloud service handles optional sync between your devices. TelemetryDeck receives the anonymous usage data described above. The app does not include advertising or tracking services.
+Oshoworld.com and archive.org host the audio files. GitHub and jsDelivr host the list of talks and the transcripts. Apple's iCloud service handles optional sync between your devices. TelemetryDeck receives the anonymous usage data described above. The app does not include advertising or tracking services.
 
 Optional tips and yearly support use Apple's StoreKit in-app purchases. Apple
 handles payment, subscription renewals and cancellations. The app records tip
