@@ -1,11 +1,11 @@
-MEQCICud9IRywNWoVyoPhKB8lHcU9z2d7SGmbNmcGxQYhJQxAiBQDsBS4jflpsIF5ZbglH/fqGQ/O/dxs6pAthSyfPeDaw==
+MEQCID2hCnuM3gsIPp1UqaXjF/k/i+svDmAmgkFjIpPD2QgeAiBg2AmK8Ry0fC8lIzVUALKmPD15kj2/5ng+Fl9ShNU+gw==
 {
 "format": 1,
-"revision": 7,
-"updated": "2026-11-19",
+"revision": 8,
+"updated": "2026-11-27",
 "lists": {
   "beginnerEnglish": ["english-A_Bird_on_the_Wing__","english-Ancient_Music_In_The_Pines","english-A_Sudden_Clash_of_Thunder","english-Come_Come_Yet_Again_Come","english-Be_Still_and_Know","english-The_Hidden_Harmony","english-Ah_This","english-And_the_Flowers_Showerd"],
-  "beginnerHindi": ["hindi-Main_Mrityu_Sikhata_Hun","hindi-Dhyan_Sutra","hindi-Antar_Ki_Khoj","hindi-Agyat_Ki_Aur","hindi-Amrit_Ki_Disha","hindi-Naye_Samaj_Ki_Khoj","hindi-Jeevan_Kranti_Ke_Sutra"],
+  "beginnerHindi": ["hindi-Main_Mrityu_Sikhata_Hun","hindi-Dhyan_Sutra","hindi-Antar_Ki_Khoj","hindi-Agyat_Ki_Aur","hindi-Amrit_Ki_Disha"],
   "popularEnglish": ["english-Vigyan_Bhairav_Tantra_Vol_1","english-Vigyan_Bhairav_Tantra_Vol_2","english-Beyond_Enlightenment","english-The_Mustard_Seed","english-The_Book_Of_Wisdom","english-Tao_Vol_1_Absolute_Tao","english-Beyond_Psychology","english-Dhammapada_Way_Of_Buddha_Vol_1"],
   "popularHindi": ["hindi-Maha_Geeta","hindi-Geeta_Darshan_Vol_1-2","hindi-Tao_Upanishad","hindi-Bhakti_Sutra","hindi-Athato_Bhakti_Jigyasa","hindi-Sahaj_Yog","hindi-Shiv_Sutra"]
 },
